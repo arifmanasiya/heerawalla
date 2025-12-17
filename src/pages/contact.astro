@@ -5,7 +5,7 @@ import Footer from '../components/Footer.astro';
 import { loadSiteConfig, getConfigValue } from '../lib/config';
 
 const config = await loadSiteConfig();
-const contactEmail = getConfigValue(config, 'contact_email', 'hello@heerawalla.com');
+const contactEmail = getConfigValue(config, 'contact_email', 'support@heerawalla.com');
 ---
 
 <BaseLayout title="Contact | Heerawalla" description="Reach Heerawalla client care for bespoke projects or purchase inquiries.">

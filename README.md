@@ -32,6 +32,7 @@ Only rows with `is_active = TRUE` are shown. `is_featured = TRUE` drives the fea
 Keys used: `meta_title, meta_description, hero_title, hero_subtitle, hero_cta_label, hero_cta_link, contact_email, about_title, about_description`
 
 Sample files live in `/data/products.sample.csv` and `/data/site_config.sample.csv`.
+Optional keys: `orders_email` (used for product inquiry mailto).
 
 ## Using Google Sheets as CSV
 1. Create a Google Sheet tab for **Products** with the columns above.

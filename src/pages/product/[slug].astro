@@ -6,6 +6,7 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import { loadProducts } from '../../lib/products';
 import type { Product } from '../../lib/schema';
 import { withBase } from '../../lib/paths';
+import { loadSiteConfig, getConfigValue } from '../../lib/config';
 
 export async function getStaticPaths() {
   const products = await loadProducts();
@@ -16,6 +17,7 @@ export async function getStaticPaths() {
 }
 
 const { product } = Astro.props as { product: Product };
+const siteConfig = await loadSiteConfig();
 const rawImage = product.image?.trim();
 const fallback = withBase('/images/products/placeholder.svg');
 const image = rawImage ? (rawImage.startsWith('http') ? rawImage : withBase(rawImage)) : fallback;
@@ -23,6 +25,7 @@ const priceData = {
   usd: product.price_usd,
   inr: product.price_inr
 };
+const ordersEmail = getConfigValue(siteConfig, 'orders_email', 'orders@heerawalla.com');
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -90,7 +93,7 @@ void jsonLdString;
         </div>
 
         <div class="flex flex-wrap gap-3">
-          <a class="btn btn-primary" href={`mailto:hello@heerawalla.com?subject=Inquiry: ${encodeURIComponent(product.name)}`}>
+          <a class="btn btn-primary" href={`mailto:${ordersEmail}?subject=Inquiry: ${encodeURIComponent(product.name)}`}>
             Inquire
           </a>
           <a class="btn btn-ghost" href="/contact">Book a consultation</a>
