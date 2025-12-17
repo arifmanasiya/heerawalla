@@ -60,7 +60,7 @@ Build will fail if required CSV columns are missing or data is invalid.
 - Workflow: `.github/workflows/deploy.yml`
 - Push to `main`; GitHub Actions builds (`npm run build`) with `PRODUCTS_CSV_URL` and `SITE_CONFIG_CSV_URL` repo variables, then deploys `dist` to Pages.
 - If you use a project page (e.g., `https://username.github.io/heerawalla/`), set repo variable `BASE_PATH=/heerawalla` so asset URLs resolve; keep it `/` when using the `heerawalla.com` custom domain.
-- Optionally set `SITE=https://heerawalla.com` to override the canonical/OG base URL.
+- Optionally set `SITE=https://heerawalla.com` (or your Pages URL) to override the canonical/OG base URL.
 - Configure your Pages custom domain (optional) to `heerawalla.com`.
 
 ## Project structure
