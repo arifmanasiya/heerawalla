@@ -1,0 +1,37 @@
+<div class="inline-flex items-center gap-2 rounded-full bg-white px-2 py-1 text-xs shadow-sm ring-1 ring-slate-200">
+  <button
+    type="button"
+    class="currency-btn px-3 py-1 rounded-full data-[active=true]:bg-ink data-[active=true]:text-white"
+    data-currency="USD"
+  >
+    USD
+  </button>
+  <button
+    type="button"
+    class="currency-btn px-3 py-1 rounded-full data-[active=true]:bg-ink data-[active=true]:text-white"
+    data-currency="INR"
+  >
+    INR
+  </button>
+</div>
+
+<script is:inline>
+  (() => {
+    const KEY = 'hw-currency';
+    const btns = Array.from(document.querySelectorAll('.currency-btn'));
+    const applyState = (cur) => {
+      btns.forEach((btn) => btn.setAttribute('data-active', String(btn.dataset.currency === cur)));
+    };
+    const setCurrency = (cur) => {
+      window.dispatchEvent(new CustomEvent('hw:currency:update', { detail: cur }));
+      applyState(cur);
+    };
+    const initial = localStorage.getItem(KEY) || 'USD';
+    applyState(initial);
+    btns.forEach((btn) =>
+      btn.addEventListener('click', () => {
+        setCurrency(btn.dataset.currency || 'USD');
+      })
+    );
+  })();
+</script>

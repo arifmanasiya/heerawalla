@@ -1,0 +1,53 @@
+---
+import "../styles/global.css";
+const { title = 'Heerawalla | Fine jewelry crafted with precision', description = 'Luxury jewelry catalog with timeless, minimal design.', image } = Astro.props as { title?: string; description?: string; image?: string };
+const ogImage = image || '/images/hero.svg';
+const url = Astro.site?.toString() || 'https://heerawalla.com';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={url} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/jpeg" href="/images/heerawalla-logo.jpeg" />
+  </head>
+  <body class="min-h-screen bg-mist text-ink">
+    <slot />
+
+    <script is:inline>
+      (() => {
+        const KEY = 'hw-currency';
+        let currency = localStorage.getItem(KEY) || 'USD';
+        const formatters = {
+          USD: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }),
+          INR: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })
+        };
+        const apply = () => {
+          document.documentElement.dataset.currency = currency;
+          document.querySelectorAll('[data-price-usd]').forEach((el) => {
+            const usd = Number(el.dataset.priceUsd || 0);
+            const inr = Number(el.dataset.priceInr || 0);
+            const formatter = formatters[currency] || formatters.USD;
+            const val = currency === 'INR' ? inr || usd : usd || inr;
+            el.textContent = formatter.format(val || 0);
+          });
+        };
+        window.addEventListener('hw:currency:update', (event) => {
+          currency = event.detail;
+          localStorage.setItem(KEY, currency);
+          apply();
+        });
+        apply();
+      })();
+    </script>
+  </body>
+</html>

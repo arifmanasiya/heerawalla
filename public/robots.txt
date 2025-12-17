@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://heerawalla.com/sitemap-index.xml

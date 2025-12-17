@@ -1,0 +1,63 @@
+---
+import type { Product } from '../lib/schema';
+const { products } = Astro.props as { products: Product[] };
+const collections = Array.from(new Set(products.map((p) => p.collection).filter(Boolean)));
+const metals = Array.from(new Set(products.map((p) => p.metal).filter(Boolean)));
+const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
+---
+
+<div class="card p-4 space-y-3" id="filters">
+  <div class="flex flex-wrap gap-3">
+    <label class="text-xs uppercase tracking-[0.14em] text-slate-500">Filters</label>
+    <div class="flex flex-wrap gap-3">
+      <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="collection">
+        <option value="">Collection</option>
+        {collections.map((c) => <option value={c}>{c}</option>)}
+      </select>
+      <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="category">
+        <option value="">Category</option>
+        {categories.map((c) => <option value={c}>{c}</option>)}
+      </select>
+      <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="metal">
+        <option value="">Metal</option>
+        {metals.map((m) => <option value={m}>{m}</option>)}
+      </select>
+      <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="price">
+        <option value="">Price</option>
+        <option value="0-500">Under $500</option>
+        <option value="500-2000">$500 - $2,000</option>
+        <option value="2000-999999">$2,000+</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  (() => {
+    const selects = Array.from(document.querySelectorAll('.filter-select'));
+    const cards = Array.from(document.querySelectorAll('[data-product-card]'));
+
+    const apply = () => {
+      const filters = Object.fromEntries(selects.map((s) => [s.dataset.filter, s.value]));
+      cards.forEach((card) => {
+        const c = card.dataset.collection || '';
+        const cat = card.dataset.category || '';
+        const metal = card.dataset.metal || '';
+        const price = Number(card.dataset.price || 0);
+        const matchesCollection = !filters.collection || c === filters.collection;
+        const matchesCategory = !filters.category || cat === filters.category;
+        const matchesMetal = !filters.metal || metal === filters.metal;
+        let matchesPrice = true;
+        if (filters.price) {
+          const [min, max] = filters.price.split('-').map(Number);
+          matchesPrice = price >= min && price <= max;
+        }
+        const visible = matchesCollection && matchesCategory && matchesMetal && matchesPrice;
+        card.toggleAttribute('data-hidden', !visible);
+        card.classList.toggle('hidden', !visible);
+      });
+    };
+
+    selects.forEach((s) => s.addEventListener('change', apply));
+  })();
+</script>

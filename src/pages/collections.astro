@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import ProductCard from '../components/ProductCard.astro';
+import Filters from '../components/Filters.astro';
+import { loadProducts } from '../lib/products';
+import { loadSiteConfig } from '../lib/config';
+
+const products = await loadProducts();
+const config = await loadSiteConfig();
+const title = config.meta_title || 'Collections | Heerawalla';
+const description = config.meta_description || 'Explore Heerawalla jewelry collections.';
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <main class="container space-y-8 py-10">
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Catalog</p>
+      <h1 class="text-3xl font-semibold tracking-tight">Collections</h1>
+      <p class="text-sm text-slate-500 max-w-2xl">
+        Filter by collection, metal, category, or price to discover the right piece.
+      </p>
+    </div>
+
+    <Filters products={products} />
+
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" id="product-grid">
+      {products.map((product) => (
+        <div
+          data-product-card
+          data-collection={product.collection}
+          data-category={product.category}
+          data-metal={product.metal}
+          data-price={product.price_usd}
+        >
+          <ProductCard product={product} />
+        </div>
+      ))}
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>

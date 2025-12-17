@@ -1,0 +1,56 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { loadSiteConfig, getConfigValue } from '../lib/config';
+
+const config = await loadSiteConfig();
+const title = getConfigValue(config, 'about_title', 'About Heerawalla');
+const description = getConfigValue(
+  config,
+  'about_description',
+  'Heerawalla crafts timeless jewelry with ethical sourcing and meticulous finishing.'
+);
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  <main class="container py-12 space-y-8">
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Story</p>
+      <h1 class="text-3xl font-semibold tracking-tight">Our house codes</h1>
+      <p class="text-sm text-slate-500 max-w-2xl">{description}</p>
+    </div>
+    <div class="grid gap-6 md:grid-cols-2">
+      <div class="card p-6 space-y-3">
+        <div class="text-lg font-semibold">Craft</div>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          Each piece is hand-finished by master artisans. We balance minimal lines with subtle, tactile details
+          that age beautifully with wear.
+        </p>
+      </div>
+      <div class="card p-6 space-y-3">
+        <div class="text-lg font-semibold">Ethics</div>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          Conflict-free stones and responsibly sourced metals underpin every collection. Provenance is documented
+          for transparency.
+        </p>
+      </div>
+      <div class="card p-6 space-y-3">
+        <div class="text-lg font-semibold">Design</div>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          Inspired by architectural minimalism and heirloom silhouettes, our forms are designed to layer and
+          endure.
+        </p>
+      </div>
+      <div class="card p-6 space-y-3">
+        <div class="text-lg font-semibold">Care</div>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          Complimentary annual inspection and polishing for Heerawalla collectors. Book a studio appointment or
+          mail-in service.
+        </p>
+      </div>
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>

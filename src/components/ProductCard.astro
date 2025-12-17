@@ -1,0 +1,32 @@
+---
+import type { Product } from '../lib/schema';
+const { product } = Astro.props as { product: Product };
+const rawImage = product.image?.trim();
+const image = rawImage ? (rawImage.startsWith('http') ? rawImage : rawImage) : '/images/products/placeholder.svg';
+---
+
+<article class="card overflow-hidden group h-full flex flex-col">
+  <a href={`/product/${product.slug}`} class="block overflow-hidden">
+    <img
+      src={image}
+      alt={product.name}
+      loading="lazy"
+      class="h-64 w-full object-cover transition duration-300 group-hover:scale-105"
+    />
+  </a>
+  <div class="flex flex-col gap-2 p-4 flex-1">
+    <div class="text-xs uppercase tracking-[0.12em] text-slate-500">{product.collection || product.category}</div>
+    <a href={`/product/${product.slug}`} class="text-lg font-semibold leading-snug hover:text-accent">
+      {product.name}
+    </a>
+    <p class="text-sm text-slate-500 line-clamp-2">{product.description}</p>
+    <div class="mt-auto flex items-center justify-between pt-2">
+      <span
+        class="font-semibold text-sm"
+        data-price-usd={product.price_usd}
+        data-price-inr={product.price_inr}
+      ></span>
+      <span class="text-xs uppercase tracking-[0.14em] text-slate-400">{product.metal}</span>
+    </div>
+  </div>
+</article>

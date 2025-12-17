@@ -1,0 +1,116 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import ProductCard from '../components/ProductCard.astro';
+import CurrencyToggle from '../components/CurrencyToggle.astro';
+import { loadProducts } from '../lib/products';
+import { loadSiteConfig, getConfigValue } from '../lib/config';
+
+const products = await loadProducts();
+const featured = products.filter((p) => p.is_featured).slice(0, 6);
+const config = await loadSiteConfig();
+
+const heroTitle = getConfigValue(config, 'hero_title', 'Heirloom pieces for modern collectors');
+const heroSubtitle = getConfigValue(
+  config,
+  'hero_subtitle',
+  'Hand-finished gold, diamonds, and precious stones with timeless, Tiffany-like minimalism.'
+);
+const heroCtaLabel = getConfigValue(config, 'hero_cta_label', 'View collections');
+const heroCtaLink = getConfigValue(config, 'hero_cta_link', '/collections');
+const metaTitle = getConfigValue(
+  config,
+  'meta_title',
+  'Heerawalla | Fine jewelry crafted with precision'
+);
+const metaDescription = getConfigValue(
+  config,
+  'meta_description',
+  "Explore Heerawalla's curated jewelry collection - minimal, luxurious, and made to endure."
+);
+
+const collections = Array.from(new Set(products.map((p) => p.collection).filter(Boolean))).slice(0, 3);
+---
+
+<BaseLayout title={metaTitle} description={metaDescription}>
+  <Header />
+
+  <main class="space-y-16">
+    <section class="container grid gap-12 lg:grid-cols-2 items-center pt-8">
+      <div class="space-y-6">
+        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Heerawalla</p>
+        <h1 class="font-display text-4xl sm:text-5xl leading-tight tracking-tight">{heroTitle}</h1>
+        <p class="text-lg text-slate-600 max-w-xl">{heroSubtitle}</p>
+        <div class="flex flex-wrap gap-3">
+          <a class="btn btn-primary" href={heroCtaLink}>{heroCtaLabel}</a>
+          <a class="btn btn-ghost" href="/contact">Book a consultation</a>
+        </div>
+        <div class="flex items-center gap-6 text-sm text-slate-500">
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-ink"></span> Conflict-free diamonds
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-ink"></span> Crafted by master artisans
+          </div>
+        </div>
+      </div>
+      <div class="card overflow-hidden">
+        <img src="/images/hero.svg" alt="Fine jewelry still life" class="w-full h-full object-cover" loading="lazy" />
+      </div>
+    </section>
+
+    <section class="container space-y-6">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Featured</p>
+          <h2 class="text-2xl font-semibold tracking-tight">Signature picks</h2>
+        </div>
+        <CurrencyToggle />
+      </div>
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {featured.map((product) => (
+          <div data-product-card data-collection={product.collection} data-category={product.category} data-metal={product.metal} data-price={product.price_usd}>
+            <ProductCard product={product} />
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="container space-y-6">
+      <div>
+        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Collections</p>
+        <h2 class="text-2xl font-semibold tracking-tight">Curated for every occasion</h2>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {collections.map((c) => (
+          <a href={`/collections->collection=${encodeURIComponent(c)}`} class="card p-6 flex flex-col gap-3 hover:-translate-y-1 transition">
+            <div class="text-lg font-semibold">{c}</div>
+            <p class="text-sm text-slate-500">Hand-selected pieces crafted in {c} style.</p>
+            <span class="text-sm font-medium text-accent">View collection -></span>
+          </a>
+        ))}
+      </div>
+    </section>
+
+    <section class="container grid gap-8 lg:grid-cols-3">
+      <div class="card p-6 space-y-3">
+        <div class="text-lg font-semibold">Bespoke services</div>
+        <p class="text-sm text-slate-500">Custom designs, stone sourcing, and engravings guided by our designers.</p>
+        <a href="/contact" class="text-sm text-accent">Start a bespoke project -></a>
+      </div>
+      <div class="card p-6 space-y-3">
+        <div class="text-lg font-semibold">Ethical sourcing</div>
+        <p class="text-sm text-slate-500">Conflict-free diamonds and responsibly sourced metals, documented for every piece.</p>
+        <a href="/policies" class="text-sm text-accent">View sourcing standards -></a>
+      </div>
+      <div class="card p-6 space-y-3">
+        <div class="text-lg font-semibold">Lifetime care</div>
+        <p class="text-sm text-slate-500">Complimentary annual inspections and polishing for Heerawalla collectors.</p>
+        <a href="/contact" class="text-sm text-accent">Schedule care -></a>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
