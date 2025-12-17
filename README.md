@@ -3,6 +3,7 @@
 - Run dev server: `npm run dev`
 - Build: `npm run build`
 - Publish Google Sheets as CSV and set `PRODUCTS_CSV_URL` and `SITE_CONFIG_CSV_URL` GitHub repo variables.
+- (If using GitHub Pages without a custom domain) set `BASE_PATH` to your repo path, e.g. `/heerawalla`.
 - Push to `main`; GitHub Actions deploys to Pages.
 
 ---
@@ -58,6 +59,8 @@ Build will fail if required CSV columns are missing or data is invalid.
 ## Deploy (GitHub Pages)
 - Workflow: `.github/workflows/deploy.yml`
 - Push to `main`; GitHub Actions builds (`npm run build`) with `PRODUCTS_CSV_URL` and `SITE_CONFIG_CSV_URL` repo variables, then deploys `dist` to Pages.
+- If you use a project page (e.g., `https://username.github.io/heerawalla/`), set repo variable `BASE_PATH=/heerawalla` so asset URLs resolve; keep it `/` when using the `heerawalla.com` custom domain.
+- Optionally set `SITE=https://heerawalla.com` to override the canonical/OG base URL.
 - Configure your Pages custom domain (optional) to `heerawalla.com`.
 
 ## Project structure

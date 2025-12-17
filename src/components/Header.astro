@@ -1,12 +1,13 @@
 ---
 import CurrencyToggle from './CurrencyToggle.astro';
+import { withBase } from '../lib/paths';
 ---
 
 <header class="w-full">
   <div class="container flex items-center justify-between py-6">
-    <a href="/" class="flex items-center gap-3 text-lg font-semibold tracking-tight">
+    <a href={withBase('/')} class="flex items-center gap-3 text-lg font-semibold tracking-tight">
       <img
-        src="/images/heerawalla-logo.jpeg"
+        src={withBase('/images/heerawalla-logo.jpeg')}
         alt="Heerawalla logo"
         class="h-10 w-auto rounded-md shadow-sm ring-1 ring-slate-200 object-contain bg-white"
         loading="lazy"
@@ -17,10 +18,10 @@ import CurrencyToggle from './CurrencyToggle.astro';
       </div>
     </a>
     <nav class="hidden md:flex items-center gap-6 text-sm font-medium">
-      <a href="/collections" class="hover:text-accent">Collections</a>
-      <a href="/about" class="hover:text-accent">About</a>
-      <a href="/contact" class="hover:text-accent">Contact</a>
-      <a href="/policies" class="hover:text-accent">Policies</a>
+      <a href={withBase('/collections')} class="hover:text-accent">Collections</a>
+      <a href={withBase('/about')} class="hover:text-accent">About</a>
+      <a href={withBase('/contact')} class="hover:text-accent">Contact</a>
+      <a href={withBase('/policies')} class="hover:text-accent">Policies</a>
     </nav>
     <div class="flex items-center gap-4">
       <CurrencyToggle />

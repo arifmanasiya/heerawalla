@@ -1,12 +1,18 @@
 ---
 import type { Product } from '../lib/schema';
+import { withBase } from '../lib/paths';
 const { product } = Astro.props as { product: Product };
 const rawImage = product.image?.trim();
-const image = rawImage ? (rawImage.startsWith('http') ? rawImage : rawImage) : '/images/products/placeholder.svg';
+const fallback = withBase('/images/products/placeholder.svg');
+const image = rawImage
+  ? rawImage.startsWith('http')
+    ? rawImage
+    : withBase(rawImage)
+  : fallback;
 ---
 
 <article class="card overflow-hidden group h-full flex flex-col">
-  <a href={`/product/${product.slug}`} class="block overflow-hidden">
+  <a href={withBase(`/product/${product.slug}`)} class="block overflow-hidden">
     <img
       src={image}
       alt={product.name}

@@ -5,6 +5,7 @@ import Footer from '../../components/Footer.astro';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import { loadProducts } from '../../lib/products';
 import type { Product } from '../../lib/schema';
+import { withBase } from '../../lib/paths';
 
 export async function getStaticPaths() {
   const products = await loadProducts();
@@ -16,7 +17,8 @@ export async function getStaticPaths() {
 
 const { product } = Astro.props as { product: Product };
 const rawImage = product.image?.trim();
-const image = rawImage ? (rawImage.startsWith('http') ? rawImage : rawImage) : '/images/products/placeholder.svg';
+const fallback = withBase('/images/products/placeholder.svg');
+const image = rawImage ? (rawImage.startsWith('http') ? rawImage : withBase(rawImage)) : fallback;
 const priceData = {
   usd: product.price_usd,
   inr: product.price_inr
@@ -52,7 +54,13 @@ void jsonLdString;
 <BaseLayout title={`${product.name} | Heerawalla`} description={product.description}>
   <Header />
   <main class="container py-10 space-y-8">
-    <Breadcrumbs crumbs={[{ label: 'Home', href: '/' }, { label: 'Collections', href: '/collections' }, { label: product.name }]} />
+    <Breadcrumbs
+      crumbs={[
+        { label: 'Home', href: withBase('/') },
+        { label: 'Collections', href: withBase('/collections') },
+        { label: product.name }
+      ]}
+    />
     <div class="grid gap-8 lg:grid-cols-2">
       <div class="card overflow-hidden">
         <img src={image} alt={product.name} class="w-full h-full object-cover" loading="lazy" />

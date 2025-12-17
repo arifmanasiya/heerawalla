@@ -6,6 +6,7 @@ import ProductCard from '../components/ProductCard.astro';
 import CurrencyToggle from '../components/CurrencyToggle.astro';
 import { loadProducts } from '../lib/products';
 import { loadSiteConfig, getConfigValue } from '../lib/config';
+import { withBase } from '../lib/paths';
 
 const products = await loadProducts();
 const featured = products.filter((p) => p.is_featured).slice(0, 6);
@@ -31,6 +32,7 @@ const metaDescription = getConfigValue(
 );
 
 const collections = Array.from(new Set(products.map((p) => p.collection).filter(Boolean))).slice(0, 3);
+const heroImage = withBase('/images/hero.svg');
 ---
 
 <BaseLayout title={metaTitle} description={metaDescription}>
@@ -43,8 +45,8 @@ const collections = Array.from(new Set(products.map((p) => p.collection).filter(
         <h1 class="font-display text-4xl sm:text-5xl leading-tight tracking-tight">{heroTitle}</h1>
         <p class="text-lg text-slate-600 max-w-xl">{heroSubtitle}</p>
         <div class="flex flex-wrap gap-3">
-          <a class="btn btn-primary" href={heroCtaLink}>{heroCtaLabel}</a>
-          <a class="btn btn-ghost" href="/contact">Book a consultation</a>
+          <a class="btn btn-primary" href={withBase(heroCtaLink)}>{heroCtaLabel}</a>
+          <a class="btn btn-ghost" href={withBase('/contact')}>Book a consultation</a>
         </div>
         <div class="flex items-center gap-6 text-sm text-slate-500">
           <div class="flex items-center gap-2">
@@ -56,7 +58,7 @@ const collections = Array.from(new Set(products.map((p) => p.collection).filter(
         </div>
       </div>
       <div class="card overflow-hidden">
-        <img src="/images/hero.svg" alt="Fine jewelry still life" class="w-full h-full object-cover" loading="lazy" />
+        <img src={heroImage} alt="Fine jewelry still life" class="w-full h-full object-cover" loading="lazy" />
       </div>
     </section>
 
@@ -84,7 +86,7 @@ const collections = Array.from(new Set(products.map((p) => p.collection).filter(
       </div>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {collections.map((c) => (
-          <a href={`/collections->collection=${encodeURIComponent(c)}`} class="card p-6 flex flex-col gap-3 hover:-translate-y-1 transition">
+          <a href={withBase(`/collections?collection=${encodeURIComponent(c)}`)} class="card p-6 flex flex-col gap-3 hover:-translate-y-1 transition">
             <div class="text-lg font-semibold">{c}</div>
             <p class="text-sm text-slate-500">Hand-selected pieces crafted in {c} style.</p>
             <span class="text-sm font-medium text-accent">View collection -></span>
@@ -97,17 +99,17 @@ const collections = Array.from(new Set(products.map((p) => p.collection).filter(
       <div class="card p-6 space-y-3">
         <div class="text-lg font-semibold">Bespoke services</div>
         <p class="text-sm text-slate-500">Custom designs, stone sourcing, and engravings guided by our designers.</p>
-        <a href="/contact" class="text-sm text-accent">Start a bespoke project -></a>
+        <a href={withBase('/contact')} class="text-sm text-accent">Start a bespoke project -></a>
       </div>
       <div class="card p-6 space-y-3">
         <div class="text-lg font-semibold">Ethical sourcing</div>
         <p class="text-sm text-slate-500">Conflict-free diamonds and responsibly sourced metals, documented for every piece.</p>
-        <a href="/policies" class="text-sm text-accent">View sourcing standards -></a>
+        <a href={withBase('/policies')} class="text-sm text-accent">View sourcing standards -></a>
       </div>
       <div class="card p-6 space-y-3">
         <div class="text-lg font-semibold">Lifetime care</div>
         <p class="text-sm text-slate-500">Complimentary annual inspections and polishing for Heerawalla collectors.</p>
-        <a href="/contact" class="text-sm text-accent">Schedule care -></a>
+        <a href={withBase('/contact')} class="text-sm text-accent">Schedule care -></a>
       </div>
     </section>
   </main>

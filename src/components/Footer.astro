@@ -1,3 +1,7 @@
+---
+import { withBase } from '../lib/paths';
+---
+
 <footer class="mt-16 border-t border-slate-200 bg-white">
   <div class="container py-10 grid gap-8 md:grid-cols-4">
     <div class="space-y-3">
@@ -7,15 +11,15 @@
     <div>
       <div class="text-sm font-semibold mb-3">Explore</div>
       <ul class="space-y-2 text-sm text-slate-600">
-        <li><a href="/collections" class="hover:text-accent">Collections</a></li>
-        <li><a href="/about" class="hover:text-accent">About</a></li>
-        <li><a href="/contact" class="hover:text-accent">Contact</a></li>
+        <li><a href={withBase('/collections')} class="hover:text-accent">Collections</a></li>
+        <li><a href={withBase('/about')} class="hover:text-accent">About</a></li>
+        <li><a href={withBase('/contact')} class="hover:text-accent">Contact</a></li>
       </ul>
     </div>
     <div>
       <div class="text-sm font-semibold mb-3">Support</div>
       <ul class="space-y-2 text-sm text-slate-600">
-        <li><a href="/policies" class="hover:text-accent">Policies</a></li>
+        <li><a href={withBase('/policies')} class="hover:text-accent">Policies</a></li>
         <li><a href="mailto:hello@heerawalla.com" class="hover:text-accent">Email</a></li>
         <li><a href="tel:+11234567890" class="hover:text-accent">+1 (123) 456-7890</a></li>
       </ul>
@@ -23,7 +27,7 @@
     <div class="space-y-3">
       <div class="text-sm font-semibold">Newsletter</div>
       <p class="text-sm text-slate-500">Sign up to hear about limited drops and bespoke services.</p>
-      <a class="btn btn-primary" href="mailto:hello@heerawalla.com&copy;subject=Join%20Heerawalla">Join</a>
+      <a class="btn btn-primary" href="mailto:hello@heerawalla.com?subject=Join%20Heerawalla">Join</a>
     </div>
   </div>
 <div class="border-t border-slate-200 py-4 text-center text-xs text-slate-500">&copy; {new Date().getFullYear()} Heerawalla. All rights reserved.</div>
