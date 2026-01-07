@@ -4,28 +4,19 @@ import { withBase } from '../lib/paths';
 ---
 
 <header class="w-full">
-  <div class="container flex items-center justify-between py-6">
-    <a href={withBase('/')} class="flex items-center gap-3 text-lg font-semibold tracking-tight">
-      <img
-        src={withBase('/images/heerawalla-logo.jpeg')}
-        alt="Heerawalla logo"
-        class="h-10 w-auto rounded-md shadow-sm ring-1 ring-slate-200 object-contain bg-white"
-        loading="lazy"
-      />
-      <div class="leading-tight">
-        <div class="text-base font-semibold">Heerawalla</div>
-        <div class="text-xs text-slate-500">Fine Jewelry</div>
-      </div>
+  <div class="max-w-7xl mx-auto px-6 pt-6 pb-2 flex items-center justify-between gap-6">
+    <a href={withBase('/')} class="text-left">
+      <span class="wordmark text-[15px] sm:text-[16px]">Heerawalla</span>
     </a>
-    <nav class="hidden md:flex items-center gap-6 text-sm font-medium">
-      <a href={withBase('/collections')} class="hover:text-accent">Collections</a>
-      <a href={withBase('/about')} class="hover:text-accent">About</a>
-      <a href={withBase('/contact')} class="hover:text-accent">Contact</a>
-      <a href={withBase('/policies')} class="hover:text-accent">Policies</a>
+    <nav class="hidden md:flex items-center gap-8 text-[11px] uppercase tracking-[0.28em] text-slate-500" aria-label="Primary">
+      <a href={withBase('/collections')} class="hover:text-ink">Collections</a>
+      <a href={withBase('/about')} class="hover:text-ink">About</a>
+      <a href={withBase('/contact')} class="hover:text-ink">Contact</a>
+      <a href={withBase('/policies')} class="hover:text-ink">Policies</a>
     </nav>
-    <div class="flex items-center gap-4">
-      <CurrencyToggle />
-      <a href="mailto:support@heerawalla.com" class="text-sm hover:text-accent">Client Care</a>
+    <div class="flex items-center gap-4 text-[11px] uppercase tracking-[0.28em] text-slate-500">
+      <CurrencyToggle variant="text" />
+      <a href="mailto:support@heerawalla.com" class="hover:text-ink">Concierge</a>
     </div>
   </div>
 </header>

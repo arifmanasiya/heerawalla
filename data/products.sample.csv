@@ -1,7 +1,4 @@
-id,name,slug,description,collection,category,metal,price_usd,price_inr,image,is_active,is_featured,tags
-hw-001,Azure Solitaire,azure-solitaire,"Brilliant-cut diamond solitaire on a slender platinum band.",Signature,Ring,Platinum,5200,432000,/images/products/placeholder.svg,TRUE,TRUE,diamond
-hw-002,Ellipse Pendant,ellipse-pendant,"Minimal oval pendant with bezel-set emerald on fine chain.",Signature,Necklace,18k Yellow Gold,3800,316000,/images/products/placeholder.svg,TRUE,TRUE,emerald
-hw-003,Luna Hoops,luna-hoops,"Tapered gold hoops with mirror polish and secure hinge.",Everyday,Earrings,18k Yellow Gold,2100,174000,/images/products/placeholder.svg,TRUE,FALSE,hoops
-hw-004,Crescent Bangle,crescent-bangle,"Sculptural cuff with soft curve and brushed interior.",Everyday,Bracelet,18k Rose Gold,2650,219000,/images/products/placeholder.svg,TRUE,FALSE,bangle
-hw-005,North Star Studs,north-star-studs,"Star-set diamond studs with milgrain details.",Heritage,Earrings,Platinum,1950,162000,/images/products/placeholder.svg,TRUE,TRUE,diamond
-hw-006,Atlas Band,atlas-band,"Flat profile band with satin finish and polished edges.",Signature,Ring,18k White Gold,1450,121000,/images/products/placeholder.svg,TRUE,FALSE,band
+id,name,slug,description,collection,category,metal,price_inr_natural,price_inr_lab,is_active,is_featured,tags,cut,clarity,color,carat
+hw-001,Atlas Band,atlas-band,"Flat profile band with satin finish and polished edges.",Signature,men/bands,18k White Gold,121000,80000,TRUE,FALSE,band,Ideal,VVS1 - VVS2,E,1
+hw-002,Azure Solitaire,azure-solitaire,"Brilliant-cut diamond solitaire on a slender platinum band.",Signature,women/rings,Platinum,432000,265000,TRUE,FALSE,diamond,Ideal,VVS1 - VVS2,E,1
+hw-003,Ellipse Pendant,ellipse-pendant,"Minimal oval pendant with bezel-set emerald on fine chain.",Signature,women/pendants,18k Yellow Gold,316000,200000,TRUE,FALSE,emerald,Ideal,VVS1 - VVS2,E,1

@@ -1,14 +1,26 @@
-<div class="inline-flex items-center gap-2 rounded-full bg-white px-2 py-1 text-xs shadow-sm ring-1 ring-slate-200">
+---
+const { variant = 'pill' } = Astro.props as { variant?: 'pill' | 'text' };
+const wrapperClass =
+  variant === 'text'
+    ? 'inline-flex items-center gap-4 text-[11px] uppercase tracking-[0.3em] text-slate-400'
+    : 'inline-flex items-center gap-2 rounded-full bg-white px-2 py-1 text-xs shadow-sm ring-1 ring-slate-200';
+const buttonClass =
+  variant === 'text'
+    ? 'currency-btn px-1 py-1 text-slate-500 data-[active=true]:text-ink data-[active=true]:border-ink/60 border-b border-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white'
+    : 'currency-btn px-3 py-1 rounded-full data-[active=true]:bg-ink data-[active=true]:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white';
+---
+
+<div class={wrapperClass}>
   <button
     type="button"
-    class="currency-btn px-3 py-1 rounded-full data-[active=true]:bg-ink data-[active=true]:text-white"
+    class={buttonClass}
     data-currency="USD"
   >
     USD
   </button>
   <button
     type="button"
-    class="currency-btn px-3 py-1 rounded-full data-[active=true]:bg-ink data-[active=true]:text-white"
+    class={buttonClass}
     data-currency="INR"
   >
     INR

@@ -1,0 +1,4 @@
+id,name,slug,description,collection,category,metal,price_inr_natural,price_inr_lab,is_active,is_featured,tags,cut,clarity,color,carat
+hws-001,The Eclipse Set,hws-001,"18K gold set with VVS1 diamonds, ideal cut, E color.",Signature,women/sets,18K Gold,1100000,,TRUE,TRUE,set,Ideal,VVS1 - VVS2,E,1
+hws-002,The Continuum Set,hws-002,"18K gold set with VVS1 diamonds, ideal cut, E color.",Signature,women/sets,18K Gold,1250000,,TRUE,TRUE,set,Ideal,VVS1 - VVS2,E,1
+hws-003,The Axis Set,hws-003,"18K gold set with VVS1 diamonds, ideal cut, E color.",Signature,women/sets,18K Gold,1000000,,TRUE,TRUE,set,Ideal,VVS1 - VVS2,E,1

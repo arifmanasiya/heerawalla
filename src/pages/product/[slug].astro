@@ -3,51 +3,78 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
-import { loadProducts } from '../../lib/products';
-import type { Product } from '../../lib/schema';
+import { loadProductsWithMedia, type ProductWithMedia } from '../../lib/products';
 import { withBase } from '../../lib/paths';
 import { loadSiteConfig, getConfigValue } from '../../lib/config';
 
 export async function getStaticPaths() {
-  const products = await loadProducts();
+  const products = await loadProductsWithMedia();
   return products.map((product) => ({
     params: { slug: product.slug },
     props: { product }
   }));
 }
 
-const { product } = Astro.props as { product: Product };
+const { product } = Astro.props as { product: ProductWithMedia };
 const siteConfig = await loadSiteConfig();
-const rawImage = product.image?.trim();
+const primaryMedia = product.media.images[0]?.url || product.media.videos[0]?.url;
+const rawImage = primaryMedia;
 const fallback = withBase('/images/products/placeholder.svg');
 const image = rawImage ? (rawImage.startsWith('http') ? rawImage : withBase(rawImage)) : fallback;
+const imageMeta = product.media.images.map((m) => ({ url: m.url, description: m.description || '' }));
+const imageCount = imageMeta.length;
+const labInr = product.price_inr_lab ?? product.price_inr_natural;
+const labUsd = product.price_usd_lab ?? product.price_usd_natural;
 const priceData = {
-  usd: product.price_usd,
-  inr: product.price_inr
+  natural: { usd: product.price_usd_natural, inr: product.price_inr_natural },
+  lab: { usd: labUsd, inr: labInr }
 };
 const ordersEmail = getConfigValue(siteConfig, 'orders_email', 'orders@heerawalla.com');
+const productUrl = Astro.site ? new URL(withBase(`/product/${product.slug}`), Astro.site).toString() : withBase(`/product/${product.slug}`);
+const mailtoBody = encodeURIComponent(
+  `I'm interested in ${product.name}\n\nCategory: ${product.category}\nMetal: ${product.metal}\nPrice (INR): ${product.price_inr_natural}\nLab Price (INR): ${priceData.lab.inr}\nProduct link: ${productUrl}`
+);
+const mailtoHref = `mailto:${ordersEmail}?subject=${encodeURIComponent(`Inquiry: ${product.name}`)}&body=${mailtoBody}`;
 
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Product',
   name: product.name,
-  image,
+  image: product.media.images.length
+    ? product.media.images.map((m) => m.url)
+    : [image],
   description: product.description,
   sku: product.id,
   brand: { '@type': 'Brand', name: 'Heerawalla' },
   offers: [
     {
       '@type': 'Offer',
-      price: product.price_usd,
+      price: product.price_usd_natural,
       priceCurrency: 'USD',
       availability: 'https://schema.org/InStock'
     },
     {
       '@type': 'Offer',
-      price: product.price_inr,
+      price: product.price_inr_natural,
       priceCurrency: 'INR',
       availability: 'https://schema.org/InStock'
-    }
+    },
+    ...(product.price_usd_lab && product.price_inr_lab
+      ? [
+          {
+            '@type': 'Offer',
+            price: product.price_usd_lab,
+            priceCurrency: 'USD',
+            availability: 'https://schema.org/InStock'
+          },
+          {
+            '@type': 'Offer',
+            price: product.price_inr_lab,
+            priceCurrency: 'INR',
+            availability: 'https://schema.org/InStock'
+          }
+        ]
+      : [])
   ]
 };
 const jsonLdString = JSON.stringify(jsonLd);
@@ -65,38 +92,73 @@ void jsonLdString;
       ]}
     />
     <div class="grid gap-8 lg:grid-cols-2">
-      <div class="card overflow-hidden">
-        <img src={image} alt={product.name} class="w-full h-full object-cover" loading="lazy" />
+      <div class="card overflow-hidden relative">
+        <img
+          src={image}
+          alt={product.name}
+          class="w-full h-full object-cover"
+          loading="lazy"
+          data-product-image
+          data-product-image-meta={JSON.stringify(imageMeta)}
+        />
+        {imageCount > 1 ? (
+          <button
+            type="button"
+            class="absolute left-3 top-1/2 -translate-y-1/2 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/90 text-lg font-semibold text-ink shadow-sm backdrop-blur transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+            data-image-prev
+            aria-label="Previous image"
+          >
+            &larr;
+          </button>
+        ) : null}
+        {imageCount > 1 ? (
+          <button
+            type="button"
+            class="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/90 text-lg font-semibold text-ink shadow-sm backdrop-blur transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+            data-image-next
+            aria-label="Next image"
+          >
+            &rarr;
+          </button>
+        ) : null}
       </div>
       <div class="space-y-6">
         <div>
           <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{product.collection || product.category}</p>
           <h1 class="text-3xl font-semibold tracking-tight">{product.name}</h1>
         </div>
-        <div class="flex items-center gap-4">
-          <span
-            class="text-xl font-semibold"
-            data-price-usd={priceData.usd}
-            data-price-inr={priceData.inr}
-          ></span>
-          <span class="text-sm text-slate-500">{product.metal}</span>
+        <div class="space-y-2">
+          <div class="flex items-center gap-4">
+            <span
+              class="text-xl font-semibold"
+              data-price-inr={priceData.natural.inr}
+              data-price-inr-natural={priceData.natural.inr}
+              data-price-inr-lab={priceData.lab.inr}
+              data-metal-default={product.metal?.toLowerCase().includes('14') ? '14k' : '18k'}
+              id="price-display"
+            ></span>
+            <span class="text-sm text-slate-500">{product.metal}</span>
+          </div>
+          <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
+            <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Diamonds</span>
+            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="natural">Natural</button>
+            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="lab">Lab Grown</button>
+          </div>
+          <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
+            <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Gold</span>
+            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="18k">18K</button>
+            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="14k">14K</button>
+          </div>
         </div>
-        <p class="text-sm leading-relaxed text-slate-600 whitespace-pre-line">{product.description}</p>
-
-        <div class="space-y-3">
-          <div class="text-sm font-semibold">Details</div>
-          <ul class="text-sm text-slate-600 list-disc list-inside space-y-1">
-            <li>Metal: {product.metal || 'Precious metal'}</li>
-            <li>Collection: {product.collection || 'Signature'}</li>
-            <li>Category: {product.category || 'Jewelry'}</li>
-          </ul>
-        </div>
+        <p class="text-sm leading-relaxed text-slate-600 whitespace-pre-line" data-product-description>
+          {product.description}
+        </p>
 
         <div class="flex flex-wrap gap-3">
-          <a class="btn btn-primary" href={`mailto:${ordersEmail}?subject=Inquiry: ${encodeURIComponent(product.name)}`}>
+          <a class="btn btn-primary" href={mailtoHref}>
             Inquire
           </a>
-          <a class="btn btn-ghost" href="/contact">Book a consultation</a>
+          <a class="btn btn-ghost" href={withBase('/contact')}>Book a consultation</a>
         </div>
       </div>
     </div>
@@ -105,5 +167,85 @@ void jsonLdString;
 
   <script type="application/ld+json" is:inline>
     {jsonLdString}
+  </script>
+  <script is:inline>
+    (() => {
+      const mainImage = document.querySelector('[data-product-image]');
+      if (!mainImage) return;
+      const rawList = mainImage.getAttribute('data-product-image-meta') || '[]';
+      let imageMeta = [];
+      try {
+        imageMeta = JSON.parse(rawList);
+      } catch {
+        return;
+      }
+      if (!Array.isArray(imageMeta) || imageMeta.length === 0) return;
+      const prevBtn = document.querySelector('[data-image-prev]');
+      const nextBtn = document.querySelector('[data-image-next]');
+      const descEl = document.querySelector('[data-product-description]');
+      const defaultText = descEl ? descEl.textContent || '' : '';
+      let index = imageMeta.findIndex((item) => item?.url === (mainImage.getAttribute('src') || ''));
+      if (index < 0) index = 0;
+
+      const setIndex = (nextIndex) => {
+        const count = imageMeta.length;
+        index = ((nextIndex % count) + count) % count;
+        const next = imageMeta[index];
+        if (next?.url) {
+          mainImage.setAttribute('src', next.url);
+        }
+        if (descEl) {
+          descEl.textContent = next?.description || defaultText;
+        }
+      };
+
+      setIndex(index);
+
+      if (imageMeta.length > 1) {
+        if (prevBtn) {
+          prevBtn.addEventListener('click', () => setIndex(index - 1));
+        }
+        if (nextBtn) {
+          nextBtn.addEventListener('click', () => setIndex(index + 1));
+        }
+      }
+    })();
+  </script>
+  <script is:inline>
+    (() => {
+      const priceEl = document.getElementById('price-display');
+      if (!priceEl) return;
+      const naturalInr = Number(priceEl.dataset.priceInrNatural || 0);
+      const labInr = Number(priceEl.dataset.priceInrLab || naturalInr);
+      let diamondMode = 'natural';
+      let metalMode = priceEl.dataset.metalDefault || '18k';
+      const apply = () => {
+        const base = diamondMode === 'lab' ? labInr : naturalInr;
+        const adjusted = metalMode === '14k' ? Math.round(base * 0.95) : base;
+        priceEl.dataset.priceInr = String(adjusted);
+        window.dispatchEvent(new CustomEvent('hw:currency:update', { detail: localStorage.getItem('hw-currency') || 'USD' }));
+        document.querySelectorAll('[data-price-toggle]').forEach((btn) => {
+          btn.classList.toggle('bg-ink', btn.dataset.priceToggle === diamondMode);
+          btn.classList.toggle('text-white', btn.dataset.priceToggle === diamondMode);
+        });
+        document.querySelectorAll('[data-metal-toggle]').forEach((btn) => {
+          btn.classList.toggle('bg-ink', btn.dataset.metalToggle === metalMode);
+          btn.classList.toggle('text-white', btn.dataset.metalToggle === metalMode);
+        });
+      };
+      document.querySelectorAll('[data-price-toggle]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          diamondMode = btn.dataset.priceToggle || 'natural';
+          apply();
+        });
+      });
+      document.querySelectorAll('[data-metal-toggle]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          metalMode = btn.dataset.metalToggle || '18k';
+          apply();
+        });
+      });
+      apply();
+    })();
   </script>
 </BaseLayout>

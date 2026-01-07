@@ -2,24 +2,15 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
-import ProductCard from '../components/ProductCard.astro';
 import CurrencyToggle from '../components/CurrencyToggle.astro';
-import { loadProducts } from '../lib/products';
+import { loadProductsWithMedia, type ProductWithMedia } from '../lib/products';
 import { loadSiteConfig, getConfigValue } from '../lib/config';
 import { withBase } from '../lib/paths';
 
-const products = await loadProducts();
+const products: ProductWithMedia[] = await loadProductsWithMedia();
 const featured = products.filter((p) => p.is_featured).slice(0, 6);
 const config = await loadSiteConfig();
 
-const heroTitle = getConfigValue(config, 'hero_title', 'Heirloom pieces for modern collectors');
-const heroSubtitle = getConfigValue(
-  config,
-  'hero_subtitle',
-  'Hand-finished gold, diamonds, and precious stones with timeless, Tiffany-like minimalism.'
-);
-const heroCtaLabel = getConfigValue(config, 'hero_cta_label', 'View collections');
-const heroCtaLink = getConfigValue(config, 'hero_cta_link', '/collections');
 const metaTitle = getConfigValue(
   config,
   'meta_title',
@@ -32,84 +23,346 @@ const metaDescription = getConfigValue(
 );
 
 const collections = Array.from(new Set(products.map((p) => p.collection).filter(Boolean))).slice(0, 3);
-const heroImage = withBase('/images/hero.svg');
+const signatureSetMap: Record<string, string> = {
+  'hws-001': 'eclipse',
+  'hws-002': 'continuum',
+  'hws-003': 'axis'
+};
+const heroImage = withBase('/images/hero.png');
+const fallbackImage = withBase('/images/products/placeholder.svg');
 ---
 
 <BaseLayout title={metaTitle} description={metaDescription}>
   <Header />
 
-  <main class="space-y-16">
-    <section class="container grid gap-12 lg:grid-cols-2 items-center pt-8">
-      <div class="space-y-6">
-        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Heerawalla</p>
-        <h1 class="font-display text-4xl sm:text-5xl leading-tight tracking-tight">{heroTitle}</h1>
-        <p class="text-lg text-slate-600 max-w-xl">{heroSubtitle}</p>
-        <div class="flex flex-wrap gap-3">
-          <a class="btn btn-primary" href={withBase(heroCtaLink)}>{heroCtaLabel}</a>
-          <a class="btn btn-ghost" href={withBase('/contact')}>Book a consultation</a>
-        </div>
-        <div class="flex items-center gap-6 text-sm text-slate-500">
-          <div class="flex items-center gap-2">
-            <span class="h-2 w-2 rounded-full bg-ink"></span> Conflict-free diamonds
+  <main class="space-y-20">
+    <section class="max-w-7xl mx-auto px-6 pt-4 lg:pt-8">
+      <div class="grid gap-12 lg:gap-16 lg:grid-cols-[1.05fr_0.95fr] items-end relative">
+        <div class="space-y-7 order-2 lg:order-1">
+          <p class="text-[11px] uppercase tracking-[0.38em] text-slate-500">MAISON HEERAWALLA</p>
+          <h1 class="font-display text-5xl sm:text-6xl leading-[0.98] tracking-[0.02em] text-ink">Heerawalla Revolution</h1>
+          <!-- CMS swap: Variant B subheadline -->
+          <!-- The world revolves around her&mdash;crafted for every way she moves through it. -->
+          <!-- CMS swap: Variant C subheadline -->
+          <!-- The world revolves around her. -->
+          <p class="text-lg text-slate-600 max-w-xl">The world revolves around her&mdash;subtle, elegant, or bold.</p>
+          <!-- CMS swap: Variant B supporting line -->
+          <!-- Discover three signatures of the same power: Axis (anchored), Continuum (fluid), Eclipse (magnetic). -->
+          <!-- CMS swap: Variant C supporting line -->
+          <!-- Axis. Continuum. Eclipse. -->
+          <p class="text-sm text-slate-600 max-w-lg">Three expressions of a singular force. Axis anchors. Continuum flows. Eclipse commands.</p>
+          <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Choose your signature&mdash;Axis, Continuum, or Eclipse. Each is a complete set.</p>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <a
+              class="inline-flex items-center justify-center min-h-[44px] px-6 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              href={withBase('/collections')}
+            >
+              Explore the collection
+            </a>
+            <a
+              class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 text-sm uppercase tracking-[0.2em] text-ink border border-ink/20 rounded-none hover:border-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              href={withBase('/contact')}
+            >
+              Book a private consultation
+            </a>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="h-2 w-2 rounded-full bg-ink"></span> Crafted by master artisans
+          <div class="mt-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-[10px] uppercase tracking-[0.28em] text-slate-500">Signature Sets</p>
+                <p class="text-sm text-slate-600 mt-1">Three signatures. Each a complete set.</p>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-3" role="tablist" aria-label="Signature sets">
+              <button
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="revolution-panel"
+                data-line="axis"
+                data-set-name="Axis"
+                data-desc="Structured, anchored confidence"
+                data-set-link="/product/hws-003"
+                data-active="true"
+                class="min-h-[44px] px-3 py-2 font-display text-[11px] tracking-[0.12em] text-slate-500 border border-ink/15 rounded-none transition-colors duration-200 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              >
+                Axis Set
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="revolution-panel"
+                data-line="continuum"
+                data-set-name="Continuum"
+                data-desc="Fluid, graceful elegance"
+                data-set-link="/product/hws-002"
+                data-active="false"
+                tabindex="-1"
+                class="min-h-[44px] px-3 py-2 font-display text-[11px] tracking-[0.12em] text-slate-500 border border-ink/15 rounded-none transition-colors duration-200 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              >
+                Continuum Set
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="revolution-panel"
+                data-line="eclipse"
+                data-set-name="Eclipse"
+                data-desc="Bold, magnetic presence"
+                data-set-link="/product/hws-001"
+                data-active="false"
+                tabindex="-1"
+                class="min-h-[44px] px-3 py-2 font-display text-[11px] tracking-[0.12em] text-slate-500 border border-ink/15 rounded-none transition-colors duration-200 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              >
+                Eclipse Set
+              </button>
+            </div>
+            <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p
+                id="revolution-panel"
+                role="tabpanel"
+                aria-live="polite"
+                class="text-sm text-slate-600 transition-opacity duration-300 motion-reduce:transition-none"
+                data-revolution-panel
+              >
+                The Axis Set — Structured, anchored confidence
+              </p>
+              <a
+                href="/product/hws-003"
+                class="text-xs uppercase tracking-[0.24em] text-slate-500 underline underline-offset-4 hover:text-ink"
+                data-revolution-link
+              >
+                Shop Axis
+              </a>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="card overflow-hidden">
-        <img src={heroImage} alt="Fine jewelry still life" class="w-full h-full object-cover" loading="lazy" />
+        <div class="hero-media hero-media--campaign w-full h-[360px] sm:h-[420px] md:h-[480px] lg:h-[620px] max-h-[70vh] order-1 lg:order-2">
+          <img
+            src={heroImage}
+            alt="Heerawalla Revolution jewelry composition with sculpted gold forms and luminous diamonds."
+            class="hero-media__image"
+            loading="lazy"
+          />
+          <svg
+            viewBox="0 0 100 100"
+            class="hero-media__seal"
+            aria-hidden="true"
+          >
+            <path fill="currentColor" fill-rule="evenodd" d="
+              M50 11
+              A39 39 0 1 1 50 89
+              A39 39 0 1 1 50 11
+              Z
+              M50 17
+              A33 33 0 1 0 50 83
+              A33 33 0 1 0 50 17
+              Z
+            "/>
+            <rect x="47.25" y="6" width="5.5" height="88" rx="1.5" fill="currentColor"/>
+          </svg>
+        </div>
       </div>
     </section>
+    <style>
+      :global(.hero-media--campaign) {
+        position: relative;
+        overflow: hidden;
+        background: #ffffff;
+        border-radius: 2px;
+        box-shadow: inset 0 0 0 1px rgba(11, 25, 40, 0.1);
+      }
+      :global(.hero-media--campaign)::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(11, 25, 40, 0) 55%, rgba(11, 25, 40, 0.12) 100%);
+        pointer-events: none;
+        z-index: 2;
+      }
+      :global(.hero-media--campaign)::after {
+        content: none;
+      }
+      :global(.hero-media--campaign .hero-media__image) {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: 50% 30%;
+        z-index: 0;
+      }
+      :global(.hero-media--campaign .hero-media__seal) {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        width: 20px;
+        height: 20px;
+        color: #0b1928;
+        opacity: 0.2;
+        pointer-events: none;
+        z-index: 3;
+      }
+      @media (min-width: 1024px) {
+        :global(.hero-media--campaign .hero-media__image) {
+          object-fit: contain;
+          object-position: 50% 50%;
+        }
+      }
+      @media (max-width: 1024px) {
+        :global(.hero-media--campaign .hero-media__image) {
+          object-position: 50% 32%;
+        }
+      }
+      @media (max-width: 640px) {
+        :global(.hero-media--campaign .hero-media__image) {
+          object-position: 50% 28%;
+        }
+      }
+    </style>
+    <script is:inline>
+      (() => {
+        const tabs = Array.from(document.querySelectorAll('[role="tab"][data-line]'));
+        const panel = document.querySelector('[data-revolution-panel]');
+        const link = document.querySelector('[data-revolution-link]');
+        if (!tabs.length || !panel) return;
 
-    <section class="container space-y-6">
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Featured</p>
-          <h2 class="text-2xl font-semibold tracking-tight">Signature picks</h2>
-        </div>
-        <CurrencyToggle />
+        const setActive = (tab) => {
+          tabs.forEach((btn) => {
+            const isActive = btn === tab;
+            btn.setAttribute('aria-selected', String(isActive));
+            btn.setAttribute('data-active', String(isActive));
+            btn.tabIndex = isActive ? 0 : -1;
+          });
+          const setName = tab.getAttribute('data-set-name') || '';
+          const desc = tab.getAttribute('data-desc') || '';
+          panel.textContent = `The ${setName} Set — ${desc}`;
+          if (link) {
+            const href = tab.getAttribute('data-set-link') || '/collections';
+            link.setAttribute('href', href);
+            link.textContent = `Shop ${setName}`;
+          }
+          const cards = Array.from(document.querySelectorAll('[data-signature-card]'));
+          if (cards.length) {
+            const line = tab.getAttribute('data-line') || '';
+            let anyVisible = false;
+            cards.forEach((card) => {
+              const matches = card.getAttribute('data-signature-set') === line;
+              card.toggleAttribute('data-hidden', !matches);
+              card.classList.toggle('hidden', !matches);
+              if (matches) anyVisible = true;
+            });
+            if (!anyVisible) {
+              cards.forEach((card) => {
+                card.toggleAttribute('data-hidden', false);
+                card.classList.remove('hidden');
+              });
+            }
+          }
+        };
+
+        tabs.forEach((tab) => {
+          tab.addEventListener('click', () => setActive(tab));
+        });
+        window.addEventListener('load', () => {
+          const initial = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true') || tabs[0];
+          if (initial) setActive(initial);
+        });
+      })();
+    </script>
+
+    <section class="max-w-7xl mx-auto px-6 pt-6 lg:pt-10 space-y-8">
+      <div class="flex flex-col gap-10">
+        {featured.map((product) => {
+          const image = product.media.images[0]?.url || fallbackImage;
+          const signatureSet = signatureSetMap[product.slug] || signatureSetMap[product.id] || '';
+          return (
+            <a
+              href={withBase(`/product/${product.slug}`)}
+              class="group flex flex-col gap-4"
+              data-product-card
+              data-signature-card
+              data-signature-set={signatureSet}
+              data-collection={product.collection}
+              data-category={product.category}
+              data-metal={product.metal}
+              data-price={product.price_inr_natural}
+            >
+              <div class="border border-slate-200 bg-white">
+                <img
+                  src={image}
+                  alt={product.name}
+                  loading="lazy"
+                  class="w-full h-auto object-contain transition duration-300 group-hover:scale-[1.02]"
+                />
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <div class="text-[10px] uppercase tracking-[0.24em] text-slate-500">{product.collection || product.category}</div>
+                  <div class="text-lg font-semibold tracking-tight">{product.name}</div>
+                </div>
+                <span class="text-[10px] uppercase tracking-[0.24em] text-slate-400">{product.metal}</span>
+              </div>
+              <p class="text-sm text-slate-500 line-clamp-2">{product.description}</p>
+              <span class="text-sm font-semibold" data-price-inr={product.price_inr_natural}></span>
+            </a>
+          );
+        })}
       </div>
-      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {featured.map((product) => (
-          <div data-product-card data-collection={product.collection} data-category={product.category} data-metal={product.metal} data-price={product.price_usd}>
-            <ProductCard product={product} />
-          </div>
-        ))}
+      <div class="flex justify-end">
+        <a href={withBase('/collections')} class="text-xs uppercase tracking-[0.3em] text-slate-500 hover:text-ink">View all collections</a>
       </div>
     </section>
 
     <section class="container space-y-6">
       <div>
-        <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Collections</p>
-        <h2 class="text-2xl font-semibold tracking-tight">Curated for every occasion</h2>
+        <p class="text-xs uppercase tracking-[0.28em] text-slate-500">Collections</p>
+        <h2 class="font-display text-3xl sm:text-4xl tracking-tight">Composed as heirlooms</h2>
       </div>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="grid gap-0 divide-y border-y border-slate-200 md:grid-cols-3 md:divide-y-0 md:divide-x">
         {collections.map((c) => (
-          <a href={withBase(`/collections?collection=${encodeURIComponent(c)}`)} class="card p-6 flex flex-col gap-3 hover:-translate-y-1 transition">
-            <div class="text-lg font-semibold">{c}</div>
-            <p class="text-sm text-slate-500">Hand-selected pieces crafted in {c} style.</p>
-            <span class="text-sm font-medium text-accent">View collection -></span>
+          <a
+            href={withBase(`/collections?collection=${encodeURIComponent(c)}`)}
+            class="group flex flex-col gap-3 px-0 py-6 md:px-6 md:py-8"
+          >
+            <span class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Collection</span>
+            <span class="font-display text-2xl tracking-tight">{c}</span>
+            <span class="text-sm text-slate-500 group-hover:text-ink">View collection -></span>
           </a>
         ))}
       </div>
     </section>
 
-    <section class="container grid gap-8 lg:grid-cols-3">
-      <div class="card p-6 space-y-3">
-        <div class="text-lg font-semibold">Bespoke services</div>
-        <p class="text-sm text-slate-500">Custom designs, stone sourcing, and engravings guided by our designers.</p>
-        <a href={withBase('/contact')} class="text-sm text-accent">Start a bespoke project -></a>
-      </div>
-      <div class="card p-6 space-y-3">
-        <div class="text-lg font-semibold">Ethical sourcing</div>
-        <p class="text-sm text-slate-500">Conflict-free diamonds and responsibly sourced metals, documented for every piece.</p>
-        <a href={withBase('/policies')} class="text-sm text-accent">View sourcing standards -></a>
-      </div>
-      <div class="card p-6 space-y-3">
-        <div class="text-lg font-semibold">Lifetime care</div>
-        <p class="text-sm text-slate-500">Complimentary annual inspections and polishing for Heerawalla collectors.</p>
-        <a href={withBase('/contact')} class="text-sm text-accent">Schedule care -></a>
+    <section class="container">
+      <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center border-t border-slate-200 pt-10">
+        <div class="space-y-6">
+          <p class="text-xs uppercase tracking-[0.28em] text-slate-500">The Atelier</p>
+          <h2 class="font-display text-3xl sm:text-4xl tracking-tight">Jewels for personal rituals and generational keeping.</h2>
+          <p class="text-sm text-slate-600">
+            Every piece is crafted with deliberate restraint: refined proportions, luminous stones, and a finish that
+            rewards a closer look.
+          </p>
+          <div class="grid gap-4 text-sm text-slate-600">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+              <span>Ethical sourcing</span>
+              <span class="text-slate-500">Conflict-free stones</span>
+            </div>
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+              <span>Metalsmithing</span>
+              <span class="text-slate-500">Hand-finished 18K gold</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span>Lifetime care</span>
+              <span class="text-slate-500">Annual polishing included</span>
+            </div>
+          </div>
+        </div>
+        <div class="relative aspect-[3/4] overflow-hidden border border-slate-200">
+          <img src={withBase('/images/atelier.png')} alt="Atelier detail" class="h-full w-full object-cover" loading="lazy" />
+          <div class="absolute inset-3 border border-white/70 pointer-events-none"></div>
+        </div>
       </div>
     </section>
   </main>

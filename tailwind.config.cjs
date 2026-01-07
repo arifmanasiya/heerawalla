@@ -4,13 +4,13 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Inter"', 'system-ui', 'sans-serif'],
-        display: ['"Playfair Display"', 'serif']
+        sans: ['"Manrope"', 'sans-serif'],
+        display: ['"Cormorant Garamond"', 'serif']
       },
       colors: {
         ink: '#0b1928',
-        mist: '#f7f9fb',
-        accent: '#7b9abf',
+        mist: '#ffffff',
+        accent: '#b08c5a',
         gold: '#d4af37'
       }
     }

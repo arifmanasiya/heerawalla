@@ -1,0 +1,78 @@
+---
+import type { MediaCollection } from '../lib/media';
+import { withBase } from '../lib/paths';
+const { media } = Astro.props as { media: MediaCollection };
+const images = media.images;
+const videos = media.videos;
+const hasImages = images.length > 0;
+const hasVideos = videos.length > 0;
+const fallback = withBase('/images/products/placeholder.svg');
+---
+
+<section class="space-y-3">
+  <div class="flex items-center justify-between">
+    <h2 class="text-lg font-semibold">Gallery</h2>
+    <p class="text-xs text-slate-500">
+      {hasImages ? 'Tap a thumbnail to update the main image.' : 'Swipe or scroll horizontally.'}
+    </p>
+  </div>
+  <div class="flex gap-4 overflow-x-auto snap-x pb-2">
+    {hasImages ? (
+      images.map((item, index) => {
+        const description = item.description?.trim();
+        return (
+          <button
+            type="button"
+            class="gallery-thumb shrink-0 rounded-xl snap-start border border-transparent bg-transparent p-0 relative overflow-hidden"
+            data-gallery-thumb
+            data-gallery-index={index}
+            data-gallery-src={item.url}
+            data-gallery-caption={description || ''}
+            aria-current={index === 0 ? 'true' : 'false'}
+            aria-label={`View image ${index + 1}`}
+          >
+            <img
+              src={item.url}
+              alt={item.filename}
+              loading="lazy"
+              class="h-72 w-auto rounded-xl object-cover"
+            />
+            {description ? (
+              <span class="gallery-caption">
+                <span class="gallery-caption__text">{description}</span>
+              </span>
+            ) : null}
+          </button>
+        );
+      })
+    ) : (
+      <img src={fallback} alt="Placeholder" class="h-72 w-auto rounded-xl object-cover" loading="lazy" />
+    )}
+  </div>
+  {hasVideos ? (
+    <div class="space-y-3">
+      <div class="text-sm font-semibold">Videos</div>
+      <div class="flex gap-4 overflow-x-auto snap-x pb-2">
+        {videos.map((item) => (
+          <video
+            class="h-72 w-auto rounded-xl bg-black snap-start"
+            controls
+            muted
+            preload="metadata"
+            poster={media.images[0]?.url || fallback}
+          >
+            <source src={item.url} />
+            Your browser does not support the video tag.
+          </video>
+        ))}
+      </div>
+    </div>
+  ) : null}
+</section>
+
+<style>
+  .gallery-thumb[aria-current='true'] {
+    outline: 2px solid #0b1928;
+    outline-offset: 2px;
+  }
+</style>
