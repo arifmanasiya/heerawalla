@@ -8,31 +8,6 @@ import { getMediaForProduct, type MediaCollection } from './media';
 const DATA_DIR = path.resolve('data');
 const SAMPLE_PRODUCTS = path.resolve('data/products.sample.csv');
 
-let cachedUsdInrRate: number | null = null;
-
-async function fetchUsdInrRate(): Promise<number> {
-  if (cachedUsdInrRate) return cachedUsdInrRate;
-  const fallback = Number(process.env.USDINR_RATE || 85);
-  const date = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const url = `https://api.exchangerate.host/${date}?base=USD&symbols=INR`;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Rate fetch failed ${res.status}`);
-    const data = (await res.json()) as { rates?: { INR?: number } };
-    const rate = data?.rates?.INR;
-    if (!rate || rate <= 0) throw new Error('Invalid rate');
-    cachedUsdInrRate = rate * 1.05; // add 5% buffer
-  } catch {
-    cachedUsdInrRate = fallback * 1.05;
-  }
-  return cachedUsdInrRate;
-}
-
-function inrToUsd(amountInInr: number, usdInrRate: number) {
-  const usd = amountInInr / usdInrRate;
-  return Math.round(usd * 100) / 100;
-}
-
 function toBoolean(value: string | undefined): boolean {
   if (!value) return false;
   return ['true', '1', 'yes', 'y'].includes(value.trim().toLowerCase());
@@ -44,6 +19,14 @@ function toOptionalString(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function toOptionalNumber(value: string | undefined): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  const trimmed = value.toString().trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 async function readProductCSVs(): Promise<string[]> {
   const entries = await fs.readdir(DATA_DIR);
   const matches = entries.filter((file) => file.startsWith('products-') && file.endsWith('.csv'));
@@ -52,7 +35,6 @@ async function readProductCSVs(): Promise<string[]> {
 }
 
 async function loadCsvFile(filePath: string): Promise<Product[]> {
-  const usdInrRate = await fetchUsdInrRate();
   const csv = await fetchCsv(filePath, filePath);
   const records = parse(csv, {
     columns: true,
@@ -84,16 +66,15 @@ async function loadCsvFile(filePath: string): Promise<Product[]> {
         clarity: toOptionalString(row.clarity),
         color: toOptionalString(row.color),
         carat: row.carat ? Number(row.carat) : undefined,
-        price_inr_natural: Number(row.price_inr_natural),
-        price_inr_lab: row.price_inr_lab ? Number(row.price_inr_lab) : undefined,
+        price_usd_natural: Number(row.price_usd_natural),
+        lab_discount_pct: toOptionalNumber(row.lab_discount_pct),
+        metal_14k_discount_pct: toOptionalNumber(row.metal_14k_discount_pct),
         is_active: toBoolean(row.is_active),
         is_featured: toBoolean(row.is_featured),
         tags: row.tags
       };
       const validated = productSchema.parse(base) as ProductInput;
-      const price_usd_natural = inrToUsd(validated.price_inr_natural, usdInrRate);
-      const price_usd_lab = validated.price_inr_lab ? inrToUsd(validated.price_inr_lab, usdInrRate) : undefined;
-      return { ...validated, price_usd_natural, price_usd_lab };
+      return { ...validated };
     })
     .filter((p) => p.is_active);
   return parsed;

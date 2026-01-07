@@ -7,6 +7,7 @@ const fallback = withBase('/images/products/placeholder.svg');
 const image = rawImage ? rawImage : fallback;
 const thumbnails = product.media.images.slice(1, 4);
 const hasThumbs = thumbnails.length > 0;
+const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 ---
 
 <article class="card overflow-hidden group h-full flex flex-col" data-thumb-layout="column">
@@ -57,10 +58,7 @@ const hasThumbs = thumbnails.length > 0;
     </a>
     <p class="text-sm text-slate-500 line-clamp-2">{product.description}</p>
     <div class="mt-auto flex items-center justify-between pt-2">
-      <span
-        class="font-semibold text-sm"
-        data-price-inr={product.price_inr_natural}
-      ></span>
+      <span class="font-semibold text-sm">{usdFormatter.format(product.price_usd_natural)}</span>
       <span class="text-xs uppercase tracking-[0.14em] text-slate-400">{product.metal}</span>
     </div>
   </div>

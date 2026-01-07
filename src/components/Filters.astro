@@ -34,80 +34,17 @@ const categories = Array.from(new Set(products.map((p) => p.category).filter(Boo
 
 <script is:inline>
   (() => {
-    const KEY_CURRENCY = 'hw-currency';
-    const KEY_RATE = 'hw-usd-inr-rate';
-    const FALLBACK_RATE = 85;
     const selects = Array.from(document.querySelectorAll('.filter-select'));
-    const priceSelect = selects.find((s) => s.dataset.filter === 'price');
-
-    const getRate = () => {
-      const cachedRaw = localStorage.getItem(KEY_RATE);
-      if (cachedRaw) {
-        try {
-          const cached = JSON.parse(cachedRaw);
-          if (cached.rate && cached.rate > 0) return cached.rate;
-        } catch {}
-      }
-      return FALLBACK_RATE;
-    };
-
-    const inrToUsd = (inr) => {
-      const rate = getRate();
-      return rate ? (inr / rate) * 1.05 : 0;
-    };
-
-    const usdToInr = (usd) => {
-      const rate = getRate();
-      return Math.round((usd / 1.05) * rate);
-    };
-
-    const getCurrency = () => localStorage.getItem(KEY_CURRENCY) || 'USD';
-
-    const buildPriceOptions = () => {
-      if (!priceSelect) return;
-      const currency = getCurrency();
-      const formatter =
-        currency === 'INR'
-          ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
-          : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-      const toCurrencyValue = (usd) => (currency === 'USD' ? usd : usdToInr(usd));
-      const ranges = [
-        { min: 0, max: 500, type: 'under' },
-        { min: 500, max: 2000, type: 'range' },
-        { min: 2000, max: 999999, type: 'above' }
-      ];
-
-      priceSelect.innerHTML = '<option value="">Price</option>';
-      ranges.forEach((range) => {
-        const minVal = toCurrencyValue(range.min);
-        const maxVal = toCurrencyValue(range.max);
-        let label = '';
-        if (range.type === 'under') {
-          label = `Under ${formatter.format(maxVal)}`;
-        } else if (range.type === 'above') {
-          label = `${formatter.format(minVal)}+`;
-        } else {
-          label = `${formatter.format(minVal)} - ${formatter.format(maxVal)}`;
-        }
-        const option = document.createElement('option');
-        option.value = `${minVal}-${maxVal}`;
-        option.textContent = label;
-        priceSelect.appendChild(option);
-      });
-      priceSelect.value = '';
-    };
 
     const apply = () => {
       const cards = Array.from(document.querySelectorAll('[data-product-card]'));
       if (cards.length === 0) return;
-      const currency = getCurrency();
       const filters = Object.fromEntries(selects.map((s) => [s.dataset.filter, s.value]));
       cards.forEach((card) => {
         const c = card.dataset.collection || '';
         const cat = card.dataset.category || '';
         const metal = card.dataset.metal || '';
-        const priceInr = Number(card.dataset.price || 0);
-        const price = currency === 'USD' ? inrToUsd(priceInr) : priceInr;
+        const price = Number(card.dataset.price || 0);
         const matchesCollection = !filters.collection || c === filters.collection;
         const matchesCategory = !filters.category || cat === filters.category;
         const matchesMetal = !filters.metal || metal === filters.metal;
@@ -123,12 +60,7 @@ const categories = Array.from(new Set(products.map((p) => p.category).filter(Boo
     };
 
     selects.forEach((s) => s.addEventListener('change', apply));
-    window.addEventListener('hw:currency:update', () => {
-      buildPriceOptions();
-      apply();
-    });
     window.addEventListener('load', () => {
-      buildPriceOptions();
       apply();
     });
   })();

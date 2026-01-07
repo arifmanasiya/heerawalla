@@ -1,2 +1,2 @@
-id,name,slug,description,collection,category,metal,price_inr_natural,price_inr_lab,is_active,is_featured,tags,cut,clarity,color,carat
-hw-002,Azure Solitaire,azure-solitaire,Brilliant-cut diamond solitaire on a slender platinum band.,Signature,women/rings,Platinum,432000,265000,FALSE,FALSE,diamond,Ideal,VVS1 - VVS2,E,1
+id,name,slug,description,collection,category,metal,price_usd_natural,lab_discount_pct,metal_14k_discount_pct,is_active,is_featured,tags,cut,clarity,color,carat
+hw-002,Azure Solitaire,azure-solitaire,Brilliant-cut diamond solitaire on a slender platinum band.,Signature,women/rings,Platinum,5336.47,-20,-5,FALSE,FALSE,diamond,Ideal,VVS1 - VVS2,E,1

@@ -12,18 +12,16 @@ export const productSchema = z.object({
   clarity: z.string().optional().default('VVS1 - VVS2'),
   color: z.string().optional().default('E'),
   carat: z.number().nonnegative().optional().default(1),
-  price_inr_natural: z.number().nonnegative(),
-  price_inr_lab: z.number().nonnegative().optional(),
+  price_usd_natural: z.number().nonnegative(),
+  lab_discount_pct: z.number().optional().default(-20),
+  metal_14k_discount_pct: z.number().optional().default(-5),
   is_active: z.boolean(),
   is_featured: z.boolean().optional().default(false),
   tags: z.string().optional().default('')
 });
 
 export type ProductInput = z.infer<typeof productSchema>;
-export type Product = ProductInput & {
-  price_usd_natural: number;
-  price_usd_lab?: number;
-};
+export type Product = ProductInput;
 
 export const siteConfigSchema = z.record(z.string().min(1), z.string().optional().default(''));
 export type SiteConfig = Record<string, string>;
@@ -32,13 +30,15 @@ export const requiredProductColumns = [
   'id',
   'name',
   'slug',
-  'price_inr_natural',
+  'price_usd_natural',
   'is_active',
   'category',
   'cut',
   'clarity',
   'color',
-  'carat'
+  'carat',
+  'lab_discount_pct',
+  'metal_14k_discount_pct'
 ] as const;
 
 export const requiredConfigColumns = ['key', 'value'] as const;

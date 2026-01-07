@@ -1,0 +1,268 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { withBase } from '../lib/paths';
+---
+
+<BaseLayout title="Sizing Guide | Heerawalla" description="A refined sizing guide for rings, bracelets, and necklaces.">
+  <Header />
+
+  <main class="max-w-7xl mx-auto px-6 py-12 space-y-14">
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Guides</p>
+      <h1 class="text-3xl sm:text-4xl font-semibold tracking-tight">Sizing Guide</h1>
+      <p class="text-sm text-slate-500 max-w-2xl">A precise fit, designed to feel effortless.</p>
+    </div>
+
+    <section class="border-t border-slate-200 pt-8">
+      <div class="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
+        <div class="space-y-3">
+          <h2 class="font-display text-2xl tracking-tight">Ring Size</h2>
+          <p class="text-sm text-slate-600">
+            Measure the inner diameter of a ring you already own (in mm), or wrap a strip of paper around your finger to
+            record its circumference. Measure snugly, then compare to the table below.
+          </p>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">US sizing with mm guidance</p>
+          <p class="text-xs text-slate-500">More sizes are available via the concierge.</p>
+        </div>
+        <div class="border border-slate-200 p-4 overflow-x-auto">
+          <table class="w-full min-w-[520px] text-sm">
+            <thead class="text-xs uppercase tracking-[0.2em] text-slate-500">
+              <tr class="text-left border-b border-slate-200">
+                <th class="py-2 pr-4 font-semibold">US Size</th>
+                <th class="py-2 pr-4 font-semibold">Inside Diameter (mm)</th>
+                <th class="py-2 font-semibold">Inside Circumference (mm)</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-600">
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">5</td>
+                <td class="py-2 pr-4">15.7</td>
+                <td class="py-2">49.3</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">5.5</td>
+                <td class="py-2 pr-4">16.1</td>
+                <td class="py-2">50.6</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">6</td>
+                <td class="py-2 pr-4">16.5</td>
+                <td class="py-2">51.9</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">6.5</td>
+                <td class="py-2 pr-4">16.9</td>
+                <td class="py-2">53.1</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">7</td>
+                <td class="py-2 pr-4">17.3</td>
+                <td class="py-2">54.4</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">7.5</td>
+                <td class="py-2 pr-4">17.7</td>
+                <td class="py-2">55.7</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">8</td>
+                <td class="py-2 pr-4">18.2</td>
+                <td class="py-2">57.0</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">8.5</td>
+                <td class="py-2 pr-4">18.6</td>
+                <td class="py-2">58.3</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">9</td>
+                <td class="py-2 pr-4">19.0</td>
+                <td class="py-2">59.5</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">9.5</td>
+                <td class="py-2 pr-4">19.4</td>
+                <td class="py-2">60.8</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">10</td>
+                <td class="py-2 pr-4">19.8</td>
+                <td class="py-2">62.1</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">10.5</td>
+                <td class="py-2 pr-4">20.2</td>
+                <td class="py-2">63.4</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">11</td>
+                <td class="py-2 pr-4">20.6</td>
+                <td class="py-2">64.6</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">11.5</td>
+                <td class="py-2 pr-4">21.0</td>
+                <td class="py-2">65.9</td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-4">12</td>
+                <td class="py-2 pr-4">21.4</td>
+                <td class="py-2">67.2</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="mt-3 text-xs text-slate-500">Print-friendly sizing is available on request.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <div class="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
+        <div class="space-y-3">
+          <h2 class="font-display text-2xl tracking-tight">Bracelet Size</h2>
+          <p class="text-sm text-slate-600">
+            Measure your wrist with a soft tape or paper strip. For a snug fit, keep the measurement true; for comfort, add
+            0.25–0.5 in (6–12 mm).
+          </p>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Snug vs comfort fit</p>
+        </div>
+        <div class="border border-slate-200 p-4 overflow-x-auto">
+          <table class="w-full min-w-[420px] text-sm">
+            <thead class="text-xs uppercase tracking-[0.2em] text-slate-500">
+              <tr class="text-left border-b border-slate-200">
+                <th class="py-2 pr-4 font-semibold">Wrist</th>
+                <th class="py-2 pr-4 font-semibold">Wrist (mm)</th>
+                <th class="py-2 font-semibold">Recommended Size</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-600">
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">5.5–6.0 in</td>
+                <td class="py-2 pr-4">140–152</td>
+                <td class="py-2">Small</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">6.1–6.8 in</td>
+                <td class="py-2 pr-4">155–173</td>
+                <td class="py-2">Medium</td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-4">6.9–7.5 in</td>
+                <td class="py-2 pr-4">175–190</td>
+                <td class="py-2">Large</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="mt-3 text-xs text-slate-500">Clasp styles may vary by piece. The concierge can confirm fit details.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <div class="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
+        <div class="space-y-3">
+          <h2 class="font-display text-2xl tracking-tight">Necklace Length</h2>
+          <p class="text-sm text-slate-600">
+            Standard lengths are designed to sit elegantly at the collarbone or just below. If you prefer a longer line,
+            the concierge can advise on custom lengths.
+          </p>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Layering note</p>
+          <p class="text-xs text-slate-500">For a refined stack, separate layers by 2 inches.</p>
+        </div>
+        <div class="border border-slate-200 p-4 overflow-x-auto">
+          <table class="w-full min-w-[380px] text-sm">
+            <thead class="text-xs uppercase tracking-[0.2em] text-slate-500">
+              <tr class="text-left border-b border-slate-200">
+                <th class="py-2 pr-4 font-semibold">Length</th>
+                <th class="py-2 pr-4 font-semibold">Length (cm)</th>
+                <th class="py-2 font-semibold">Placement</th>
+              </tr>
+            </thead>
+            <tbody class="text-slate-600">
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">16 in</td>
+                <td class="py-2 pr-4">41</td>
+                <td class="py-2">Sits at the collarbone</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">18 in</td>
+                <td class="py-2 pr-4">46</td>
+                <td class="py-2">Just below the collarbone</td>
+              </tr>
+              <tr class="border-b border-slate-200">
+                <td class="py-2 pr-4">20 in</td>
+                <td class="py-2 pr-4">51</td>
+                <td class="py-2">Upper chest</td>
+              </tr>
+              <tr>
+                <td class="py-2 pr-4">22 in</td>
+                <td class="py-2 pr-4">56</td>
+                <td class="py-2">Mid-chest</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <div class="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
+        <div class="space-y-3">
+          <h2 class="font-display text-2xl tracking-tight">Men’s Fit Notes</h2>
+          <p class="text-sm text-slate-600">
+            Men’s bands often feel tighter due to width—consider sizing up by half a size. Bracelets are typically worn with a
+            slightly looser fit, and pendant lengths at mid-chest are commonly preferred.
+          </p>
+        </div>
+        <div class="border border-slate-200 p-4 text-sm text-slate-600 space-y-2">
+          <p>Wider bands: consider +0.5 size for comfort.</p>
+          <p>Bracelets: a relaxed fit tends to feel more natural.</p>
+          <p>Pendants: 20–22 in lengths place the piece at the upper to mid-chest.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <div class="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
+        <div class="space-y-3">
+          <h2 class="font-display text-2xl tracking-tight">If You’re Between Sizes</h2>
+          <p class="text-sm text-slate-600">
+            For wider bands or stacking rings, sizing up is often more comfortable. In colder climates or when hands swell,
+            choose a comfort fit to avoid tightness.
+          </p>
+        </div>
+        <div class="border border-slate-200 p-4 text-sm text-slate-600 space-y-2">
+          <p>Wider bands: size up.</p>
+          <p>Stacking rings: size up.</p>
+          <p>Temperature changes: consider a comfort fit.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <div class="grid gap-6 lg:grid-cols-[1fr_1.2fr] lg:gap-10">
+        <div class="space-y-3">
+          <h2 class="font-display text-2xl tracking-tight">Concierge sizing help</h2>
+          <p class="text-sm text-slate-600">
+            Share your measurements and we will advise on the precise size and fit for the piece you are considering.
+          </p>
+        </div>
+        <div class="border border-slate-200 p-4 space-y-3">
+          <a
+            class="btn btn-primary w-full"
+            href="mailto:support@heerawalla.com?subject=Sizing%20Help"
+          >
+            Email Concierge
+          </a>
+          <a class="btn btn-ghost w-full" href={withBase('/contact?intent=consultation')}>
+            Book a private consultation
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

@@ -1,5 +1,13 @@
 ---
 import { withBase } from '../lib/paths';
+import { loadSiteConfig, getConfigValue } from '../lib/config';
+
+const config = await loadSiteConfig();
+const joinEmail = getConfigValue(config, 'newsletter_email', 'info@heerawalla.com');
+const joinSubject = getConfigValue(config, 'newsletter_subject', 'Join Heerawalla');
+const joinBody = getConfigValue(config, 'newsletter_body', 'Please add me to the Heerawalla list.');
+const webmailComposeBase = getConfigValue(config, 'webmail_compose_url', 'https://mail.google.com/mail/?view=cm&fs=1&to=');
+const mailtoHref = `mailto:${joinEmail}?subject=${encodeURIComponent(joinSubject)}&body=${encodeURIComponent(joinBody)}`;
 ---
 
 <footer class="mt-16 border-t border-slate-200 bg-white">
@@ -13,20 +21,39 @@ import { withBase } from '../lib/paths';
       <ul class="space-y-2 text-sm text-slate-600">
         <li><a href={withBase('/collections')} class="hover:text-accent">Collections</a></li>
         <li><a href={withBase('/about')} class="hover:text-accent">About</a></li>
-        <li><a href={withBase('/contact')} class="hover:text-accent">Contact</a></li>
       </ul>
     </div>
     <div>
       <div class="text-sm font-semibold mb-3">Support</div>
       <ul class="space-y-2 text-sm text-slate-600">
         <li><a href={withBase('/policies')} class="hover:text-accent">Policies</a></li>
-        <li><a href="mailto:support@heerawalla.com" class="hover:text-accent">Email</a></li>
+        <li><a href={withBase('/faq')} class="hover:text-accent">FAQ</a></li>
+        <li><a href={withBase('/sizing')} class="hover:text-accent">Sizing Guide</a></li>
+        <li><a href={withBase('/contact')} class="hover:text-accent">Contact</a></li>
       </ul>
     </div>
     <div class="space-y-3">
       <div class="text-sm font-semibold">Newsletter</div>
       <p class="text-sm text-slate-500">Sign up to hear about limited drops and bespoke services.</p>
-      <a class="btn btn-primary" href="mailto:info@heerawalla.com?subject=Join%20Heerawalla">Join</a>
+      <div
+        class="relative inline-flex"
+        data-mail-picker
+        data-email={joinEmail}
+        data-subject={joinSubject}
+        data-body={joinBody}
+        data-gmail-base={webmailComposeBase}
+      >
+        <a class="btn btn-primary" href={mailtoHref} data-mail-trigger>Join</a>
+        <div
+          class="absolute left-0 top-full z-20 mt-2 w-48 border border-slate-200 bg-white shadow-md hidden"
+          data-mail-menu
+          role="menu"
+        >
+          <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="gmail" role="menuitem">Gmail</button>
+          <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="outlook" role="menuitem">Outlook</button>
+          <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="mailto" role="menuitem">Mail app</button>
+        </div>
+      </div>
     </div>
   </div>
 <div class="border-t border-slate-200 py-4 text-center text-xs text-slate-500">&copy; {new Date().getFullYear()} Heerawalla. All rights reserved.</div>

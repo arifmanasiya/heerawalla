@@ -1,5 +1,4 @@
 ---
-import CurrencyToggle from './CurrencyToggle.astro';
 import { withBase } from '../lib/paths';
 ---
 
@@ -15,8 +14,7 @@ import { withBase } from '../lib/paths';
       <a href={withBase('/policies')} class="hover:text-ink">Policies</a>
     </nav>
     <div class="flex items-center gap-4 text-[11px] uppercase tracking-[0.28em] text-slate-500">
-      <CurrencyToggle variant="text" />
-      <a href="mailto:support@heerawalla.com" class="hover:text-ink">Concierge</a>
+      <a href={withBase('/contact?intent=consultation')} class="hover:text-ink">Concierge</a>
     </div>
   </div>
 </header>

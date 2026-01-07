@@ -27,65 +27,146 @@ const url = new URL(Astro.url.pathname, siteOrigin).toString();
 
     <script is:inline>
       (() => {
-        const KEY_CURRENCY = 'hw-currency';
-        const KEY_RATE = 'hw-usd-inr-rate';
-        const ONE_DAY = 24 * 60 * 60 * 1000;
-        const FALLBACK_RATE = 85;
+        const pickers = Array.from(document.querySelectorAll('[data-mail-picker]'));
+        if (pickers.length === 0) return;
+        const isMobile = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent);
+        const gmailDefault = 'https://mail.google.com/mail/?view=cm&fs=1&to=';
+        const outlookDefault = 'https://outlook.office.com/mail/deeplink/compose?to=';
 
-        let currency = localStorage.getItem(KEY_CURRENCY) || 'USD';
-        let rateInrPerUsd = null;
-
-        const formatters = {
-          USD: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }),
-          INR: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })
-        };
-
-        const apply = () => {
-          document.documentElement.dataset.currency = currency;
-          document.querySelectorAll('[data-price-inr]').forEach((el) => {
-            const inr = Number(el.dataset.priceInr || 0);
-            const rate = rateInrPerUsd || FALLBACK_RATE;
-            const usd = rate ? (inr / rate) * 1.05 : 0; // add 5% after conversion
-            const formatter = formatters[currency] || formatters.USD;
-            const val = currency === 'INR' ? inr : usd;
-            el.textContent = formatter.format(val || 0);
+        const closeAll = () => {
+          pickers.forEach((picker) => {
+            picker.setAttribute('data-open', 'false');
+            const menu = picker.querySelector('[data-mail-menu]');
+            const trigger = picker.querySelector('[data-mail-trigger]');
+            if (menu) menu.classList.add('hidden');
+            if (trigger) trigger.setAttribute('aria-expanded', 'false');
           });
         };
 
-        const fetchRate = async () => {
-          const cachedRaw = localStorage.getItem(KEY_RATE);
-          if (cachedRaw) {
-            try {
-              const cached = JSON.parse(cachedRaw);
-              if (cached.rate && cached.rate > 0 && cached.ts && Date.now() - cached.ts < ONE_DAY) {
-                rateInrPerUsd = cached.rate;
-                return;
-              }
-            } catch {}
-          }
-          const date = new Date(Date.now() - ONE_DAY).toISOString().slice(0, 10);
-          const url = `https://api.exchangerate.host/${date}?base=USD&symbols=INR`;
-          const fallback = FALLBACK_RATE;
-          try {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error('rate fetch failed');
-            const data = await res.json();
-            const rate = data?.rates?.INR;
-            if (!rate || rate <= 0) throw new Error('bad rate');
-            rateInrPerUsd = rate * 1.05;
-            localStorage.setItem(KEY_RATE, JSON.stringify({ rate: rateInrPerUsd, ts: Date.now() }));
-          } catch {
-            rateInrPerUsd = fallback;
-          }
+        const formatCst = (value) => {
+          const date = new Date(value);
+          if (Number.isNaN(date.getTime())) return value;
+          const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Chicago',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          }).formatToParts(date);
+          const get = (type) => parts.find((p) => p.type === type)?.value;
+          return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} CST`;
         };
 
-        window.addEventListener('hw:currency:update', (event) => {
-          currency = event.detail;
-          localStorage.setItem(KEY_CURRENCY, currency);
-          apply();
+        const buildMailData = (picker) => {
+          const email = picker.getAttribute('data-email') || '';
+          const baseSubject = picker.getAttribute('data-subject') || '';
+          const baseBody = picker.getAttribute('data-body') || '';
+          let subject = baseSubject;
+          let body = baseBody;
+          if (picker.getAttribute('data-mail-source') === 'form') {
+            const form = picker.closest('form');
+            if (form) {
+              const data = new FormData(form);
+              const name = String(data.get('name') || '').trim();
+              const replyTo = String(data.get('email') || '').trim();
+              const message = String(data.get('message') || '').trim();
+              const consultation = String(data.get('consultation') || '').trim();
+              const lines = [];
+              if (name) lines.push(`Name: ${name}`);
+              if (replyTo) lines.push(`Email: ${replyTo}`);
+              if (consultation) lines.push(`Consultation: ${formatCst(consultation)}`);
+              if (message) lines.push('', message);
+              if (baseBody) lines.push('', baseBody);
+              body = lines.length ? lines.join('\n') : baseBody;
+              subject = baseSubject || (name ? `Inquiry from ${name}` : 'Heerawalla inquiry');
+            }
+          }
+          return { email, subject, body };
+        };
+
+        const buildHref = (provider, email, subject, body, picker) => {
+          if (provider === 'mailto') {
+            return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+          }
+          if (provider === 'outlook') {
+            const base = picker.getAttribute('data-outlook-base') || outlookDefault;
+            return `${base}${encodeURIComponent(email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+          }
+          const base = picker.getAttribute('data-gmail-base') || gmailDefault;
+          return `${base}${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        };
+
+        pickers.forEach((picker) => {
+          const trigger = picker.querySelector('[data-mail-trigger]');
+          const menu = picker.querySelector('[data-mail-menu]');
+          if (!trigger || !menu) return;
+          const isFormSource = picker.getAttribute('data-mail-source') === 'form';
+          const form = isFormSource ? picker.closest('form') : null;
+
+          trigger.setAttribute('aria-haspopup', 'menu');
+          trigger.setAttribute('aria-expanded', 'false');
+
+          if (isMobile) {
+            menu.classList.add('hidden');
+            trigger.addEventListener('click', (event) => {
+              event.preventDefault();
+              if (isFormSource && form && !form.checkValidity()) {
+                form.reportValidity();
+                return;
+              }
+              const { email, subject, body } = buildMailData(picker);
+              const href = buildHref('mailto', email, subject, body, picker);
+              window.location.href = href;
+            });
+            return;
+          }
+
+          trigger.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (isFormSource && form && !form.checkValidity()) {
+              form.reportValidity();
+              return;
+            }
+            const isOpen = picker.getAttribute('data-open') === 'true';
+            closeAll();
+            if (!isOpen) {
+              picker.setAttribute('data-open', 'true');
+              menu.classList.remove('hidden');
+              trigger.setAttribute('aria-expanded', 'true');
+            }
+          });
+
+          menu.querySelectorAll('[data-mail-provider]').forEach((option) => {
+            option.addEventListener('click', () => {
+              if (isFormSource && form && !form.checkValidity()) {
+                form.reportValidity();
+                return;
+              }
+              const provider = option.getAttribute('data-mail-provider') || 'gmail';
+              const { email, subject, body } = buildMailData(picker);
+              const href = buildHref(provider, email, subject, body, picker);
+              if (provider === 'mailto') {
+                window.location.href = href;
+              } else {
+                window.open(href, '_blank', 'noopener');
+              }
+              closeAll();
+            });
+          });
         });
 
-        fetchRate().then(apply).catch(apply);
+        document.addEventListener('click', (event) => {
+          if (event.target.closest('[data-mail-picker]')) return;
+          closeAll();
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            closeAll();
+          }
+        });
       })();
     </script>
   </body>

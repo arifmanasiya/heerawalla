@@ -1,0 +1,197 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { withBase } from '../lib/paths';
+---
+
+<BaseLayout title="FAQ | Heerawalla" description="Answers to common questions about Heerawalla jewelry, orders, and concierge care.">
+  <Header />
+
+  <main class="max-w-7xl mx-auto px-6 py-12 space-y-12">
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Support</p>
+      <h1 class="text-3xl sm:text-4xl font-semibold tracking-tight">Frequently Asked Questions</h1>
+      <p class="text-sm text-slate-500 max-w-2xl">
+        A concise guide to the pieces, materials, and care behind Heerawalla.
+      </p>
+    </div>
+
+    <section class="border-t border-slate-200 pt-8">
+      <h2 class="font-display text-2xl tracking-tight">The Jewelry</h2>
+      <dl class="mt-6 space-y-6">
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">What is the Heerawalla Revolution?</dt>
+          <dd class="text-sm text-slate-600">
+            Heerawalla Revolution is our master collection, defined by sculptural balance and precision.
+            It brings together three signature expressions that explore structure, motion, and presence.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">What are Axis, Continuum, and Eclipse?</dt>
+          <dd class="text-sm text-slate-600">
+            They are three complete sets within the Revolution: Axis for anchored confidence, Continuum for fluid elegance,
+            and Eclipse for bold, magnetic presence.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Are the sets designed for everyday wear?</dt>
+          <dd class="text-sm text-slate-600">
+            Yes. Each set is designed for daily wear with refined proportions and durable settings.
+            We recommend removing jewelry for heavy activity or exposure to chemicals.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <h2 class="font-display text-2xl tracking-tight">Materials &amp; Craftsmanship</h2>
+      <dl class="mt-6 space-y-6">
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">What metals do you use?</dt>
+          <dd class="text-sm text-slate-600">
+            We work primarily in 18K gold, with 14K options available on request. Select pieces are crafted in platinum
+            when it best serves the design.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">What diamonds are used?</dt>
+          <dd class="text-sm text-slate-600">
+            Our pieces feature VVS1–VVS2 diamonds with ideal cut and E color. You may choose natural or lab-grown stones
+            on most styles.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Are your diamonds ethically sourced?</dt>
+          <dd class="text-sm text-slate-600">
+            Yes. We prioritize ethical sourcing and can provide provenance documentation on request.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Where is Heerawalla jewelry made?</dt>
+          <dd class="text-sm text-slate-600">
+            Each piece is crafted by skilled artisans under Heerawalla standards. If you need specific origin details,
+            our concierge can share them for the piece you are considering.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <h2 class="font-display text-2xl tracking-tight">Sizing &amp; Fit</h2>
+      <dl class="mt-6 space-y-6">
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">How do I choose the right ring size?</dt>
+          <dd class="text-sm text-slate-600">
+            We recommend measuring with a local jeweler or a sizing guide for the most accurate fit. If you are between
+            sizes, choose the larger size and we can fine-tune it after purchase.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Are bracelets adjustable?</dt>
+          <dd class="text-sm text-slate-600">
+            Many bracelets feature adjustable lengths or multiple clasp positions. Please check the product page or ask
+            the concierge for exact measurements.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">What chain length comes with pendants?</dt>
+          <dd class="text-sm text-slate-600">
+            Standard chain length is noted on each product page. If you prefer a different length, we can advise on
+            alternatives.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <h2 class="font-display text-2xl tracking-tight">Orders &amp; Shipping</h2>
+      <dl class="mt-6 space-y-6">
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Where do you ship?</dt>
+          <dd class="text-sm text-slate-600">
+            We ship to select international destinations. Availability is shown at checkout, and the concierge can
+            confirm delivery options for your country.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">How long does delivery take?</dt>
+          <dd class="text-sm text-slate-600">
+            Delivery timelines vary by destination and availability. You will receive an estimated delivery window at
+            checkout and in your order confirmation.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Will I receive tracking information?</dt>
+          <dd class="text-sm text-slate-600">
+            Yes. Once your order ships, we send tracking details to the email on your order.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Are duties or taxes included?</dt>
+          <dd class="text-sm text-slate-600">
+            Duties and taxes depend on destination and are shown at checkout when applicable. For details, see our
+            <a href={withBase('/policies')} class="underline underline-offset-4 hover:text-ink"> full Policies page</a>.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <h2 class="font-display text-2xl tracking-tight">Returns &amp; Care</h2>
+      <dl class="mt-6 space-y-6">
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">What is your return policy?</dt>
+          <dd class="text-sm text-slate-600">
+            Returns are available for eligible pieces as outlined in our policy. Please review the details in our
+            <a href={withBase('/policies')} class="underline underline-offset-4 hover:text-ink"> Returns Policy</a>.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Do you offer lifetime care or servicing?</dt>
+          <dd class="text-sm text-slate-600">
+            Yes. We provide lifetime care, including annual polishing, to keep your piece pristine.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">How should I care for my jewelry?</dt>
+          <dd class="text-sm text-slate-600">
+            Store pieces separately, avoid contact with harsh chemicals, and remove jewelry before heavy activity.
+            For professional cleaning, contact the concierge.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      <h2 class="font-display text-2xl tracking-tight">Concierge &amp; Customization</h2>
+      <dl class="mt-6 space-y-6">
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Can I request a private consultation?</dt>
+          <dd class="text-sm text-slate-600">
+            Yes. You can
+            <a href={withBase('/contact?intent=consultation')} class="underline underline-offset-4 hover:text-ink"> book a private consultation</a>
+            for guidance on sets, sizing, or gifting.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">Do you offer custom or bespoke pieces?</dt>
+          <dd class="text-sm text-slate-600">
+            We accept bespoke requests on a limited basis. Share your vision with the concierge and we will advise on
+            feasibility and timelines.
+          </dd>
+        </div>
+        <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
+          <dt class="text-sm font-semibold text-ink">How do I contact the concierge?</dt>
+          <dd class="text-sm text-slate-600">
+            Reach us via the
+            <a href={withBase('/contact')} class="underline underline-offset-4 hover:text-ink"> contact page</a>,
+            and we will respond with next steps.
+          </dd>
+        </div>
+      </dl>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

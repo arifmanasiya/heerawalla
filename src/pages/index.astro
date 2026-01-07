@@ -2,7 +2,6 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
-import CurrencyToggle from '../components/CurrencyToggle.astro';
 import { loadProductsWithMedia, type ProductWithMedia } from '../lib/products';
 import { loadSiteConfig, getConfigValue } from '../lib/config';
 import { withBase } from '../lib/paths';
@@ -10,6 +9,11 @@ import { withBase } from '../lib/paths';
 const products: ProductWithMedia[] = await loadProductsWithMedia();
 const featured = products.filter((p) => p.is_featured).slice(0, 6);
 const config = await loadSiteConfig();
+const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const applyDiscount = (value: number, pct?: number) => {
+  const ratio = 1 + (pct ?? 0) / 100;
+  return Math.round(value * ratio * 100) / 100;
+};
 
 const metaTitle = getConfigValue(
   config,
@@ -26,7 +30,8 @@ const collections = Array.from(new Set(products.map((p) => p.collection).filter(
 const signatureSetMap: Record<string, string> = {
   'hws-001': 'eclipse',
   'hws-002': 'continuum',
-  'hws-003': 'axis'
+  'hws-003': 'axis',
+  'hms-001': 'axis'
 };
 const heroImage = withBase('/images/hero.png');
 const fallbackImage = withBase('/images/products/placeholder.svg');
@@ -61,7 +66,7 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
             </a>
             <a
               class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 text-sm uppercase tracking-[0.2em] text-ink border border-ink/20 rounded-none hover:border-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              href={withBase('/contact')}
+              href={withBase('/contact?intent=consultation')}
             >
               Book a private consultation
             </a>
@@ -127,7 +132,7 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
                 class="text-sm text-slate-600 transition-opacity duration-300 motion-reduce:transition-none"
                 data-revolution-panel
               >
-                The Axis Set — Structured, anchored confidence
+                The Axis Set &mdash; Structured, anchored confidence
               </p>
               <a
                 href="/product/hws-003"
@@ -238,7 +243,7 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
           });
           const setName = tab.getAttribute('data-set-name') || '';
           const desc = tab.getAttribute('data-desc') || '';
-          panel.textContent = `The ${setName} Set — ${desc}`;
+          panel.textContent = `The ${setName} Set \u2014 ${desc}`;
           if (link) {
             const href = tab.getAttribute('data-set-link') || '/collections';
             link.setAttribute('href', href);
@@ -278,6 +283,10 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
         {featured.map((product) => {
           const image = product.media.images[0]?.url || fallbackImage;
           const signatureSet = signatureSetMap[product.slug] || signatureSetMap[product.id] || '';
+          const startingUsd = applyDiscount(
+            applyDiscount(product.price_usd_natural, product.lab_discount_pct),
+            product.metal_14k_discount_pct
+          );
           return (
             <a
               href={withBase(`/product/${product.slug}`)}
@@ -288,7 +297,7 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
               data-collection={product.collection}
               data-category={product.category}
               data-metal={product.metal}
-              data-price={product.price_inr_natural}
+              data-price={product.price_usd_natural}
             >
               <div class="border border-slate-200 bg-white">
                 <img
@@ -306,7 +315,7 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
                 <span class="text-[10px] uppercase tracking-[0.24em] text-slate-400">{product.metal}</span>
               </div>
               <p class="text-sm text-slate-500 line-clamp-2">{product.description}</p>
-              <span class="text-sm font-semibold" data-price-inr={product.price_inr_natural}></span>
+              <span class="text-sm font-semibold">Starting {usdFormatter.format(startingUsd)}</span>
             </a>
           );
         })}

@@ -23,18 +23,24 @@ const fallback = withBase('/images/products/placeholder.svg');
 const image = rawImage ? (rawImage.startsWith('http') ? rawImage : withBase(rawImage)) : fallback;
 const imageMeta = product.media.images.map((m) => ({ url: m.url, description: m.description || '' }));
 const imageCount = imageMeta.length;
-const labInr = product.price_inr_lab ?? product.price_inr_natural;
-const labUsd = product.price_usd_lab ?? product.price_usd_natural;
-const priceData = {
-  natural: { usd: product.price_usd_natural, inr: product.price_inr_natural },
-  lab: { usd: labUsd, inr: labInr }
+const applyDiscount = (value: number, pct?: number) => {
+  const ratio = 1 + (pct ?? 0) / 100;
+  return Math.round(value * ratio * 100) / 100;
 };
+const baseUsd = product.price_usd_natural;
+const labDiscountPct = product.lab_discount_pct ?? -20;
+const metal14DiscountPct = product.metal_14k_discount_pct ?? -5;
+const labUsd = applyDiscount(baseUsd, labDiscountPct);
+const defaultUsd = applyDiscount(labUsd, metal14DiscountPct);
+const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const ordersEmail = getConfigValue(siteConfig, 'orders_email', 'orders@heerawalla.com');
+const webmailComposeBase = getConfigValue(siteConfig, 'webmail_compose_url', 'https://mail.google.com/mail/?view=cm&fs=1&to=');
+const metal18Label = (product.metal || '18K Gold').replace(/14K/gi, '18K');
+const metal14Label = metal18Label.replace(/18K/gi, '14K');
 const productUrl = Astro.site ? new URL(withBase(`/product/${product.slug}`), Astro.site).toString() : withBase(`/product/${product.slug}`);
-const mailtoBody = encodeURIComponent(
-  `I'm interested in ${product.name}\n\nCategory: ${product.category}\nMetal: ${product.metal}\nPrice (INR): ${product.price_inr_natural}\nLab Price (INR): ${priceData.lab.inr}\nProduct link: ${productUrl}`
-);
-const mailtoHref = `mailto:${ordersEmail}?subject=${encodeURIComponent(`Inquiry: ${product.name}`)}&body=${mailtoBody}`;
+const mailtoSubject = `Invoice request: ${product.name}`;
+const mailtoBody = `I'm interested in ${product.name}\n\nCategory: ${product.category}\nMetal: ${product.metal}\nPrice (USD): ${baseUsd}\nLab Price (USD): ${labUsd}\nProduct link: ${productUrl}\n\nPlease confirm availability and share a secure invoice link.`;
+const mailtoHref = `mailto:${ordersEmail}?subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(mailtoBody)}`;
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -49,28 +55,16 @@ const jsonLd = {
   offers: [
     {
       '@type': 'Offer',
-      price: product.price_usd_natural,
+      price: baseUsd,
       priceCurrency: 'USD',
       availability: 'https://schema.org/InStock'
     },
-    {
-      '@type': 'Offer',
-      price: product.price_inr_natural,
-      priceCurrency: 'INR',
-      availability: 'https://schema.org/InStock'
-    },
-    ...(product.price_usd_lab && product.price_inr_lab
+    ...(labUsd && labUsd !== baseUsd
       ? [
           {
             '@type': 'Offer',
-            price: product.price_usd_lab,
+            price: labUsd,
             priceCurrency: 'USD',
-            availability: 'https://schema.org/InStock'
-          },
-          {
-            '@type': 'Offer',
-            price: product.price_inr_lab,
-            priceCurrency: 'INR',
             availability: 'https://schema.org/InStock'
           }
         ]
@@ -131,14 +125,27 @@ void jsonLdString;
           <div class="flex items-center gap-4">
             <span
               class="text-xl font-semibold"
-              data-price-inr={priceData.natural.inr}
-              data-price-inr-natural={priceData.natural.inr}
-              data-price-inr-lab={priceData.lab.inr}
-              data-metal-default={product.metal?.toLowerCase().includes('14') ? '14k' : '18k'}
+              data-price-usd-base={baseUsd}
+              data-lab-discount={labDiscountPct}
+              data-metal-14k-discount={metal14DiscountPct}
+              data-metal-default="14k"
               id="price-display"
-            ></span>
-            <span class="text-sm text-slate-500">{product.metal}</span>
+            >
+              {usdFormatter.format(defaultUsd)}
+            </span>
+            <span
+              class="text-sm text-slate-500"
+              data-metal-label
+              data-metal-18={metal18Label}
+              data-metal-14={metal14Label}
+            >
+              {metal14Label}
+            </span>
           </div>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Estimated price</p>
+          <p class="text-sm text-slate-500">
+            Final pricing is confirmed after consultation based on metal, diamond choice, and sizing.
+          </p>
           <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
             <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Diamonds</span>
             <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="natural">Natural</button>
@@ -154,11 +161,46 @@ void jsonLdString;
           {product.description}
         </p>
 
-        <div class="flex flex-wrap gap-3">
-          <a class="btn btn-primary" href={mailtoHref}>
-            Inquire
-          </a>
-          <a class="btn btn-ghost" href={withBase('/contact')}>Book a consultation</a>
+        <form class="space-y-3" data-inquiry-form>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label class="text-sm space-y-1">
+              <span class="text-slate-600">Your name</span>
+              <input required name="name" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
+            </label>
+            <label class="text-sm space-y-1">
+              <span class="text-slate-600">Email (optional)</span>
+              <input type="email" name="email" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
+            </label>
+          </div>
+          <div class="flex flex-wrap gap-3">
+            <div
+              class="relative"
+              data-mail-picker
+              data-mail-source="form"
+              data-email={ordersEmail}
+              data-subject={mailtoSubject}
+              data-body={mailtoBody}
+              data-gmail-base={webmailComposeBase}
+            >
+              <a class="btn btn-primary" href={mailtoHref} data-mail-trigger>Request invoice</a>
+              <div
+                class="absolute left-0 top-full z-20 mt-2 w-48 border border-slate-200 bg-white shadow-md hidden"
+                data-mail-menu
+                role="menu"
+              >
+                <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="gmail" role="menuitem">Gmail</button>
+                <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="outlook" role="menuitem">Outlook</button>
+                <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="mailto" role="menuitem">Mail app</button>
+              </div>
+            </div>
+            <a class="btn btn-ghost" href={withBase('/contact?intent=consultation')}>Book a consultation</a>
+          </div>
+        </form>
+        <div class="border-t border-slate-200 pt-4 text-sm text-slate-500 space-y-2">
+          <div class="text-xs uppercase tracking-[0.2em] text-slate-500">How checkout works</div>
+          <p>1) You request an invoice and confirm your preferred details.</p>
+          <p>2) A concierge validates availability, sizing, and pricing.</p>
+          <p>3) We email a secure payment link. Your piece is reserved once paid.</p>
         </div>
       </div>
     </div>
@@ -215,15 +257,23 @@ void jsonLdString;
     (() => {
       const priceEl = document.getElementById('price-display');
       if (!priceEl) return;
-      const naturalInr = Number(priceEl.dataset.priceInrNatural || 0);
-      const labInr = Number(priceEl.dataset.priceInrLab || naturalInr);
-      let diamondMode = 'natural';
-      let metalMode = priceEl.dataset.metalDefault || '18k';
+      const baseUsd = Number(priceEl.dataset.priceUsdBase || 0);
+      const labDiscount = Number(priceEl.dataset.labDiscount || -20);
+      const metal14Discount = Number(priceEl.dataset.metal14kDiscount || -5);
+      let diamondMode = 'lab';
+      let metalMode = priceEl.dataset.metalDefault || '14k';
+      const metalLabel = document.querySelector('[data-metal-label]');
+      const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+      const applyDiscount = (value, pct) => Math.round(value * (1 + pct / 100) * 100) / 100;
       const apply = () => {
-        const base = diamondMode === 'lab' ? labInr : naturalInr;
-        const adjusted = metalMode === '14k' ? Math.round(base * 0.95) : base;
-        priceEl.dataset.priceInr = String(adjusted);
-        window.dispatchEvent(new CustomEvent('hw:currency:update', { detail: localStorage.getItem('hw-currency') || 'USD' }));
+        let price = baseUsd;
+        if (diamondMode === 'lab') {
+          price = applyDiscount(price, labDiscount);
+        }
+        if (metalMode === '14k') {
+          price = applyDiscount(price, metal14Discount);
+        }
+        priceEl.textContent = formatter.format(price);
         document.querySelectorAll('[data-price-toggle]').forEach((btn) => {
           btn.classList.toggle('bg-ink', btn.dataset.priceToggle === diamondMode);
           btn.classList.toggle('text-white', btn.dataset.priceToggle === diamondMode);
@@ -232,6 +282,13 @@ void jsonLdString;
           btn.classList.toggle('bg-ink', btn.dataset.metalToggle === metalMode);
           btn.classList.toggle('text-white', btn.dataset.metalToggle === metalMode);
         });
+        if (metalLabel) {
+          const label =
+            metalMode === '14k'
+              ? metalLabel.getAttribute('data-metal-14')
+              : metalLabel.getAttribute('data-metal-18');
+          if (label) metalLabel.textContent = label;
+        }
       };
       document.querySelectorAll('[data-price-toggle]').forEach((btn) => {
         btn.addEventListener('click', () => {

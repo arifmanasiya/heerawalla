@@ -14,7 +14,6 @@ This is an inspirational jewelry catalog for **heerawalla.com**, built with Astr
 
 ## Features
 - Build-time CSV ingest (Products + Site Config) with validation; fails build on missing columns.
-- Currency toggle (USD / INR) persisted in `localStorage`.
 - Pages: Home, Collections (client-side filters), Product detail (dynamic routes), About, Contact (mailto form), Policies.
 - SEO: meta tags, OpenGraph, JSON-LD Product schema, sitemap, robots.txt.
 - Premium minimal design: whitespace, elegant typography, subtle hover states, responsive and accessible.
@@ -25,12 +24,12 @@ This is an inspirational jewelry catalog for **heerawalla.com**, built with Astr
 Use multiple files, one per subcategory, named `products-*.csv` in `/data` (e.g., `products-men-bands.csv`, `products-women-rings.csv`).
 
 Required columns per file:
-`id, name, slug, description, collection, category, metal, price_inr_natural, price_inr_lab, is_active, is_featured, tags`
+`id, name, slug, description, collection, category, metal, price_usd_natural, lab_discount_pct, metal_14k_discount_pct, is_active, is_featured, tags`
 
 - Only rows with `is_active = TRUE` are shown. `is_featured = TRUE` drives the featured section.
 - `category` should match your folder path under `public/images/products`, e.g., `women/rings` or `men/bands`.
-- `price_*_lab` may be left blank if no lab-grown option.
-- USD prices are derived at build time using the prior day USD/INR rate plus 5% buffer (fetched from exchangerate.host, fallback env `USDINR_RATE`).
+- `price_usd_natural` is the 18K/Natural base price.
+- `lab_discount_pct` and `metal_14k_discount_pct` are percentage adjustments (negative values reduce price).
 
 ### Site Config CSV (required columns)
 `key, value`
@@ -81,11 +80,6 @@ data/
   site_config.sample.csv
 ```
 
-## Currency toggle implementation
-- Default currency: USD.
-- Prices rendered with `data-price-usd` and `data-price-inr` attributes.
-- `CurrencyToggle` dispatches a custom `hw:currency:update` event; BaseLayout listens, formats with `Intl.NumberFormat`, and persists to `localStorage`.
-
 ## Future Netlify integration
 - `src/lib/apiClient.ts` exposes `createOrder`, `startCheckout`, and `submitLead` placeholders. Point them to Netlify Functions (`/api/*`) later.
 - Contact form currently uses `mailto:` but fields are ready to POST to `/api/inquiry`.
@@ -103,4 +97,4 @@ data/
 - Drop media into `public/images/products/<category>/<product_id>/`, e.g. `public/images/products/women/rings/hw-002/image-1.jpg`.
 - File names are free-form; we sort alphabetically. Supported images: jpg/jpeg/png/webp/avif/gif/svg. Videos: mp4/webm/mov/m4v.
 - The product `id` in the CSV links to the folder; `category` can include nested paths (e.g., `men/bands`). If no media is found, the placeholder shows.
-- On product pages, all images are shown first, then videos, in a swipeable horizontal gallery. List cards use the first image as the cover. If lab prices exist, a Natural/Lab toggle appears; it respects the currency toggle.
+- On product pages, all images are shown first, then videos, in a swipeable horizontal gallery. List cards use the first image as the cover. Natural/Lab and 14K/18K toggles adjust price based on CSV discount percentages.

@@ -1,4 +1,4 @@
-id,name,slug,description,collection,category,metal,price_inr_natural,price_inr_lab,is_active,is_featured,tags,cut,clarity,color,carat
-hw-001,Atlas Band,atlas-band,"Flat profile band with satin finish and polished edges.",Signature,men/bands,18k White Gold,121000,80000,TRUE,FALSE,band,Ideal,VVS1 - VVS2,E,1
-hw-002,Azure Solitaire,azure-solitaire,"Brilliant-cut diamond solitaire on a slender platinum band.",Signature,women/rings,Platinum,432000,265000,TRUE,FALSE,diamond,Ideal,VVS1 - VVS2,E,1
-hw-003,Ellipse Pendant,ellipse-pendant,"Minimal oval pendant with bezel-set emerald on fine chain.",Signature,women/pendants,18k Yellow Gold,316000,200000,TRUE,FALSE,emerald,Ideal,VVS1 - VVS2,E,1
+id,name,slug,description,collection,category,metal,price_usd_natural,lab_discount_pct,metal_14k_discount_pct,is_active,is_featured,tags,cut,clarity,color,carat
+hw-001,Atlas Band,atlas-band,"Flat profile band with satin finish and polished edges.",Signature,men/bands,18k White Gold,1494.71,-20,-5,TRUE,FALSE,band,Ideal,VVS1 - VVS2,E,1
+hw-002,Azure Solitaire,azure-solitaire,"Brilliant-cut diamond solitaire on a slender platinum band.",Signature,women/rings,Platinum,5336.47,-20,-5,TRUE,FALSE,diamond,Ideal,VVS1 - VVS2,E,1
+hw-003,Ellipse Pendant,ellipse-pendant,"Minimal oval pendant with bezel-set emerald on fine chain.",Signature,women/pendants,18k Yellow Gold,3903.53,-20,-5,TRUE,FALSE,emerald,Ideal,VVS1 - VVS2,E,1
