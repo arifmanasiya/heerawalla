@@ -117,21 +117,6 @@ const editionLabel = (() => {
       initLayout(main);
     });
 
-    const applyThumb = (button) => {
-      const card = button.closest('[data-product-card]') || button.closest('article');
-      if (!card) return;
-      const main = card.querySelector('[data-main-image]');
-      const nextSrc = button.getAttribute('data-thumb-src');
-      if (!main || !nextSrc) return;
-      if (main.getAttribute('src') === nextSrc) return;
-      main.setAttribute('src', nextSrc);
-      card.querySelectorAll('[data-thumb-src]').forEach((el) => {
-        el.setAttribute('aria-pressed', String(el === button));
-        el.classList.toggle('ring-1', el === button);
-        el.classList.toggle('ring-ink', el === button);
-      });
-    };
-
     const resetThumb = (card) => {
       if (!card) return;
       const main = card.querySelector('[data-main-image]');
@@ -142,6 +127,25 @@ const editionLabel = (() => {
       card.querySelectorAll('[data-thumb-src]').forEach((el) => {
         el.setAttribute('aria-pressed', 'false');
         el.classList.remove('ring-1', 'ring-ink');
+      });
+    };
+
+    const applyThumb = (button) => {
+      const card = button.closest('[data-product-card]') || button.closest('article');
+      if (!card) return;
+      const main = card.querySelector('[data-main-image]');
+      const nextSrc = button.getAttribute('data-thumb-src');
+      if (!main || !nextSrc) return;
+      const isActive = button.getAttribute('aria-pressed') === 'true';
+      if (isActive) {
+        resetThumb(card);
+        return;
+      }
+      main.setAttribute('src', nextSrc);
+      card.querySelectorAll('[data-thumb-src]').forEach((el) => {
+        el.setAttribute('aria-pressed', String(el === button));
+        el.classList.toggle('ring-1', el === button);
+        el.classList.toggle('ring-ink', el === button);
       });
     };
 
