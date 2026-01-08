@@ -37,12 +37,6 @@ const diamondDefault = labAvailable ? 'lab' : naturalAvailable ? 'natural' : 'la
 const defaultDiamondUsd = diamondDefault === 'lab' ? labUsd : baseUsd;
 const defaultUsd = applyDiscount(defaultDiamondUsd, metal14DiscountPct);
 const diamondDefaultLabel = diamondDefault === 'lab' ? 'Lab Grown' : 'Natural';
-const diamondAvailabilityLine =
-  naturalAvailable && labAvailable
-    ? 'Gold options and natural or lab-grown diamonds available.'
-    : naturalAvailable
-      ? 'Gold options with natural diamonds.'
-      : 'Gold options with lab-grown diamonds.';
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const ordersEmail = getConfigValue(siteConfig, 'orders_email', 'orders@heerawalla.com');
 const webmailComposeBase = getConfigValue(siteConfig, 'webmail_compose_url', 'https://mail.google.com/mail/?view=cm&fs=1&to=');
