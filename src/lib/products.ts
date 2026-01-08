@@ -27,6 +27,13 @@ function toOptionalNumber(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function toOptionalBoolean(value: string | undefined): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  const trimmed = value.toString().trim();
+  if (!trimmed) return undefined;
+  return ['true', '1', 'yes', 'y'].includes(trimmed.toLowerCase());
+}
+
 async function readProductCSVs(): Promise<string[]> {
   const entries = await fs.readdir(DATA_DIR);
   const matches = entries.filter((file) => file.startsWith('products-') && file.endsWith('.csv'));
@@ -61,6 +68,7 @@ async function loadCsvFile(filePath: string): Promise<Product[]> {
         description: row.description,
         collection: row.collection,
         category: row.category,
+        design_code: row.design_code,
         metal: row.metal,
         cut: toOptionalString(row.cut),
         clarity: toOptionalString(row.clarity),
@@ -69,6 +77,8 @@ async function loadCsvFile(filePath: string): Promise<Product[]> {
         price_usd_natural: Number(row.price_usd_natural),
         lab_discount_pct: toOptionalNumber(row.lab_discount_pct),
         metal_14k_discount_pct: toOptionalNumber(row.metal_14k_discount_pct),
+        natural_available: toOptionalBoolean(row.natural_available),
+        lab_available: toOptionalBoolean(row.lab_available),
         is_active: toBoolean(row.is_active),
         is_featured: toBoolean(row.is_featured),
         tags: row.tags

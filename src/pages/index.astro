@@ -7,7 +7,7 @@ import { loadSiteConfig, getConfigValue } from '../lib/config';
 import { withBase } from '../lib/paths';
 
 const products: ProductWithMedia[] = await loadProductsWithMedia();
-const featured = products.filter((p) => p.is_featured).slice(0, 6);
+const featured = products.filter((p) => p.is_featured);
 const config = await loadSiteConfig();
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const applyDiscount = (value: number, pct?: number) => {
@@ -27,11 +27,15 @@ const metaDescription = getConfigValue(
 );
 
 const collections = Array.from(new Set(products.map((p) => p.collection).filter(Boolean))).slice(0, 3);
-const signatureSetMap: Record<string, string> = {
-  'hws-001': 'eclipse',
-  'hws-002': 'continuum',
-  'hws-003': 'axis',
-  'hms-001': 'axis'
+const normalizeDesignCode = (value?: string) => (value ? value.toLowerCase() : '');
+const editionLabel = (category?: string, fallback?: string) => {
+  const raw = category || '';
+  const group = raw.split('/')[0] || '';
+  if (group === 'women') return "Women's Edition";
+  if (group === 'men') return "Men's Edition";
+  if (group === 'daily') return 'Daily Edition';
+  if (group === 'occasion') return 'Occasion Edition';
+  return fallback || raw;
 };
 const heroImage = withBase('/images/hero.png');
 const fallbackImage = withBase('/images/products/placeholder.svg');
@@ -42,7 +46,7 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
 
   <main class="space-y-20">
     <section class="max-w-7xl mx-auto px-6 pt-4 lg:pt-8">
-      <div class="grid gap-12 lg:gap-16 lg:grid-cols-[1.05fr_0.95fr] items-end relative">
+      <div class="grid gap-12 lg:gap-16 lg:grid-cols-[1.2fr_1.6fr] items-end relative">
         <div class="space-y-7 order-2 lg:order-1">
           <p class="text-[11px] uppercase tracking-[0.38em] text-slate-500">MAISON HEERAWALLA</p>
           <h1 class="font-display text-5xl sm:text-6xl leading-[0.98] tracking-[0.02em] text-ink">Heerawalla Revolution</h1>
@@ -55,8 +59,8 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
           <!-- Discover three signatures of the same power: Axis (anchored), Continuum (fluid), Eclipse (magnetic). -->
           <!-- CMS swap: Variant C supporting line -->
           <!-- Axis. Continuum. Eclipse. -->
-          <p class="text-sm text-slate-600 max-w-lg">Three expressions of a singular force. Axis anchors. Continuum flows. Eclipse commands.</p>
-          <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Choose your signature&mdash;Axis, Continuum, or Eclipse. Each is a complete set.</p>
+          <p class="text-sm text-slate-600 max-w-lg">Axis, Continuum, and Eclipse are three design codes&mdash;each expressed through the Women's, Men's, Daily, and Occasion Editions.</p>
+          <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Choose a design code&mdash;Axis, Continuum, or Eclipse. Each is a complete expression.</p>
           <div class="flex flex-col sm:flex-row gap-3">
             <a
               class="inline-flex items-center justify-center min-h-[44px] px-6 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
@@ -74,24 +78,23 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
           <div class="mt-6">
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-[10px] uppercase tracking-[0.28em] text-slate-500">Signature Sets</p>
-                <p class="text-sm text-slate-600 mt-1">Three signatures. Each a complete set.</p>
+                <p class="text-[10px] uppercase tracking-[0.28em] text-slate-500">Design codes</p>
               </div>
             </div>
-            <div class="mt-3 flex flex-wrap gap-3" role="tablist" aria-label="Signature sets">
+            <div class="mt-3 flex flex-wrap gap-3" role="tablist" aria-label="Design codes">
               <button
                 type="button"
                 role="tab"
                 aria-selected="true"
                 aria-controls="revolution-panel"
                 data-line="axis"
-                data-set-name="Axis"
+                data-code-name="Axis"
                 data-desc="Structured, anchored confidence"
-                data-set-link="/product/hws-003"
+                data-code-link={withBase('/axis')}
                 data-active="true"
                 class="min-h-[44px] px-3 py-2 font-display text-[11px] tracking-[0.12em] text-slate-500 border border-ink/15 rounded-none transition-colors duration-200 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               >
-                Axis Set
+                Axis
               </button>
               <button
                 type="button"
@@ -99,14 +102,14 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
                 aria-selected="false"
                 aria-controls="revolution-panel"
                 data-line="continuum"
-                data-set-name="Continuum"
+                data-code-name="Continuum"
                 data-desc="Fluid, graceful elegance"
-                data-set-link="/product/hws-002"
+                data-code-link={withBase('/continuum')}
                 data-active="false"
                 tabindex="-1"
                 class="min-h-[44px] px-3 py-2 font-display text-[11px] tracking-[0.12em] text-slate-500 border border-ink/15 rounded-none transition-colors duration-200 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               >
-                Continuum Set
+                Continuum
               </button>
               <button
                 type="button"
@@ -114,14 +117,14 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
                 aria-selected="false"
                 aria-controls="revolution-panel"
                 data-line="eclipse"
-                data-set-name="Eclipse"
+                data-code-name="Eclipse"
                 data-desc="Bold, magnetic presence"
-                data-set-link="/product/hws-001"
+                data-code-link={withBase('/eclipse')}
                 data-active="false"
                 tabindex="-1"
                 class="min-h-[44px] px-3 py-2 font-display text-[11px] tracking-[0.12em] text-slate-500 border border-ink/15 rounded-none transition-colors duration-200 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               >
-                Eclipse Set
+                Eclipse
               </button>
             </div>
             <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -132,14 +135,14 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
                 class="text-sm text-slate-600 transition-opacity duration-300 motion-reduce:transition-none"
                 data-revolution-panel
               >
-                The Axis Set &mdash; Structured, anchored confidence
+                Axis &mdash; Structured, anchored confidence
               </p>
               <a
-                href="/product/hws-003"
+                href={withBase('/axis')}
                 class="text-xs uppercase tracking-[0.24em] text-slate-500 underline underline-offset-4 hover:text-ink"
                 data-revolution-link
               >
-                Shop Axis
+                Explore Axis
               </a>
             </div>
           </div>
@@ -212,8 +215,8 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
       }
       @media (min-width: 1024px) {
         :global(.hero-media--campaign .hero-media__image) {
-          object-fit: contain;
-          object-position: 50% 50%;
+          object-fit: cover;
+          object-position: 50% 38%;
         }
       }
       @media (max-width: 1024px) {
@@ -241,30 +244,20 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
             btn.setAttribute('data-active', String(isActive));
             btn.tabIndex = isActive ? 0 : -1;
           });
-          const setName = tab.getAttribute('data-set-name') || '';
+          const codeName = tab.getAttribute('data-code-name') || '';
           const desc = tab.getAttribute('data-desc') || '';
-          panel.textContent = `The ${setName} Set \u2014 ${desc}`;
+          panel.textContent = `${codeName} \u2014 ${desc}`;
           if (link) {
-            const href = tab.getAttribute('data-set-link') || '/collections';
+            const href = tab.getAttribute('data-code-link') || '/collections';
             link.setAttribute('href', href);
-            link.textContent = `Shop ${setName}`;
+            link.textContent = `Explore ${codeName}`;
           }
-          const cards = Array.from(document.querySelectorAll('[data-signature-card]'));
+          const cards = Array.from(document.querySelectorAll('[data-design-card]'));
           if (cards.length) {
-            const line = tab.getAttribute('data-line') || '';
-            let anyVisible = false;
             cards.forEach((card) => {
-              const matches = card.getAttribute('data-signature-set') === line;
-              card.toggleAttribute('data-hidden', !matches);
-              card.classList.toggle('hidden', !matches);
-              if (matches) anyVisible = true;
+              card.toggleAttribute('data-hidden', false);
+              card.classList.remove('hidden');
             });
-            if (!anyVisible) {
-              cards.forEach((card) => {
-                card.toggleAttribute('data-hidden', false);
-                card.classList.remove('hidden');
-              });
-            }
           }
         };
 
@@ -282,18 +275,24 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
       <div class="flex flex-col gap-10">
         {featured.map((product) => {
           const image = product.media.images[0]?.url || fallbackImage;
-          const signatureSet = signatureSetMap[product.slug] || signatureSetMap[product.id] || '';
+          const designCode = normalizeDesignCode(product.design_code);
+          const labAvailable = product.lab_available ?? true;
+          const baseDiamondUsd = labAvailable
+            ? applyDiscount(product.price_usd_natural, product.lab_discount_pct)
+            : product.price_usd_natural;
           const startingUsd = applyDiscount(
-            applyDiscount(product.price_usd_natural, product.lab_discount_pct),
+            baseDiamondUsd,
             product.metal_14k_discount_pct
           );
+          const label = editionLabel(product.category, product.collection);
           return (
             <a
               href={withBase(`/product/${product.slug}`)}
               class="group flex flex-col gap-4"
               data-product-card
-              data-signature-card
-              data-signature-set={signatureSet}
+              data-design-card
+              data-design-code={designCode}
+              data-design-code-label={product.design_code}
               data-collection={product.collection}
               data-category={product.category}
               data-metal={product.metal}
@@ -309,10 +308,10 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
               </div>
               <div class="flex items-start justify-between gap-4">
                 <div>
-                  <div class="text-[10px] uppercase tracking-[0.24em] text-slate-500">{product.collection || product.category}</div>
+                  <div class="text-[10px] uppercase tracking-[0.24em] text-slate-500">{label}</div>
                   <div class="text-lg font-semibold tracking-tight">{product.name}</div>
                 </div>
-                <span class="text-[10px] uppercase tracking-[0.24em] text-slate-400">{product.metal}</span>
+                <span class="text-[10px] uppercase tracking-[0.24em] text-slate-400">Gold | Diamonds</span>
               </div>
               <p class="text-sm text-slate-500 line-clamp-2">{product.description}</p>
               <span class="text-sm font-semibold">Starting {usdFormatter.format(startingUsd)}</span>

@@ -17,10 +17,10 @@ const description = config.meta_description || 'Explore Heerawalla jewelry colle
   <Header />
   <main class="container space-y-8 py-10">
     <div class="space-y-2">
-      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Catalog</p>
-      <h1 class="text-3xl font-semibold tracking-tight">Collections</h1>
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500" data-collections-eyebrow>Design Code</p>
+      <h1 class="text-3xl font-semibold tracking-tight" data-collections-title>Edits</h1>
       <p class="text-sm text-slate-500 max-w-2xl">
-        Filter by collection, metal, category, or price to discover the right piece.
+        Filter by edition, metal, or price to discover the right piece.
       </p>
     </div>
 
@@ -34,6 +34,7 @@ const description = config.meta_description || 'Explore Heerawalla jewelry colle
           data-category={product.category}
           data-metal={product.metal}
           data-price={product.price_usd_natural}
+          data-design-code={product.design_code}
         >
           <ProductCard product={product} />
         </div>
@@ -42,3 +43,22 @@ const description = config.meta_description || 'Explore Heerawalla jewelry colle
   </main>
   <Footer />
 </BaseLayout>
+
+<script is:inline>
+  (() => {
+    const params = new URLSearchParams(window.location.search);
+    const raw =
+      params.get('design_code') ||
+      params.get('design-code') ||
+      params.get('designCode') ||
+      '';
+    const code = raw.trim();
+    if (!code) return;
+    const title = document.querySelector('[data-collections-title]');
+    const label = code
+      .split(/[-_]/g)
+      .map((part) => (part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : ''))
+      .join(' ');
+    if (title) title.textContent = label;
+  })();
+</script>

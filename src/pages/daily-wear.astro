@@ -1,0 +1,67 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import ProductCard from '../components/ProductCard.astro';
+import { loadProductsWithMedia } from '../lib/products';
+import { withBase } from '../lib/paths';
+
+const editionLabel = 'Daily Wear';
+const editionKey = 'daily';
+const products = (await loadProductsWithMedia()).filter((product) =>
+  (product.category || '').startsWith(`${editionKey}/`)
+);
+const seo = {
+  primary: 'daily wear jewelry',
+  secondary: [
+    'everyday fine jewelry',
+    'minimal gold jewelry',
+    'lightweight diamond jewelry',
+    'wearable luxury jewelry'
+  ]
+};
+const metaTitle = `Heerawalla ${editionLabel} \u2014 Editions`;
+const metaDescription =
+  'Heerawalla daily wear jewelry is refined, comfortable, and designed to live with you from morning through evening.';
+const keywords = [seo.primary, ...seo.secondary].join(', ');
+const breadcrumbs = [
+  { label: 'Home', href: withBase('/') },
+  { label: editionLabel }
+];
+---
+
+<BaseLayout title={metaTitle} description={metaDescription} keywords={keywords} breadcrumbs={breadcrumbs}>
+  <Header />
+
+  <main class="max-w-7xl mx-auto px-6 py-12 space-y-12">
+    <section class="space-y-4">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Edition</p>
+      <h1 class="text-4xl font-semibold tracking-tight">{editionLabel} Jewelry</h1>
+      <p class="text-sm text-slate-600 max-w-2xl">
+        Quietly luxurious pieces designed for everyday cadence and lasting comfort.
+      </p>
+      <div class="flex flex-wrap gap-3 text-xs uppercase tracking-[0.2em] text-slate-500">
+        <span class="text-slate-400">Design Codes</span>
+        <a href={withBase('/axis')} class="hover:text-ink">Axis</a>
+        <a href={withBase('/continuum')} class="hover:text-ink">Continuum</a>
+        <a href={withBase('/eclipse')} class="hover:text-ink">Eclipse</a>
+      </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8">
+      {products.length ? (
+        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {products.map((product) => (
+            <ProductCard product={product} />
+          ))}
+        </div>
+      ) : (
+        <p class="text-sm text-slate-500">
+          Daily wear selections are curated seasonally. The concierge can share availability.
+        </p>
+      )}
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

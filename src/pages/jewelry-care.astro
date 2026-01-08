@@ -1,0 +1,79 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { withBase } from '../lib/paths';
+
+const metaTitle = 'Heerawalla Jewelry Care & Lifetime Service';
+const metaDescription =
+  'Care guidance for Heerawalla jewelry, including daily wear habits, storage, and lifetime servicing.';
+const keywords = [
+  'jewelry care guide',
+  'fine jewelry care',
+  'diamond jewelry care',
+  'gold jewelry care',
+  'lifetime jewelry service'
+].join(', ');
+const breadcrumbs = [
+  { label: 'Home', href: withBase('/') },
+  { label: 'Jewelry Care' }
+];
+---
+
+<BaseLayout title={metaTitle} description={metaDescription} keywords={keywords} breadcrumbs={breadcrumbs}>
+  <Header />
+
+  <main class="max-w-7xl mx-auto px-6 py-12 space-y-12">
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Guides</p>
+      <h1 class="text-3xl sm:text-4xl font-semibold tracking-tight">Jewelry Care &amp; Lifetime Service</h1>
+      <p class="text-sm text-slate-500 max-w-2xl">
+        Simple care habits that preserve brilliance, with lifetime servicing to support each piece.
+      </p>
+    </div>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">Daily wear</h2>
+      <p class="text-sm text-slate-600">
+        Remove jewelry before heavy activity, exercise, or contact with harsh chemicals. Allow pieces to rest between
+        wears so surfaces remain luminous.
+      </p>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">Storage</h2>
+      <p class="text-sm text-slate-600">
+        Store pieces separately in their provided packaging to avoid abrasion. Keep chains fastened to prevent tangling
+        and preserve alignment.
+      </p>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">Cleaning</h2>
+      <p class="text-sm text-slate-600">
+        Use a soft cloth to remove oils and residue. For deeper cleaning or inspection, the concierge can arrange a
+        professional service.
+      </p>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">Lifetime service</h2>
+      <p class="text-sm text-slate-600">
+        Heerawalla offers lifetime care, including annual polishing, to maintain the precision of each piece. We
+        recommend scheduling service once per year or after significant wear.
+      </p>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">Concierge support</h2>
+      <p class="text-sm text-slate-600">
+        If you need guidance on care or servicing, our concierge can advise on next steps and arrange appointments.
+      </p>
+      <a href={withBase('/contact')} class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink">
+        Contact the concierge
+      </a>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

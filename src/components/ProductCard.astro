@@ -5,38 +5,65 @@ const { product } = Astro.props as { product: ProductWithMedia };
 const rawImage = product.media.images[0]?.url;
 const fallback = withBase('/images/products/placeholder.svg');
 const image = rawImage ? rawImage : fallback;
-const thumbnails = product.media.images.slice(1, 4);
+const thumbnails = product.media.images.slice(1);
 const hasThumbs = thumbnails.length > 0;
+const hasMoreThumbs = thumbnails.length > 3;
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const editionLabel = (() => {
+  const category = product.category || '';
+  const group = category.split('/')[0] || '';
+  if (group === 'women') return "Women's Edition";
+  if (group === 'men') return "Men's Edition";
+  if (group === 'daily') return 'Daily Edition';
+  if (group === 'occasion') return 'Occasion Edition';
+  return product.collection || product.category || '';
+})();
 ---
 
-<article class="card overflow-hidden group h-full flex flex-col" data-thumb-layout="column">
+<article
+  class="card overflow-hidden group h-full flex flex-col"
+  data-thumb-layout="column"
+  data-thumb-layout-locked="true"
+>
   <div class="thumb-media flex gap-2 sm:gap-3 bg-white" data-thumb-media>
     {hasThumbs ? (
-      <div
-        class="thumb-strip flex shrink-0 gap-2 sm:gap-3"
-        data-thumb-strip
-      >
-        {thumbnails.map((thumb, index) => (
+      <div class="thumb-strip-wrap relative" data-thumb-strip-wrap>
+        <div
+          class={`thumb-strip flex shrink-0 gap-2 sm:gap-3 ${hasMoreThumbs ? 'thumb-strip--scroll' : ''}`}
+          data-thumb-strip
+        >
+          {thumbnails.map((thumb, index) => (
+            <button
+              type="button"
+              class="thumb-button border border-slate-200 bg-white overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              data-thumb-src={thumb.url}
+              aria-pressed="false"
+            >
+              <img
+                src={thumb.url}
+                alt={`${product.name} thumbnail ${index + 1}`}
+                loading="lazy"
+                class="h-full w-full object-contain bg-white"
+                data-protected-image
+              />
+            </button>
+          ))}
+        </div>
+        {hasMoreThumbs ? (
           <button
             type="button"
-            class="thumb-button border border-slate-200 bg-white overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-            data-thumb-src={thumb.url}
-            aria-pressed="false"
+            class="thumb-more absolute bottom-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-[11px] text-slate-600 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            data-thumb-more
+            aria-label="More thumbnails"
           >
-            <img
-              src={thumb.url}
-              alt={`${product.name} thumbnail ${index + 1}`}
-              loading="lazy"
-              class="h-full w-full object-contain bg-white"
-            />
+            <span aria-hidden="true">↓</span>
           </button>
-        ))}
+        ) : null}
       </div>
     ) : null}
     <a
       href={withBase(`/product/${product.slug}`)}
-      class="thumb-main flex-1 flex items-center justify-end overflow-hidden"
+      class="thumb-main flex-1 flex items-stretch justify-end overflow-hidden"
       data-thumb-main
     >
       <div class="aspect-square w-full bg-white">
@@ -47,19 +74,19 @@ const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currenc
           class="h-full w-full object-contain object-right transition duration-300 group-hover:scale-[1.02]"
           data-main-image
           data-default-src={image}
+          data-protected-image
         />
       </div>
     </a>
   </div>
   <div class="flex flex-col gap-2 p-4 flex-1">
-    <div class="text-xs uppercase tracking-[0.12em] text-slate-500">{product.collection || product.category}</div>
+    <div class="text-xs uppercase tracking-[0.12em] text-slate-500">{editionLabel}</div>
     <a href={`/product/${product.slug}`} class="text-lg font-semibold leading-snug hover:text-accent">
       {product.name}
     </a>
     <p class="text-sm text-slate-500 line-clamp-2">{product.description}</p>
     <div class="mt-auto flex items-center justify-between pt-2">
       <span class="font-semibold text-sm">{usdFormatter.format(product.price_usd_natural)}</span>
-      <span class="text-xs uppercase tracking-[0.14em] text-slate-400">{product.metal}</span>
     </div>
   </div>
 </article>
@@ -123,6 +150,26 @@ const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currenc
       if (button) applyThumb(button);
     });
 
+    const scrollMore = (button) => {
+      const wrap = button.closest('[data-thumb-strip-wrap]');
+      if (!wrap) return;
+      const strip = wrap.querySelector('[data-thumb-strip]');
+      if (!strip) return;
+      const maxScroll = strip.scrollHeight - strip.clientHeight;
+      if (maxScroll <= 0) return;
+      const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const behavior = prefersReduced ? 'auto' : 'smooth';
+      const next = strip.scrollTop + strip.clientHeight;
+      strip.scrollTo({ top: next > maxScroll ? 0 : next, behavior });
+    };
+
+    document.addEventListener('click', (event) => {
+      const more = event.target.closest('[data-thumb-more]');
+      if (!more) return;
+      event.preventDefault();
+      scrollMore(more);
+    });
+
     document.addEventListener('pointerover', (event) => {
       const button = event.target.closest('[data-thumb-src]');
       if (button) applyThumb(button);
@@ -165,6 +212,18 @@ const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currenc
     width: 5rem;
     flex-direction: column;
     padding: 0.5rem 0 0.5rem 0.5rem;
+    max-height: 17rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+  }
+
+  [data-thumb-layout='column'] [data-thumb-strip]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-thumb-layout='column'] .thumb-strip--scroll {
+    padding-bottom: 2.5rem;
   }
 
   [data-thumb-layout='row'] [data-thumb-strip] {
@@ -188,6 +247,7 @@ const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currenc
     [data-thumb-layout='column'] [data-thumb-strip] {
       width: 6rem;
       padding: 0.75rem 0 0.75rem 0.75rem;
+      max-height: 21rem;
     }
 
     [data-thumb-layout='row'] [data-thumb-strip] {

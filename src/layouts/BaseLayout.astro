@@ -1,10 +1,60 @@
 ---
 import "../styles/global.css";
 import { withBase } from '../lib/paths';
-const { title = 'Heerawalla | Fine jewelry crafted with precision', description = 'Luxury jewelry catalog with timeless, minimal design.', image } = Astro.props as { title?: string; description?: string; image?: string };
+
+type Crumb = { label: string; href?: string };
+const {
+  title = 'Heerawalla | Fine jewelry crafted with precision',
+  description = 'Luxury jewelry catalog with timeless, minimal design.',
+  image,
+  keywords,
+  breadcrumbs
+} = Astro.props as {
+  title?: string;
+  description?: string;
+  image?: string;
+  keywords?: string;
+  breadcrumbs?: Crumb[];
+};
 const siteOrigin = Astro.site?.origin || 'https://heerawalla.com';
 const ogImage = image && image.startsWith('http') ? image : new URL(withBase(image || '/images/hero.png'), siteOrigin).toString();
 const url = new URL(Astro.url.pathname, siteOrigin).toString();
+const titleCase = (value: string) =>
+  value
+    .split(/[-_]/g)
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : ''))
+    .join(' ');
+const buildCrumbs = () => {
+  if (breadcrumbs?.length) return breadcrumbs;
+  const segments = Astro.url.pathname.split('/').filter(Boolean);
+  if (segments.length === 0) return [{ label: 'Home', href: withBase('/') }];
+  const crumbs: Crumb[] = [{ label: 'Home', href: withBase('/') }];
+  segments.forEach((seg, idx) => {
+    const href = withBase(`/${segments.slice(0, idx + 1).join('/')}`);
+    crumbs.push({ label: titleCase(seg), href });
+  });
+  return crumbs;
+};
+const crumbItems = buildCrumbs();
+const breadcrumbSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: crumbItems.map((crumb, index) => ({
+    '@type': 'ListItem',
+    position: index + 1,
+    name: crumb.label,
+    item: new URL(crumb.href || Astro.url.pathname, siteOrigin).toString()
+  }))
+};
+const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'Heerawalla',
+  url: siteOrigin,
+  logo: new URL(withBase('/favicon.svg'), siteOrigin).toString()
+};
+const breadcrumbJson = JSON.stringify(breadcrumbSchema);
+const organizationJson = JSON.stringify(organizationSchema);
 ---
 
 <!doctype html>
@@ -14,6 +64,7 @@ const url = new URL(Astro.url.pathname, siteOrigin).toString();
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {keywords ? <meta name="keywords" content={keywords} /> : null}
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImage} />
@@ -21,9 +72,33 @@ const url = new URL(Astro.url.pathname, siteOrigin).toString();
     <meta property="og:url" content={url} />
     <link rel="icon" type="image/svg+xml" href={withBase('/favicon.svg')} />
     <link rel="shortcut icon" href={withBase('/favicon.svg')} />
+    <link rel="apple-touch-icon" href={withBase('/favicon.svg')} />
+    <link rel="mask-icon" href={withBase('/favicon.svg')} color="#0B1928" />
+    <script type="application/ld+json" is:inline>
+      {organizationJson}
+    </script>
+    <script type="application/ld+json" is:inline>
+      {breadcrumbJson}
+    </script>
   </head>
   <body class="min-h-screen bg-white text-ink">
     <slot />
+
+    <script is:inline>
+      (() => {
+        const isProtected = (target) => {
+          if (!(target instanceof Element)) return false;
+          return Boolean(target.closest('img[data-protected-image]'));
+        };
+        const stopIfProtected = (event) => {
+          if (isProtected(event.target)) {
+            event.preventDefault();
+          }
+        };
+        document.addEventListener('contextmenu', stopIfProtected);
+        document.addEventListener('dragstart', stopIfProtected);
+      })();
+    </script>
 
     <script is:inline>
       (() => {

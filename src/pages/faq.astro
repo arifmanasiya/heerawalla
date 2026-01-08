@@ -3,6 +3,120 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import { withBase } from '../lib/paths';
+
+const faqItems = [
+  {
+    question: 'What is the Heerawalla Revolution?',
+    answer:
+      'Heerawalla Revolution is our master collection, defined by sculptural balance and precision. It brings together three signature expressions that explore structure, motion, and presence.'
+  },
+  {
+    question: 'What are Axis, Continuum, and Eclipse?',
+    answer:
+      "They are three design codes within the Revolution: Axis for anchored confidence, Continuum for fluid elegance, and Eclipse for bold, magnetic presence. Each code is expressed through the Women's, Men's, Daily, and Occasion Editions."
+  },
+  {
+    question: 'Are the compositions designed for everyday wear?',
+    answer:
+      'Yes. Each composition is designed for daily wear with refined proportions and durable mountings. We recommend removing jewelry for heavy activity or exposure to chemicals.'
+  },
+  {
+    question: 'What metals do you use?',
+    answer:
+      'We work primarily in 18K gold, with 14K options available on request. Select pieces are crafted in platinum when it best serves the design.'
+  },
+  {
+    question: 'What diamonds are used?',
+    answer:
+      'Our pieces feature VVS1-VVS2 diamonds with ideal cut and E color. You may choose natural or lab-grown stones on most styles.'
+  },
+  {
+    question: 'Are your diamonds ethically sourced?',
+    answer: 'Yes. We prioritize ethical sourcing and can provide provenance documentation on request.'
+  },
+  {
+    question: 'Where is Heerawalla jewelry made?',
+    answer:
+      'Each piece is crafted by skilled artisans under Heerawalla standards. If you need specific origin details, our concierge can share them for the piece you are considering.'
+  },
+  {
+    question: 'How do I choose the right ring size?',
+    answer:
+      'We recommend measuring with a local jeweler or a sizing guide for the most accurate fit. If you are between sizes, choose the larger size and we can fine-tune it after purchase.'
+  },
+  {
+    question: 'Are bracelets adjustable?',
+    answer:
+      'Many bracelets feature adjustable lengths or multiple clasp positions. Please check the product page or ask the concierge for exact measurements.'
+  },
+  {
+    question: 'What chain length comes with pendants?',
+    answer:
+      'Standard chain length is noted on each product page. If you prefer a different length, we can advise on alternatives.'
+  },
+  {
+    question: 'Where do you ship?',
+    answer:
+      'We ship within the United States. Special orders can be hand delivered for select clients upon request.'
+  },
+  {
+    question: 'How long does delivery take?',
+    answer:
+      'Delivery timelines vary by destination and availability. You will receive an estimated delivery window at checkout and in your order confirmation.'
+  },
+  {
+    question: 'Will I receive tracking information?',
+    answer: 'Yes. Once your order ships, we send tracking details to the email on your order.'
+  },
+  {
+    question: 'Are duties or taxes included?',
+    answer:
+      'Applicable taxes are shown at checkout. For details on duties and tariffs, see our full Policies page.'
+  },
+  {
+    question: 'What is your return policy?',
+    answer:
+      'Returns are available for eligible pieces as outlined in our policy. Please review the details in our Returns Policy.'
+  },
+  {
+    question: 'Do you offer lifetime care or servicing?',
+    answer:
+      'Yes. We provide lifetime care, including annual polishing, to keep your piece pristine.'
+  },
+  {
+    question: 'How should I care for my jewelry?',
+    answer:
+      'Store pieces separately, avoid contact with harsh chemicals, and remove jewelry before heavy activity. For professional cleaning, contact the concierge.'
+  },
+  {
+    question: 'Can I request a private consultation?',
+    answer:
+      'Yes. You can book a private consultation for guidance on editions, sizing, or gifting.'
+  },
+  {
+    question: 'Do you offer custom or bespoke pieces?',
+    answer:
+      'We accept bespoke requests on a limited basis. Share your vision with the concierge and we will advise on feasibility and timelines.'
+  },
+  {
+    question: 'How do I contact the concierge?',
+    answer:
+      'Reach us via the contact page, and we will respond with next steps.'
+  }
+];
+const faqSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqItems.map((item) => ({
+    '@type': 'Question',
+    name: item.question,
+    acceptedAnswer: {
+      '@type': 'Answer',
+      text: item.answer
+    }
+  }))
+};
+const faqJson = JSON.stringify(faqSchema);
 ---
 
 <BaseLayout title="FAQ | Heerawalla" description="Answers to common questions about Heerawalla jewelry, orders, and concierge care.">
@@ -30,14 +144,14 @@ import { withBase } from '../lib/paths';
         <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
           <dt class="text-sm font-semibold text-ink">What are Axis, Continuum, and Eclipse?</dt>
           <dd class="text-sm text-slate-600">
-            They are three complete sets within the Revolution: Axis for anchored confidence, Continuum for fluid elegance,
-            and Eclipse for bold, magnetic presence.
+            They are three design codes within the Revolution: Axis for anchored confidence, Continuum for fluid elegance,
+            and Eclipse for bold, magnetic presence. Each code is expressed through the Women's, Men's, Daily, and Occasion Editions.
           </dd>
         </div>
         <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
-          <dt class="text-sm font-semibold text-ink">Are the sets designed for everyday wear?</dt>
+          <dt class="text-sm font-semibold text-ink">Are the compositions designed for everyday wear?</dt>
           <dd class="text-sm text-slate-600">
-            Yes. Each set is designed for daily wear with refined proportions and durable settings.
+            Yes. Each composition is designed for daily wear with refined proportions and durable mountings.
             We recommend removing jewelry for heavy activity or exposure to chemicals.
           </dd>
         </div>
@@ -110,8 +224,7 @@ import { withBase } from '../lib/paths';
         <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
           <dt class="text-sm font-semibold text-ink">Where do you ship?</dt>
           <dd class="text-sm text-slate-600">
-            We ship to select international destinations. Availability is shown at checkout, and the concierge can
-            confirm delivery options for your country.
+            We ship within the United States. Special orders can be hand delivered for select clients upon request.
           </dd>
         </div>
         <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
@@ -130,7 +243,7 @@ import { withBase } from '../lib/paths';
         <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
           <dt class="text-sm font-semibold text-ink">Are duties or taxes included?</dt>
           <dd class="text-sm text-slate-600">
-            Duties and taxes depend on destination and are shown at checkout when applicable. For details, see our
+            Applicable taxes are shown at checkout. For details on duties and tariffs, see our
             <a href={withBase('/policies')} class="underline underline-offset-4 hover:text-ink"> full Policies page</a>.
           </dd>
         </div>
@@ -171,7 +284,7 @@ import { withBase } from '../lib/paths';
           <dd class="text-sm text-slate-600">
             Yes. You can
             <a href={withBase('/contact?intent=consultation')} class="underline underline-offset-4 hover:text-ink"> book a private consultation</a>
-            for guidance on sets, sizing, or gifting.
+            for guidance on editions, sizing, or gifting.
           </dd>
         </div>
         <div class="grid gap-2 lg:grid-cols-[0.9fr_1.1fr] lg:gap-8">
@@ -195,3 +308,7 @@ import { withBase } from '../lib/paths';
 
   <Footer />
 </BaseLayout>
+
+<script type="application/ld+json" is:inline>
+  {faqJson}
+</script>

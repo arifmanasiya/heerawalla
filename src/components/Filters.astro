@@ -4,6 +4,41 @@ const { products } = Astro.props as { products: ProductWithMedia[] };
 const collections = Array.from(new Set(products.map((p) => p.collection).filter(Boolean)));
 const metals = Array.from(new Set(products.map((p) => p.metal).filter(Boolean)));
 const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
+
+const titleCase = (value: string) =>
+  value
+    .split(' ')
+    .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : ''))
+    .join(' ');
+
+const formatCategoryLabel = (value: string) => {
+  const parts = value.split('/');
+  const group = parts[0] || '';
+  const sub = parts[1] || '';
+  const groupLabel =
+    group === 'women'
+      ? "Women's"
+      : group === 'men'
+        ? "Men's"
+        : group
+          ? titleCase(group.replace(/-/g, ' '))
+          : '';
+  let subLabel = sub ? sub.replace(/-/g, ' ') : '';
+  if (subLabel) {
+    const lower = subLabel.toLowerCase();
+    if (lower === 'set' || lower === 'sets') {
+      subLabel = 'Edition';
+    } else {
+      subLabel = titleCase(subLabel);
+    }
+  }
+  return [groupLabel, subLabel].filter(Boolean).join(' ');
+};
+
+const categoryOptions = categories.map((value) => ({
+  value,
+  label: formatCategoryLabel(value)
+}));
 ---
 
 <div class="card p-4 space-y-3" id="filters">
@@ -15,8 +50,8 @@ const categories = Array.from(new Set(products.map((p) => p.category).filter(Boo
         {collections.map((c) => <option value={c}>{c}</option>)}
       </select>
       <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="category">
-        <option value="">Category</option>
-        {categories.map((c) => <option value={c}>{c}</option>)}
+        <option value="">Edition</option>
+        {categoryOptions.map((c) => <option value={c.value}>{c.label}</option>)}
       </select>
       <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="metal">
         <option value="">Metal</option>
@@ -24,9 +59,9 @@ const categories = Array.from(new Set(products.map((p) => p.category).filter(Boo
       </select>
       <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="price">
         <option value="">Price</option>
-        <option value="0-500">Under $500</option>
-        <option value="500-2000">$500 - $2,000</option>
-        <option value="2000-999999">$2,000+</option>
+        <option value="0-5000">Under $5,000</option>
+        <option value="5000-10000">Under $10,000</option>
+        <option value="10000-999999">$10,000+</option>
       </select>
     </div>
   </div>
@@ -35,16 +70,70 @@ const categories = Array.from(new Set(products.map((p) => p.category).filter(Boo
 <script is:inline>
   (() => {
     const selects = Array.from(document.querySelectorAll('.filter-select'));
+    const getDesignCode = () => {
+      const params = new URLSearchParams(window.location.search);
+      const raw =
+        params.get('design_code') ||
+        params.get('design-code') ||
+        params.get('designCode') ||
+        '';
+      return raw.trim();
+    };
+    const toggleCollectionFilter = () => {
+      const designCode = getDesignCode();
+      const collectionSelect = document.querySelector('[data-filter="collection"]');
+      if (!collectionSelect) return;
+      const hide = Boolean(designCode);
+      collectionSelect.toggleAttribute('hidden', hide);
+      collectionSelect.toggleAttribute('disabled', hide);
+    };
+    const updateOptionsForDesignCode = () => {
+      const cards = Array.from(document.querySelectorAll('[data-product-card]'));
+      if (!cards.length) return;
+      const designCode = getDesignCode();
+      if (!designCode) return;
+      const lower = designCode.toLowerCase();
+      const scoped = cards.filter((card) => (card.dataset.designCode || '').toLowerCase() === lower);
+      if (!scoped.length) return;
+      const available = {
+        collection: new Set(),
+        category: new Set(),
+        metal: new Set()
+      };
+      scoped.forEach((card) => {
+        if (card.dataset.collection) available.collection.add(card.dataset.collection);
+        if (card.dataset.category) available.category.add(card.dataset.category);
+        if (card.dataset.metal) available.metal.add(card.dataset.metal);
+      });
+      selects.forEach((select) => {
+        const key = select.dataset.filter;
+        if (!key || !(key in available)) return;
+        const pool = available[key];
+        const options = Array.from(select.querySelectorAll('option'));
+        options.forEach((opt) => {
+          if (!opt.value) return;
+          const enabled = pool.has(opt.value);
+          opt.disabled = !enabled;
+          opt.hidden = !enabled;
+        });
+        if (select.value && !pool.has(select.value)) {
+          select.value = '';
+        }
+      });
+    };
 
     const apply = () => {
       const cards = Array.from(document.querySelectorAll('[data-product-card]'));
       if (cards.length === 0) return;
       const filters = Object.fromEntries(selects.map((s) => [s.dataset.filter, s.value]));
+      const designCode = getDesignCode();
       cards.forEach((card) => {
         const c = card.dataset.collection || '';
         const cat = card.dataset.category || '';
         const metal = card.dataset.metal || '';
         const price = Number(card.dataset.price || 0);
+        const code = (card.dataset.designCode || '').toLowerCase();
+        const matchesDesignCode = !designCode || code === designCode.toLowerCase();
         const matchesCollection = !filters.collection || c === filters.collection;
         const matchesCategory = !filters.category || cat === filters.category;
         const matchesMetal = !filters.metal || metal === filters.metal;
@@ -53,7 +142,8 @@ const categories = Array.from(new Set(products.map((p) => p.category).filter(Boo
           const [min, max] = filters.price.split('-').map(Number);
           matchesPrice = price >= min && price <= max;
         }
-        const visible = matchesCollection && matchesCategory && matchesMetal && matchesPrice;
+        const visible =
+          matchesDesignCode && matchesCollection && matchesCategory && matchesMetal && matchesPrice;
         card.toggleAttribute('data-hidden', !visible);
         card.classList.toggle('hidden', !visible);
       });
@@ -61,6 +151,8 @@ const categories = Array.from(new Set(products.map((p) => p.category).filter(Boo
 
     selects.forEach((s) => s.addEventListener('change', apply));
     window.addEventListener('load', () => {
+      toggleCollectionFilter();
+      updateOptionsForDesignCode();
       apply();
     });
   })();

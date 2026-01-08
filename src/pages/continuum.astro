@@ -1,0 +1,77 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import ProductCard from '../components/ProductCard.astro';
+import { loadProductsWithMedia } from '../lib/products';
+import { withBase } from '../lib/paths';
+
+const designCode = 'Continuum';
+const designCodeLower = designCode.toLowerCase();
+const products = (await loadProductsWithMedia()).filter(
+  (product) => product.design_code?.toLowerCase() === designCodeLower
+);
+
+const metaTitle = `Heerawalla ${designCode} \u2014 Design Code`;
+const metaDescription =
+  'Heerawalla Continuum expresses fluid, graceful elegance. Discover the design code through women\u2019s, men\u2019s, daily, and occasion editions.';
+const breadcrumbs = [
+  { label: 'Home', href: withBase('/') },
+  { label: designCode }
+];
+
+const editions = [
+  { key: 'men', label: "Men's Edition", href: withBase('/mens-jewelry') },
+  { key: 'women', label: "Women's Edition", href: withBase('/womens-jewelry') },
+  { key: 'daily', label: 'Daily Edition', href: withBase('/daily-wear') },
+  { key: 'occasion', label: 'Occasion Edition', href: withBase('/occasion-jewelry') }
+];
+const editionGroups = editions.map((edition) => ({
+  ...edition,
+  items: products.filter((product) => (product.category || '').startsWith(`${edition.key}/`))
+}));
+---
+
+<BaseLayout title={metaTitle} description={metaDescription} breadcrumbs={breadcrumbs}>
+  <Header />
+
+  <main class="max-w-7xl mx-auto px-6 py-12 space-y-12">
+    <section class="space-y-4">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Design Code</p>
+      <h1 class="text-4xl font-semibold tracking-tight">{designCode}</h1>
+      <p class="text-sm text-slate-600 max-w-2xl">
+        Fluid, graceful elegance with a sense of continuous movement and light.
+      </p>
+      <div class="flex flex-wrap gap-3 text-xs uppercase tracking-[0.2em] text-slate-500">
+        <span class="text-slate-400">Editions</span>
+        {editions.map((edition) => (
+          <a href={edition.href} class="hover:text-ink">{edition.label}</a>
+        ))}
+      </div>
+    </section>
+
+    {editionGroups.map((edition) => (
+      <section class="border-t border-slate-200 pt-8 space-y-4">
+        <div class="flex items-end justify-between gap-4">
+          <h2 class="font-display text-2xl tracking-tight">{edition.label}</h2>
+          <a href={edition.href} class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink">
+            View edition
+          </a>
+        </div>
+        {edition.items.length ? (
+          <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {edition.items.map((product) => (
+              <ProductCard product={product} />
+            ))}
+          </div>
+        ) : (
+          <p class="text-sm text-slate-500">
+            Selections are curated seasonally. The concierge can share availability.
+          </p>
+        )}
+      </section>
+    ))}
+  </main>
+
+  <Footer />
+</BaseLayout>

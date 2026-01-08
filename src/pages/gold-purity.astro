@@ -1,0 +1,72 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { withBase } from '../lib/paths';
+
+const metaTitle = 'Heerawalla Gold Purity Guide';
+const metaDescription =
+  'A concise guide to gold purity, 18K and 14K options, and how metal choice affects wear and presence.';
+const keywords = [
+  'gold purity guide',
+  '18k gold jewelry',
+  '14k gold jewelry',
+  'gold karat meaning',
+  'luxury gold jewelry'
+].join(', ');
+const breadcrumbs = [
+  { label: 'Home', href: withBase('/') },
+  { label: 'Gold Purity Guide' }
+];
+---
+
+<BaseLayout title={metaTitle} description={metaDescription} keywords={keywords} breadcrumbs={breadcrumbs}>
+  <Header />
+
+  <main class="max-w-7xl mx-auto px-6 py-12 space-y-12">
+    <div class="space-y-2">
+      <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Guides</p>
+      <h1 class="text-3xl sm:text-4xl font-semibold tracking-tight">Gold Purity Guide</h1>
+      <p class="text-sm text-slate-500 max-w-2xl">
+        Understanding the difference between 18K and 14K for feel, durability, and color.
+      </p>
+    </div>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">18K gold</h2>
+      <p class="text-sm text-slate-600">
+        18K gold carries a richer tone and elevated weight, with a balance of purity and strength that suits heirloom
+        pieces and luminous stones.
+      </p>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">14K gold</h2>
+      <p class="text-sm text-slate-600">
+        14K gold offers increased durability for daily wear. It retains a refined glow while providing added resilience
+        for a more active cadence.
+      </p>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">Color and finish</h2>
+      <p class="text-sm text-slate-600">
+        Yellow, white, and mixed metals are chosen to support the design code and diamond light. Finishes are refined
+        to minimize glare while preserving depth.
+      </p>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">Guidance from the concierge</h2>
+      <p class="text-sm text-slate-600">
+        The concierge can recommend the most suitable metal based on your lifestyle, preferred tone, and the piece you
+        are considering.
+      </p>
+      <a href={withBase('/contact')} class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink">
+        Contact the concierge
+      </a>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

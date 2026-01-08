@@ -31,17 +31,87 @@ const baseUsd = product.price_usd_natural;
 const labDiscountPct = product.lab_discount_pct ?? -20;
 const metal14DiscountPct = product.metal_14k_discount_pct ?? -5;
 const labUsd = applyDiscount(baseUsd, labDiscountPct);
-const defaultUsd = applyDiscount(labUsd, metal14DiscountPct);
+const naturalAvailable = product.natural_available ?? true;
+const labAvailable = product.lab_available ?? true;
+const diamondDefault = labAvailable ? 'lab' : naturalAvailable ? 'natural' : 'lab';
+const defaultDiamondUsd = diamondDefault === 'lab' ? labUsd : baseUsd;
+const defaultUsd = applyDiscount(defaultDiamondUsd, metal14DiscountPct);
+const diamondDefaultLabel = diamondDefault === 'lab' ? 'Lab Grown' : 'Natural';
+const diamondAvailabilityLine =
+  naturalAvailable && labAvailable
+    ? 'Gold options and natural or lab-grown diamonds available.'
+    : naturalAvailable
+      ? 'Gold options with natural diamonds.'
+      : 'Gold options with lab-grown diamonds.';
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const ordersEmail = getConfigValue(siteConfig, 'orders_email', 'orders@heerawalla.com');
 const webmailComposeBase = getConfigValue(siteConfig, 'webmail_compose_url', 'https://mail.google.com/mail/?view=cm&fs=1&to=');
 const metal18Label = (product.metal || '18K Gold').replace(/14K/gi, '18K');
 const metal14Label = metal18Label.replace(/18K/gi, '14K');
 const productUrl = Astro.site ? new URL(withBase(`/product/${product.slug}`), Astro.site).toString() : withBase(`/product/${product.slug}`);
+const designCode = product.design_code || 'Signature';
+const designCodeSlug = designCode.toLowerCase();
+const isDesignCode = ['axis', 'continuum', 'eclipse'].includes(designCodeSlug);
+const designCodeHref = isDesignCode ? withBase(`/${designCodeSlug}`) : withBase('/collections');
+const editionHrefMap: Record<string, string> = {
+  women: withBase('/womens-jewelry'),
+  men: withBase('/mens-jewelry'),
+  daily: withBase('/daily-wear'),
+  occasion: withBase('/occasion-jewelry')
+};
+const editionLabel = (() => {
+  const category = product.category || '';
+  const group = category.split('/')[0] || '';
+  if (group === 'women') return "Women's Edition";
+  if (group === 'men') return "Men's Edition";
+  if (group === 'daily') return 'Daily Edition';
+  if (group === 'occasion') return 'Occasion Edition';
+  return product.collection || product.category || '';
+})();
+const groupLabel = editionLabel || product.collection || product.category || '';
+const editionKey = (product.category || '').split('/')[0] || '';
+const editionHref = editionHrefMap[editionKey];
+const groupLineLabel = editionHref ? 'Edition' : 'Collection';
+const breadcrumbCrumbs = [
+  { label: 'Home', href: withBase('/') },
+  { label: designCode, href: designCodeHref },
+  ...(editionHref ? [{ label: editionLabel, href: editionHref }] : []),
+  { label: product.name }
+];
 const mailtoSubject = `Invoice request: ${product.name}`;
-const mailtoBody = `I'm interested in ${product.name}\n\nCategory: ${product.category}\nMetal: ${product.metal}\nPrice (USD): ${baseUsd}\nLab Price (USD): ${labUsd}\nProduct link: ${productUrl}\n\nPlease confirm availability and share a secure invoice link.`;
+const diamondLine =
+  naturalAvailable && labAvailable
+    ? 'Diamonds: Natural or Lab Grown'
+    : naturalAvailable
+      ? 'Diamonds: Natural'
+      : 'Diamonds: Lab Grown';
+const naturalPriceLine = naturalAvailable ? `Natural price (USD): ${baseUsd}` : null;
+const labPriceLine = labAvailable ? `Lab price (USD): ${labUsd}` : null;
+const mailtoBody = `I'm interested in ${product.name}\n\nDesign code: ${designCode}\n${groupLineLabel}: ${groupLabel}\nMetal: ${product.metal}\n${diamondLine}\n${[naturalPriceLine, labPriceLine].filter(Boolean).join('\n')}\nProduct link: ${productUrl}\n\nPlease confirm availability and share a secure invoice link.`;
 const mailtoHref = `mailto:${ordersEmail}?subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(mailtoBody)}`;
 
+const offers = [
+  ...(naturalAvailable
+    ? [
+        {
+          '@type': 'Offer',
+          price: baseUsd,
+          priceCurrency: 'USD',
+          availability: 'https://schema.org/InStock'
+        }
+      ]
+    : []),
+  ...(labAvailable && (!naturalAvailable || labUsd !== baseUsd)
+    ? [
+        {
+          '@type': 'Offer',
+          price: labUsd,
+          priceCurrency: 'USD',
+          availability: 'https://schema.org/InStock'
+        }
+      ]
+    : [])
+];
 const jsonLd = {
   '@context': 'https://schema.org',
   '@type': 'Product',
@@ -52,49 +122,33 @@ const jsonLd = {
   description: product.description,
   sku: product.id,
   brand: { '@type': 'Brand', name: 'Heerawalla' },
-  offers: [
-    {
-      '@type': 'Offer',
-      price: baseUsd,
-      priceCurrency: 'USD',
-      availability: 'https://schema.org/InStock'
-    },
-    ...(labUsd && labUsd !== baseUsd
-      ? [
-          {
-            '@type': 'Offer',
-            price: labUsd,
-            priceCurrency: 'USD',
-            availability: 'https://schema.org/InStock'
-          }
-        ]
-      : [])
-  ]
+  offers
 };
 const jsonLdString = JSON.stringify(jsonLd);
 void jsonLdString;
 ---
 
-<BaseLayout title={`${product.name} | Heerawalla`} description={product.description}>
+<BaseLayout
+  title={`${product.name} | Heerawalla`}
+  description={product.description}
+  breadcrumbs={breadcrumbCrumbs}
+>
   <Header />
   <main class="container py-10 space-y-8">
-    <Breadcrumbs
-      crumbs={[
-        { label: 'Home', href: withBase('/') },
-        { label: 'Collections', href: withBase('/collections') },
-        { label: product.name }
-      ]}
-    />
-    <div class="grid gap-8 lg:grid-cols-2">
-      <div class="card overflow-hidden relative">
-        <img
-          src={image}
-          alt={product.name}
-          class="w-full h-full object-cover"
-          loading="lazy"
-          data-product-image
-          data-product-image-meta={JSON.stringify(imageMeta)}
-        />
+    <Breadcrumbs crumbs={breadcrumbCrumbs} />
+    <div class="grid gap-8 lg:grid-cols-2 items-start">
+      <div class="card relative bg-white">
+        <div class="relative flex items-center justify-center overflow-hidden rounded-2xl bg-white">
+          <img
+            src={image}
+            alt={product.name}
+            class="block max-h-[70vh] w-auto max-w-full object-contain"
+            loading="lazy"
+            data-product-image
+            data-product-image-meta={JSON.stringify(imageMeta)}
+            data-protected-image
+          />
+        </div>
         {imageCount > 1 ? (
           <button
             type="button"
@@ -118,8 +172,13 @@ void jsonLdString;
       </div>
       <div class="space-y-6">
         <div>
-          <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{product.collection || product.category}</p>
+          <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{groupLabel}</p>
           <h1 class="text-3xl font-semibold tracking-tight">{product.name}</h1>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+          <a href={designCodeHref} class="hover:text-ink">{designCode}</a>
+          {editionHref ? <span aria-hidden="true">/</span> : null}
+          {editionHref ? <a href={editionHref} class="hover:text-ink">{editionLabel}</a> : null}
         </div>
         <div class="space-y-2">
           <div class="flex items-center gap-4">
@@ -129,28 +188,43 @@ void jsonLdString;
               data-lab-discount={labDiscountPct}
               data-metal-14k-discount={metal14DiscountPct}
               data-metal-default="14k"
+              data-diamond-default={diamondDefault}
+              data-natural-available={naturalAvailable}
+              data-lab-available={labAvailable}
               id="price-display"
             >
               {usdFormatter.format(defaultUsd)}
             </span>
-            <span
-              class="text-sm text-slate-500"
-              data-metal-label
-              data-metal-18={metal18Label}
-              data-metal-14={metal14Label}
-            >
-              {metal14Label}
+            <span class="text-sm text-slate-500 flex items-center gap-2">
+              <span
+                data-metal-label
+                data-metal-18={metal18Label}
+                data-metal-14={metal14Label}
+              >
+                {metal14Label}
+              </span>
+              <span aria-hidden="true">/</span>
+              <span data-diamond-label>{diamondDefaultLabel}</span>
             </span>
           </div>
           <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Estimated price</p>
           <p class="text-sm text-slate-500">
             Final pricing is confirmed after consultation based on metal, diamond choice, and sizing.
           </p>
-          <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
-            <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Diamonds</span>
-            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="natural">Natural</button>
-            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="lab">Lab Grown</button>
-          </div>
+          {naturalAvailable && labAvailable ? (
+            <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Diamonds</span>
+              <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="natural">Natural</button>
+              <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="lab">Lab Grown</button>
+            </div>
+          ) : (
+            <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Diamonds</span>
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">
+                {naturalAvailable ? 'Natural' : 'Lab Grown'}
+              </span>
+            </div>
+          )}
           <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
             <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Gold</span>
             <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="18k">18K</button>
@@ -260,11 +334,17 @@ void jsonLdString;
       const baseUsd = Number(priceEl.dataset.priceUsdBase || 0);
       const labDiscount = Number(priceEl.dataset.labDiscount || -20);
       const metal14Discount = Number(priceEl.dataset.metal14kDiscount || -5);
-      let diamondMode = 'lab';
+      const naturalAvailable = priceEl.dataset.naturalAvailable !== 'false';
+      const labAvailable = priceEl.dataset.labAvailable !== 'false';
+      let diamondMode =
+        priceEl.dataset.diamondDefault || (labAvailable ? 'lab' : 'natural');
+      if (diamondMode === 'lab' && !labAvailable) diamondMode = 'natural';
+      if (diamondMode === 'natural' && !naturalAvailable) diamondMode = 'lab';
       let metalMode = priceEl.dataset.metalDefault || '14k';
       const metalLabel = document.querySelector('[data-metal-label]');
       const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
       const applyDiscount = (value, pct) => Math.round(value * (1 + pct / 100) * 100) / 100;
+      const priceToggles = Array.from(document.querySelectorAll('[data-price-toggle]'));
       const apply = () => {
         let price = baseUsd;
         if (diamondMode === 'lab') {
@@ -274,7 +354,7 @@ void jsonLdString;
           price = applyDiscount(price, metal14Discount);
         }
         priceEl.textContent = formatter.format(price);
-        document.querySelectorAll('[data-price-toggle]').forEach((btn) => {
+        priceToggles.forEach((btn) => {
           btn.classList.toggle('bg-ink', btn.dataset.priceToggle === diamondMode);
           btn.classList.toggle('text-white', btn.dataset.priceToggle === diamondMode);
         });
@@ -289,10 +369,21 @@ void jsonLdString;
               : metalLabel.getAttribute('data-metal-18');
           if (label) metalLabel.textContent = label;
         }
+        const diamondLabel = document.querySelector('[data-diamond-label]');
+        if (diamondLabel) {
+          diamondLabel.textContent = diamondMode === 'lab' ? 'Lab Grown' : 'Natural';
+        }
       };
-      document.querySelectorAll('[data-price-toggle]').forEach((btn) => {
+      priceToggles.forEach((btn) => {
+        const mode = btn.dataset.priceToggle || 'natural';
+        const isAvailable = mode === 'lab' ? labAvailable : naturalAvailable;
+        if (!isAvailable) {
+          btn.setAttribute('disabled', 'true');
+          btn.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+          return;
+        }
         btn.addEventListener('click', () => {
-          diamondMode = btn.dataset.priceToggle || 'natural';
+          diamondMode = mode;
           apply();
         });
       });

@@ -1,2 +1,3 @@
-id,name,slug,description,collection,category,metal,price_usd_natural,lab_discount_pct,metal_14k_discount_pct,is_active,is_featured,tags,cut,clarity,color,carat
-hms-001,The Axis Set,hms-001,"18K gold set with VVS1 diamonds, ideal cut, E color.",Signature,men/sets,18K Gold,11735.29,-20,-5,TRUE,TRUE,set,Ideal,VVS1 - VVS2,E,1
+id,name,slug,description,collection,category,metal,price_usd_natural,lab_discount_pct,metal_14k_discount_pct,natural_available,lab_available,design_code,is_active,is_featured,tags,cut,clarity,color,carat
+hms-001,Axis · Apex,hms-001,"18K gold composition with VVS1 diamonds, ideal cut, E color.",Axis,men/sets,18K Gold,11735.29,-20,-5,TRUE,TRUE,Axis,TRUE,TRUE,design-code,Ideal,VVS1 - VVS2,E,1
+hms-002,Eclipse · Sovereign,hms-002,"A commanding Eclipse composition in 18K gold with VVS1 diamonds and a precise, magnetic presence.",Eclipse,men/sets,18K Gold,20000,-20,-5,TRUE,TRUE,Eclipse,TRUE,TRUE,design-code,Ideal,VVS1,E,1
