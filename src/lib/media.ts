@@ -9,6 +9,25 @@ export type MediaCollection = { images: MediaAsset[]; videos: MediaAsset[]; fold
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif', '.gif', '.svg']);
 const VIDEO_EXT = new Set(['.mp4', '.webm', '.mov', '.m4v']);
 const TEXT_EXT = new Set(['.txt']);
+const IMAGE_TYPE_ORDER = [
+  'hero',
+  'pendant',
+  'earring',
+  'bracelet',
+  'ring',
+  'composition',
+  'feature',
+  'engraving'
+];
+const LEGACY_TYPE_BY_INDEX: Record<string, string> = {
+  '1': 'hero',
+  '2': 'pendant',
+  '3': 'earring',
+  '4': 'bracelet',
+  '5': 'ring',
+  '6': 'composition',
+  '7': 'feature'
+};
 
 function slugify(value: string): string {
   const segments = value.split('/').map((part) => {
@@ -23,6 +42,33 @@ function getProductFolder(product: Product) {
   const id = product.id;
   const folder = path.join('public', 'images', 'products', categorySlug, id);
   return { folderFs: path.resolve(folder), folderUrl: `/images/products/${categorySlug}/${id}` };
+}
+
+function normalizeImageType(type: string) {
+  if (type === 'earrings') return 'earring';
+  if (type === 'bangle') return 'bracelet';
+  if (type === 'bangles') return 'bracelet';
+  if (type === 'rings') return 'ring';
+  return type;
+}
+
+function parseImageSortKey(filename: string) {
+  const ext = path.extname(filename).toLowerCase();
+  const base = path.basename(filename, ext).toLowerCase();
+  const typedMatch = base.match(/^img-([a-z]+)-(\d+)$/);
+  if (typedMatch) {
+    const type = normalizeImageType(typedMatch[1]);
+    const order = IMAGE_TYPE_ORDER.indexOf(type);
+    const index = Number(typedMatch[2]) || 1;
+    return { order: order === -1 ? 99 : order, index, base };
+  }
+  const legacyMatch = base.match(/^img-(\d+)$/);
+  if (legacyMatch) {
+    const type = LEGACY_TYPE_BY_INDEX[legacyMatch[1]];
+    const order = type ? IMAGE_TYPE_ORDER.indexOf(type) : 99;
+    return { order: order === -1 ? 99 : order, index: 1, base };
+  }
+  return { order: 99, index: 0, base };
 }
 
 export async function getMediaForProduct(product: Product): Promise<MediaCollection> {
@@ -68,7 +114,13 @@ export async function getMediaForProduct(product: Product): Promise<MediaCollect
   if (hasPlaceholder && images.length > 1) {
     images = images.filter((img) => img.filename.toLowerCase() !== 'image-1.svg');
   }
-  images = images.sort((a, b) => a.filename.localeCompare(b.filename));
+  images = images.sort((a, b) => {
+    const keyA = parseImageSortKey(a.filename);
+    const keyB = parseImageSortKey(b.filename);
+    if (keyA.order !== keyB.order) return keyA.order - keyB.order;
+    if (keyA.index !== keyB.index) return keyA.index - keyB.index;
+    return keyA.base.localeCompare(keyB.base);
+  });
   const videos = entries.filter((e) => e.type === 'video').sort((a, b) => a.filename.localeCompare(b.filename));
 
   return {

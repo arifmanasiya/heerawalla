@@ -1,0 +1,105 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import { loadInspirations, INSPIRATION_DISCLAIMER, type Inspiration } from '../../lib/inspirations';
+import { withBase } from '../../lib/paths';
+
+export async function getStaticPaths() {
+  const inspirations = await loadInspirations();
+  return inspirations.map((item) => ({
+    params: { slug: item.slug },
+    props: { item }
+  }));
+}
+
+const { item } = Astro.props as { item: Inspiration };
+const metaTitle = `${item.title} | Inspirations | Heerawalla`;
+const metaDescription = item.shortDesc;
+---
+
+<BaseLayout title={metaTitle} description={metaDescription}>
+  <Header />
+
+  <main class="max-w-7xl mx-auto px-6 py-12 space-y-12">
+    <div class="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-slate-500">
+      <a href={withBase('/inspirations')} class="hover:text-ink">Back to Inspirations</a>
+      <span>Unlocked direction</span>
+    </div>
+
+    <section class="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] items-start">
+      <div class="space-y-5">
+        <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Inspiration</p>
+        <h1 class="font-display text-4xl sm:text-5xl tracking-tight">{item.title}</h1>
+        <p class="text-sm text-slate-600 max-w-xl">{item.longDesc}</p>
+        <div class="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+          {item.tags.map((tag) => (
+            <span class="border border-slate-200 px-2 py-1">{tag}</span>
+          ))}
+        </div>
+        <div class="flex flex-wrap gap-3 pt-2">
+          <a
+            href={withBase(`/inspirations/${item.slug}/quote`)}
+            class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 bg-ink text-white text-xs uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+          >
+            Request Quote
+          </a>
+          <span class="text-xs uppercase tracking-[0.18em] text-slate-500 self-center">
+            Email-only bespoke
+          </span>
+        </div>
+      </div>
+      <div class="border border-slate-200 bg-white overflow-hidden">
+        <img
+          src={withBase(item.heroImage)}
+          alt={`${item.title} inspiration`}
+          class="w-full h-full object-cover"
+          loading="lazy"
+        />
+      </div>
+    </section>
+
+    <section class="grid gap-8 lg:grid-cols-2 border-t border-slate-200 pt-8">
+      <div class="space-y-4">
+        <h2 class="font-display text-2xl tracking-tight">What we take from this</h2>
+        <ul class="space-y-3 text-sm text-slate-600 list-disc list-inside">
+          {item.takeaways.map((point) => (
+            <li>{point}</li>
+          ))}
+        </ul>
+      </div>
+      <div class="space-y-4">
+        <h2 class="font-display text-2xl tracking-tight">How Heerawalla translates it</h2>
+        <ul class="space-y-3 text-sm text-slate-600 list-disc list-inside">
+          {item.translationNotes.map((point) => (
+            <li>{point}</li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">Suggested palette</h2>
+      <div class="flex flex-wrap gap-2">
+        {item.palette.map((chip) => (
+          <span class="px-3 py-1 text-xs uppercase tracking-[0.18em] border border-slate-200 text-slate-500">
+            {chip.label}
+          </span>
+        ))}
+      </div>
+    </section>
+
+    <section class="border-t border-slate-200 pt-8 space-y-4">
+      <h2 class="font-display text-2xl tracking-tight">Inspiration disclaimer</h2>
+      <p class="text-sm text-slate-600 max-w-3xl">{INSPIRATION_DISCLAIMER}</p>
+      <a
+        href={withBase(`/inspirations/${item.slug}/quote`)}
+        class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink"
+      >
+        Request Quote
+      </a>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>

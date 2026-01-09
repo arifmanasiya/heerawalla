@@ -1,0 +1,210 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import { loadInspirations } from '../../lib/inspirations';
+import { withBase } from '../../lib/paths';
+
+const metaTitle = 'Inspirations | Heerawalla';
+const metaDescription =
+  'A curated set of inspirations that guide bespoke commissions within Heerawalla language.';
+const inspirations = await loadInspirations();
+
+const uniqueValues = (items: string[][]) =>
+  Array.from(new Set(items.flat().map((value) => value.trim()).filter(Boolean)));
+const categories = uniqueValues(inspirations.map((item) => item.categories)).sort();
+const genders = uniqueValues(inspirations.map((item) => item.genders)).sort();
+const styles = uniqueValues(inspirations.map((item) => item.styles)).sort();
+const motifs = uniqueValues(inspirations.map((item) => item.motifs)).sort();
+const metals = uniqueValues(inspirations.map((item) => item.metals)).sort();
+---
+
+<BaseLayout title={metaTitle} description={metaDescription}>
+  <Header />
+
+  <main class="max-w-7xl mx-auto px-6 py-12 space-y-10">
+    <header class="space-y-4">
+      <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Inspirations</p>
+      <h1 class="font-display text-4xl sm:text-5xl tracking-tight">A starting point for bespoke</h1>
+      <p class="text-sm sm:text-base text-slate-600 max-w-2xl">
+        Original Heerawalla creations, shaped by your direction.
+      </p>
+      <p class="text-sm text-slate-500 max-w-2xl">
+        Design Codes and Signature Collections are fixed. Inspirations are client-led directions that inform an original
+        Heerawalla creation.
+      </p>
+      <p class="text-sm text-slate-500 max-w-2xl">
+        Inspirations guide mood and direction—every design is uniquely Heerawalla.
+      </p>
+    </header>
+
+    <section class="grid gap-4 lg:grid-cols-[1.2fr_2fr] items-start border-t border-slate-200 pt-6">
+      <div class="space-y-4">
+        <p class="text-[11px] uppercase tracking-[0.28em] text-slate-500">Filters</p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="text-xs uppercase tracking-[0.2em] text-slate-500 space-y-1">
+            <span>Category</span>
+            <select class="w-full rounded-none border border-slate-200 bg-white px-3 py-2 text-sm" data-filter="category">
+              <option value="">All</option>
+              {categories.map((item) => (
+                <option value={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label class="text-xs uppercase tracking-[0.2em] text-slate-500 space-y-1">
+            <span>Gender</span>
+            <select class="w-full rounded-none border border-slate-200 bg-white px-3 py-2 text-sm" data-filter="gender">
+              <option value="">All</option>
+              {genders.map((item) => (
+                <option value={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label class="text-xs uppercase tracking-[0.2em] text-slate-500 space-y-1">
+            <span>Style</span>
+            <select class="w-full rounded-none border border-slate-200 bg-white px-3 py-2 text-sm" data-filter="style">
+              <option value="">All</option>
+              {styles.map((item) => (
+                <option value={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label class="text-xs uppercase tracking-[0.2em] text-slate-500 space-y-1">
+            <span>Motif</span>
+            <select class="w-full rounded-none border border-slate-200 bg-white px-3 py-2 text-sm" data-filter="motif">
+              <option value="">All</option>
+              {motifs.map((item) => (
+                <option value={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+          <label class="text-xs uppercase tracking-[0.2em] text-slate-500 space-y-1">
+            <span>Metal tone</span>
+            <select class="w-full rounded-none border border-slate-200 bg-white px-3 py-2 text-sm" data-filter="metal">
+              <option value="">All</option>
+              {metals.map((item) => (
+                <option value={item}>{item}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <button
+          type="button"
+          class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink"
+          data-filter-clear
+        >
+          Clear filters
+        </button>
+      </div>
+
+      <div class="space-y-6">
+        <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3" data-inspiration-grid>
+          {inspirations.map((item) => (
+            <article
+              class="border border-slate-200 bg-white flex flex-col"
+              data-inspiration-card
+              data-categories={item.categories.join(',')}
+              data-genders={item.genders.join(',')}
+              data-styles={item.styles.join(',')}
+              data-motifs={item.motifs.join(',')}
+              data-metals={item.metals.join(',')}
+            >
+              <a href={withBase(`/inspirations/${item.slug}`)} class="block">
+                <div class="aspect-[3/4] w-full overflow-hidden bg-white">
+                  <img
+                    src={withBase(item.heroImage)}
+                    alt={`${item.title} inspiration`}
+                    class="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+              </a>
+              <div class="flex-1 p-4 space-y-3">
+                <div class="space-y-1">
+                  <h2 class="text-lg font-semibold tracking-tight">{item.title}</h2>
+                  <p class="text-sm text-slate-500">{item.shortDesc}</p>
+                </div>
+                <div class="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                  {item.tags.slice(0, 3).map((tag) => (
+                    <span class="border border-slate-200 px-2 py-1">{tag}</span>
+                  ))}
+                </div>
+              </div>
+              <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs uppercase tracking-[0.2em] text-slate-500">
+                <a href={withBase(`/inspirations/${item.slug}`)} class="hover:text-ink">View</a>
+                <a href={withBase(`/inspirations/${item.slug}/quote`)} class="hover:text-ink">Request Quote</a>
+              </div>
+            </article>
+          ))}
+        </div>
+        <p class="text-sm text-slate-500 hidden" data-inspiration-empty>
+          No inspirations match your filters. Clear the filters to start again.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<script is:inline>
+  (() => {
+    const grid = document.querySelector('[data-inspiration-grid]');
+    const cards = Array.from(document.querySelectorAll('[data-inspiration-card]'));
+    const empty = document.querySelector('[data-inspiration-empty]');
+    const selects = Array.from(document.querySelectorAll('[data-filter]'));
+    const clear = document.querySelector('[data-filter-clear]');
+    if (!grid || !cards.length || selects.length === 0) return;
+
+    const getValues = () => {
+      const values = {};
+      selects.forEach((select) => {
+        values[select.getAttribute('data-filter')] = select.value;
+      });
+      return values;
+    };
+
+    const matchesFilter = (value, list) => {
+      if (!value) return true;
+      return list.includes(value.toLowerCase());
+    };
+
+    const apply = () => {
+      const filters = getValues();
+      let visible = 0;
+      cards.forEach((card) => {
+        const categories = (card.getAttribute('data-categories') || '').toLowerCase().split(',');
+        const genders = (card.getAttribute('data-genders') || '').toLowerCase().split(',');
+        const styles = (card.getAttribute('data-styles') || '').toLowerCase().split(',');
+        const motifs = (card.getAttribute('data-motifs') || '').toLowerCase().split(',');
+        const metals = (card.getAttribute('data-metals') || '').toLowerCase().split(',');
+        const match =
+          matchesFilter(filters.category, categories) &&
+          matchesFilter(filters.gender, genders) &&
+          matchesFilter(filters.style, styles) &&
+          matchesFilter(filters.motif, motifs) &&
+          matchesFilter(filters.metal, metals);
+        card.classList.toggle('hidden', !match);
+        if (match) visible += 1;
+      });
+      if (empty) {
+        empty.classList.toggle('hidden', visible !== 0);
+      }
+    };
+
+    selects.forEach((select) => {
+      select.addEventListener('change', apply);
+    });
+
+    if (clear) {
+      clear.addEventListener('click', () => {
+        selects.forEach((select) => {
+          select.value = '';
+        });
+        apply();
+      });
+    }
+
+    apply();
+  })();
+</script>

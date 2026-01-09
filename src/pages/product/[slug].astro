@@ -197,14 +197,61 @@ void jsonLdString;
               >
                 {metal14Label}
               </span>
+              <span class="relative group">
+                <button
+                  type="button"
+                  class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  aria-describedby="gold-tooltip"
+                >
+                  i
+                </button>
+                <span
+                  id="gold-tooltip"
+                  role="tooltip"
+                  class="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-60 -translate-x-1/2 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+                >
+                  For daily wear, 14K offers added durability; for occasions, 18K gives richer color and presence.
+                </span>
+              </span>
               <span aria-hidden="true">/</span>
-              <span data-diamond-label>{diamondDefaultLabel}</span>
+              <span class="relative group inline-flex items-center gap-1">
+                <span data-diamond-label>{diamondDefaultLabel}</span>
+                <button
+                  type="button"
+                  class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                  aria-describedby="diamond-quality-tooltip"
+                >
+                  i
+                </button>
+                <span
+                  id="diamond-quality-tooltip"
+                  class="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-60 -translate-x-1/2 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+                  role="tooltip"
+                >
+                  Pricing reflects top-quality diamonds (ideal cut, VVS1-VVS2, E-F color).
+                </span>
+              </span>
             </span>
           </div>
-          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Estimated price</p>
-          <p class="text-sm text-slate-500">
-            Final pricing is confirmed after consultation based on metal, diamond choice, and sizing.
-          </p>
+          <div class="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+            <span>Estimated price</span>
+            <div class="relative group">
+              <button
+                type="button"
+                class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                aria-describedby="price-tooltip"
+              >
+                i
+              </button>
+              <span
+                id="price-tooltip"
+                role="tooltip"
+                class="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-60 -translate-x-1/2 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+              >
+                Final pricing is confirmed after consultation based on metal, diamond choice, and sizing.
+              </span>
+            </div>
+          </div>
           {naturalAvailable && labAvailable ? (
             <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
               <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Diamonds</span>
@@ -250,7 +297,7 @@ void jsonLdString;
               data-body={mailtoBody}
               data-gmail-base={webmailComposeBase}
             >
-              <a class="btn btn-primary" href={mailtoHref} data-mail-trigger>Request invoice</a>
+              <a class="btn btn-primary" href={mailtoHref} data-mail-trigger>Request final quote</a>
               <div
                 class="absolute left-0 top-full z-20 mt-2 w-48 border border-slate-200 bg-white shadow-md hidden"
                 data-mail-menu
