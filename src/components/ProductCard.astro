@@ -6,9 +6,9 @@ const rawImage = product.media.images[0]?.url;
 const fallback = withBase('/images/products/placeholder.svg');
 const image = rawImage ? rawImage : fallback;
 const thumbnails = product.media.images.slice(1);
-const visibleThumbs = thumbnails.slice(0, 3);
+const visibleThumbs = thumbnails.slice(0, 4);
 const hasThumbs = visibleThumbs.length > 0;
-const hasMoreThumbs = thumbnails.length > 3;
+const hasMoreThumbs = thumbnails.length > 4;
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const editionLabel = (() => {
   const category = product.category || '';
@@ -26,7 +26,7 @@ const editionLabel = (() => {
   data-thumb-layout="column"
   data-thumb-layout-locked="true"
 >
-  <div class="thumb-media flex gap-2 sm:gap-3 bg-white" data-thumb-media>
+  <div class="thumb-media flex items-stretch gap-2 sm:gap-3 bg-white" data-thumb-media>
     {hasThumbs ? (
       <div class="thumb-strip-wrap relative overflow-hidden" data-thumb-strip-wrap>
         <div
@@ -67,12 +67,12 @@ const editionLabel = (() => {
       class="thumb-main flex-1 flex items-stretch justify-end overflow-hidden"
       data-thumb-main
     >
-      <div class="aspect-square w-full bg-white">
+      <div class="aspect-[3/4] w-full bg-white">
         <img
           src={image}
           alt={product.name}
           loading="lazy"
-          class="h-full w-full object-contain object-right transition duration-300 group-hover:scale-[1.02]"
+          class="h-full w-full object-contain object-center transition duration-300 group-hover:scale-[1.02]"
           data-main-image
           data-default-src={image}
           data-protected-image
@@ -219,15 +219,15 @@ const editionLabel = (() => {
     width: 4rem;
     overflow: hidden;
     flex: 0 0 auto;
-    align-self: flex-start;
+    align-self: stretch;
   }
 
   [data-thumb-layout='column'] [data-thumb-strip] {
     width: 4rem;
     flex-direction: column;
     padding: 0.5rem 0 0.5rem 0.5rem;
-    max-height: calc((4rem * 3) + (0.5rem * 2));
-    overflow-y: auto;
+    height: 100%;
+    overflow-y: hidden;
     overflow-x: hidden;
     scrollbar-width: none;
   }
@@ -266,7 +266,7 @@ const editionLabel = (() => {
     [data-thumb-layout='column'] [data-thumb-strip] {
       width: 5rem;
       padding: 0.75rem 0 0.75rem 0.75rem;
-      max-height: calc((5rem * 3) + (0.75rem * 2));
+      height: 100%;
     }
 
     [data-thumb-layout='row'] [data-thumb-strip-wrap] {
