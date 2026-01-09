@@ -40,8 +40,20 @@ const metals = uniqueValues(inspirations.map((item) => item.metals)).sort();
 
     <section class="grid gap-4 lg:grid-cols-[1.2fr_2fr] items-start border-t border-slate-200 pt-6">
       <div class="space-y-4">
-        <p class="text-[11px] uppercase tracking-[0.28em] text-slate-500">Filters</p>
-        <div class="grid gap-3 sm:grid-cols-2">
+        <div class="flex items-center justify-between md:block">
+          <p class="text-[11px] uppercase tracking-[0.28em] text-slate-500">Filters</p>
+          <button
+            type="button"
+            class="md:hidden text-[11px] uppercase tracking-[0.28em] text-slate-500 hover:text-ink"
+            data-filter-toggle
+            aria-controls="inspiration-filters"
+            aria-expanded="false"
+          >
+            Show filters
+          </button>
+        </div>
+        <div id="inspiration-filters" class="space-y-4 hidden md:block" data-filter-panel>
+          <div class="grid gap-3 sm:grid-cols-2">
           <label class="text-xs uppercase tracking-[0.2em] text-slate-500 space-y-1">
             <span>Category</span>
             <select class="w-full rounded-none border border-slate-200 bg-white px-3 py-2 text-sm" data-filter="category">
@@ -87,14 +99,15 @@ const metals = uniqueValues(inspirations.map((item) => item.metals)).sort();
               ))}
             </select>
           </label>
+          </div>
+          <button
+            type="button"
+            class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink"
+            data-filter-clear
+          >
+            Clear filters
+          </button>
         </div>
-        <button
-          type="button"
-          class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink"
-          data-filter-clear
-        >
-          Clear filters
-        </button>
       </div>
 
       <div class="space-y-6">
@@ -154,6 +167,8 @@ const metals = uniqueValues(inspirations.map((item) => item.metals)).sort();
     const empty = document.querySelector('[data-inspiration-empty]');
     const selects = Array.from(document.querySelectorAll('[data-filter]'));
     const clear = document.querySelector('[data-filter-clear]');
+    const filterToggle = document.querySelector('[data-filter-toggle]');
+    const filterPanel = document.querySelector('[data-filter-panel]');
     if (!grid || !cards.length || selects.length === 0) return;
 
     const getValues = () => {
@@ -202,6 +217,15 @@ const metals = uniqueValues(inspirations.map((item) => item.metals)).sort();
           select.value = '';
         });
         apply();
+      });
+    }
+
+    if (filterToggle && filterPanel) {
+      filterToggle.addEventListener('click', () => {
+        const isOpen = !filterPanel.classList.contains('hidden');
+        filterPanel.classList.toggle('hidden', isOpen);
+        filterToggle.setAttribute('aria-expanded', String(!isOpen));
+        filterToggle.textContent = isOpen ? 'Show filters' : 'Hide filters';
       });
     }
 

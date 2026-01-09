@@ -42,9 +42,19 @@ const categoryOptions = categories.map((value) => ({
 ---
 
 <div class="card p-4 space-y-3" id="filters">
-  <div class="flex flex-wrap gap-3">
+  <div class="flex items-center justify-between md:block">
     <label class="text-xs uppercase tracking-[0.14em] text-slate-500">Filters</label>
-    <div class="flex flex-wrap gap-3">
+    <button
+      type="button"
+      class="md:hidden text-xs uppercase tracking-[0.14em] text-slate-500 hover:text-ink"
+      data-filter-toggle
+      aria-controls="collection-filters"
+      aria-expanded="false"
+    >
+      Show filters
+    </button>
+  </div>
+  <div id="collection-filters" class="flex flex-wrap gap-3 hidden md:flex" data-filter-panel>
       <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="collection">
         <option value="">Collection</option>
         {collections.map((c) => <option value={c}>{c}</option>)}
@@ -63,13 +73,14 @@ const categoryOptions = categories.map((value) => ({
         <option value="5000-10000">Under $10,000</option>
         <option value="10000-999999">$10,000+</option>
       </select>
-    </div>
   </div>
 </div>
 
 <script is:inline>
   (() => {
     const selects = Array.from(document.querySelectorAll('.filter-select'));
+    const filterToggle = document.querySelector('[data-filter-toggle]');
+    const filterPanel = document.querySelector('[data-filter-panel]');
     const getDesignCode = () => {
       const params = new URLSearchParams(window.location.search);
       const raw =
@@ -150,6 +161,14 @@ const categoryOptions = categories.map((value) => ({
     };
 
     selects.forEach((s) => s.addEventListener('change', apply));
+    if (filterToggle && filterPanel) {
+      filterToggle.addEventListener('click', () => {
+        const isOpen = !filterPanel.classList.contains('hidden');
+        filterPanel.classList.toggle('hidden', isOpen);
+        filterToggle.setAttribute('aria-expanded', String(!isOpen));
+        filterToggle.textContent = isOpen ? 'Show filters' : 'Hide filters';
+      });
+    }
     window.addEventListener('load', () => {
       toggleCollectionFilter();
       updateOptionsForDesignCode();

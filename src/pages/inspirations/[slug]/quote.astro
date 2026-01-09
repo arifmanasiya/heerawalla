@@ -339,7 +339,7 @@ const defaultStoneType = (() => {
   <Footer />
 </BaseLayout>
 
-<script is:inline define:vars={{ slug: item.slug, inspirationTitle: item.title, disclaimer: INSPIRATION_DISCLAIMER, inquiriesEmail, inspirationImage: item.heroImage, inspirationsUrl, homeUrl }}>
+<script is:inline define:vars={{ slug: item.slug, inspirationTitle: item.title, disclaimer: INSPIRATION_DISCLAIMER, inquiriesEmail, inspirationImage: item.heroImage, inspirationsUrl, homeUrl, defaultCategory }}>
   (() => {
     const form = document.querySelector('[data-quote-form]');
     if (!form) return;
