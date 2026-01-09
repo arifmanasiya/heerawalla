@@ -20,11 +20,12 @@ const metaTitle = getConfigValue(
   'meta_title',
   'Heerawalla | Fine jewelry crafted with precision'
 );
-const metaDescription = getConfigValue(
+const metaDescriptionBase = getConfigValue(
   config,
   'meta_description',
   "Explore Heerawalla's curated jewelry collection - minimal, luxurious, and made to endure."
 );
+const metaDescription = `${metaDescriptionBase} Often searched as Heerawala, Hirawala, Hirawalla, Herowalla, Herowala, Hero Wala, Hero Walla, Heera Walla, Heera Wala, हीरावाला.`;
 
 const collections = Array.from(new Set(products.map((p) => p.collection).filter(Boolean))).slice(0, 3);
 const normalizeDesignCode = (value?: string) => (value ? value.toLowerCase() : '');

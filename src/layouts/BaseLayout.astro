@@ -18,6 +18,7 @@ const {
 };
 const siteOrigin = Astro.site?.origin || 'https://heerawalla.com';
 const ogImage = image && image.startsWith('http') ? image : new URL(withBase(image || '/images/hero.png'), siteOrigin).toString();
+const logoImage = new URL(withBase('/images/engraving_mark.svg'), siteOrigin).toString();
 const url = new URL(Astro.url.pathname, siteOrigin).toString();
 const titleCase = (value: string) =>
   value
@@ -50,13 +51,40 @@ const organizationSchema = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
   name: 'Heerawalla',
+  alternateName: [
+    'Heerawala',
+    'Hirawala',
+    'Hirawalla',
+    'Herowalla',
+    'Herowala',
+    'Hero Wala',
+    'Hero Walla',
+    'Heera Walla',
+    'Heera Wala',
+    'हीरावाला',
+    'હીરાવાળા',
+    'હીરાવાલા'
+  ],
   url: siteOrigin,
-  logo: new URL(withBase('/favicon.svg'), siteOrigin).toString()
+  logo: logoImage
+};
+const websiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'Heerawalla',
+  url: siteOrigin,
+  publisher: {
+    '@type': 'Organization',
+    name: 'Heerawalla',
+    logo: logoImage
+  }
 };
 const breadcrumbJson = JSON.stringify(breadcrumbSchema);
 const organizationJson = JSON.stringify(organizationSchema);
+const websiteJson = JSON.stringify(websiteSchema);
 void breadcrumbJson;
 void organizationJson;
+void websiteJson;
 ---
 
 <!doctype html>
@@ -72,15 +100,22 @@ void organizationJson;
     <meta property="og:image" content={ogImage} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={url} />
-    <link rel="icon" type="image/svg+xml" href={withBase('/favicon.svg')} />
-    <link rel="shortcut icon" href={withBase('/favicon.svg')} />
-    <link rel="apple-touch-icon" href={withBase('/favicon.svg')} />
-    <link rel="mask-icon" href={withBase('/favicon.svg')} color="#0B1928" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <link rel="icon" type="image/svg+xml" href={withBase('/images/engraving_mark.svg')} />
+    <link rel="shortcut icon" href={withBase('/images/engraving_mark.svg')} />
+    <link rel="apple-touch-icon" href={withBase('/images/engraving_mark.svg')} />
+    <link rel="mask-icon" href={withBase('/images/engraving_mark.svg')} color="#0B1928" />
     <script type="application/ld+json" is:inline>
       {organizationJson}
     </script>
     <script type="application/ld+json" is:inline>
       {breadcrumbJson}
+    </script>
+    <script type="application/ld+json" is:inline>
+      {websiteJson}
     </script>
   </head>
   <body class="min-h-screen bg-white text-ink">
