@@ -9,5 +9,5 @@
       "@data/*": ["data/*"]
     }
   },
-  "exclude": ["workers/**/test/**"]
+  "exclude": ["workers/**"]
 }
