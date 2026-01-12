@@ -1,0 +1,36 @@
+name = "herawalla-email-atelier"
+main = "src/index.ts"
+compatibility_date = "2025-01-11"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
+
+[vars]
+FORWARD_TO = "atelier.heerawalla@gmail.com"
+FORWARD_REJECTS_TO = "noreply.heerawalla@gmail.com"
+REPLY_TO_ADDRESS = "relay-reply@heerawalla.com"
+SEND_ACK = "true"
+SEND_REJECT = "false"
+SEND_SUBMIT = "true"
+
+# Secrets are configured via `wrangler secret put` or in the Cloudflare dashboard.
+
+[[send_email]]
+name = "SEND_EMAIL"
+allowed_sender_addresses = ["atelier@heerawalla.com"]
+
+[[kv_namespaces]]
+binding = "HEERAWALLA_ACKS"
+id = "d699d7256dfa42a79c7089d4e49e4137"

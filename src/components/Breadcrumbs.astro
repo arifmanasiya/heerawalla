@@ -2,6 +2,7 @@
 interface Crumb {
   label: string;
   href?: string;
+  kind?: string;
 }
 const { crumbs } = Astro.props as { crumbs: Crumb[] };
 ---
@@ -10,7 +11,17 @@ const { crumbs } = Astro.props as { crumbs: Crumb[] };
   <ol class="flex items-center gap-2 flex-wrap">
     {crumbs.map((crumb, idx) => (
       <li class="flex items-center gap-2">
-        {crumb.href ? <a class="hover:text-accent" href={crumb.href}>{crumb.label}</a> : <span>{crumb.label}</span>}
+        {crumb.href ? (
+          <a
+            class="hover:text-accent"
+            href={crumb.href}
+            data-breadcrumb-kind={crumb.kind}
+          >
+            {crumb.label}
+          </a>
+        ) : (
+          <span>{crumb.label}</span>
+        )}
         {idx < crumbs.length - 1 ? <span aria-hidden="true">/</span> : null}
       </li>
     ))}

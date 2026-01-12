@@ -1,2 +1,4 @@
 id,name,slug,description,collection,category,metal,price_usd_natural,lab_discount_pct,metal_14k_discount_pct,natural_available,lab_available,design_code,is_active,is_featured,tags,cut,clarity,color,carat
 hw-003,Solitaire Diamond Pendant,solitaire-pendant,"Minimal oval pendant with bezel-framed emerald on fine chain.",Signature,women/pendants,18k Yellow/White Gold,3903.53,-20,-5,TRUE,TRUE,Signature,TRUE,FALSE,emerald,Ideal,VVS1 - VVS2,E,1
+hwp-001,Axis Emblem Pendant,axis-emblem-pendant,"Unisex Axis pendant with circular line geometry and a single diamond, refined for daily wear.",Axis,unisex/pendants,18K Gold,2500,-20,-5,TRUE,TRUE,Axis,TRUE,TRUE,design-code|unisex|daily,Ideal,VVS1 - VVS2,E,1
+hwp-002,Axis Meridian Pendant,axis-meridian-pendant,"Unisex Axis pendant with circular geometry, prong-set diamonds, and an engraved signature mark.",Axis,unisex/pendants,18K Gold,4999,-20,-5,TRUE,TRUE,Axis,TRUE,FALSE,design-code|unisex|daily,Ideal,VVS1 - VVS2,E,1

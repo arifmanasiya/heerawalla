@@ -8,9 +8,10 @@ import { withBase } from '../lib/paths';
 
 const editionLabel = "Men's Jewelry";
 const editionKey = 'men';
-const products = (await loadProductsWithMedia()).filter((product) =>
-  (product.category || '').startsWith(`${editionKey}/`)
-);
+const products = (await loadProductsWithMedia()).filter((product) => {
+  const category = product.category || '';
+  return category.startsWith(`${editionKey}/`) || category.startsWith('unisex/');
+});
 const seo = {
   primary: "men's jewelry",
   secondary: [
@@ -37,14 +38,53 @@ const breadcrumbs = [
     <section class="space-y-4">
       <p class="text-xs uppercase tracking-[0.18em] text-slate-500">Edition</p>
       <h1 class="text-4xl font-semibold tracking-tight">{editionLabel}</h1>
-      <p class="text-sm text-slate-600 max-w-2xl">
+      <p class="text-sm text-slate-600 max-w-2xl" data-design-description>
         Considered forms for measured confidence, anchored in precise geometry and enduring materials.
       </p>
-      <div class="flex flex-wrap gap-3 text-xs uppercase tracking-[0.2em] text-slate-500">
+      <div
+        class="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-500"
+        data-design-filter
+      >
         <span class="text-slate-400">Design Codes</span>
-        <a href={withBase('/axis')} class="hover:text-ink">Axis</a>
-        <a href={withBase('/continuum')} class="hover:text-ink">Continuum</a>
-        <a href={withBase('/eclipse')} class="hover:text-ink">Eclipse</a>
+        <button
+          type="button"
+          class="min-h-[34px] px-3 py-1.5 border border-ink/15 rounded-none text-[10px] tracking-[0.2em] text-slate-500 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50"
+          data-code=""
+          data-active="true"
+          aria-pressed="true"
+        >
+          All
+        </button>
+        <button
+          type="button"
+          class="min-h-[34px] px-3 py-1.5 border border-ink/15 rounded-none text-[10px] tracking-[0.2em] text-slate-500 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50"
+          data-code="axis"
+          data-design-desc="Axis is precise and grounded—architectural lines, measured weight, and quiet authority."
+          data-active="false"
+          aria-pressed="false"
+        >
+          Axis
+        </button>
+        <button
+          type="button"
+          class="min-h-[34px] px-3 py-1.5 border border-ink/15 rounded-none text-[10px] tracking-[0.2em] text-slate-500 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50"
+          data-code="continuum"
+          data-design-desc="Continuum favors fluid motion—continuous curves, soft transitions, and calm refinement."
+          data-active="false"
+          aria-pressed="false"
+        >
+          Continuum
+        </button>
+        <button
+          type="button"
+          class="min-h-[34px] px-3 py-1.5 border border-ink/15 rounded-none text-[10px] tracking-[0.2em] text-slate-500 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50"
+          data-code="eclipse"
+          data-design-desc="Eclipse is bold and magnetic—strong contrast, sculptural presence, and controlled intensity."
+          data-active="false"
+          aria-pressed="false"
+        >
+          Eclipse
+        </button>
       </div>
     </section>
 
@@ -52,7 +92,9 @@ const breadcrumbs = [
       {products.length ? (
         <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((product) => (
-            <ProductCard product={product} />
+            <div data-product-card data-design-code={(product.design_code || '').toLowerCase()}>
+              <ProductCard product={product} />
+            </div>
           ))}
         </div>
       ) : (
@@ -65,3 +107,59 @@ const breadcrumbs = [
 
   <Footer />
 </BaseLayout>
+
+<script is:inline>
+  (() => {
+    const container = document.querySelector('[data-design-filter]');
+    if (!container) return;
+    const buttons = Array.from(container.querySelectorAll('[data-code]'));
+    const cards = Array.from(document.querySelectorAll('[data-product-card]'));
+    const desc = document.querySelector('[data-design-description]');
+    const defaultDesc = desc?.textContent?.trim() || '';
+    if (!buttons.length || !cards.length) return;
+
+    const setActive = (code) => {
+      buttons.forEach((button) => {
+        const isActive = (button.dataset.code || '') === code;
+        button.setAttribute('data-active', String(isActive));
+        button.setAttribute('aria-pressed', String(isActive));
+      });
+    };
+
+    const apply = (code) => {
+      const target = (code || '').toLowerCase();
+      cards.forEach((card) => {
+        const cardCode = (card.dataset.designCode || '').toLowerCase();
+        const visible = !target || cardCode === target;
+        card.classList.toggle('hidden', !visible);
+        card.toggleAttribute('data-hidden', !visible);
+      });
+      if (desc) {
+        const active = buttons.find((button) => (button.dataset.code || '') === target);
+        desc.textContent = active?.dataset.designDesc || defaultDesc;
+      }
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const initial =
+      params.get('design_code') ||
+      params.get('design-code') ||
+      params.get('designCode') ||
+      '';
+    const normalized = initial.toLowerCase();
+    const initialCode = buttons.some((button) => (button.dataset.code || '') === normalized)
+      ? normalized
+      : '';
+
+    setActive(initialCode);
+    apply(initialCode);
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const code = button.dataset.code || '';
+        setActive(code);
+        apply(code);
+      });
+    });
+  })();
+</script>

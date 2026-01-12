@@ -46,20 +46,30 @@ const productUrl = Astro.site ? new URL(withBase(`/product/${product.slug}`), As
 const designCode = product.design_code || 'Signature';
 const designCodeSlug = designCode.toLowerCase();
 const isDesignCode = ['axis', 'continuum', 'eclipse'].includes(designCodeSlug);
-const designCodeHref = isDesignCode ? withBase(`/${designCodeSlug}`) : withBase('/collections');
+const designCodeHref = (() => {
+  if (!isDesignCode) return withBase('/inspirations');
+  const category = product.category || '';
+  if (category.startsWith('men/')) {
+    return withBase(`/mens-jewelry?design_code=${designCodeSlug}`);
+  }
+  if (category.startsWith('women/')) {
+    return withBase(`/womens-jewelry?design_code=${designCodeSlug}`);
+  }
+  if (category.startsWith('unisex/')) {
+    return withBase(`/womens-jewelry?design_code=${designCodeSlug}`);
+  }
+  return withBase(`/womens-jewelry?design_code=${designCodeSlug}`);
+})();
 const editionHrefMap: Record<string, string> = {
   women: withBase('/womens-jewelry'),
-  men: withBase('/mens-jewelry'),
-  daily: withBase('/daily-wear'),
-  occasion: withBase('/occasion-jewelry')
+  men: withBase('/mens-jewelry')
 };
 const editionLabel = (() => {
   const category = product.category || '';
   const group = category.split('/')[0] || '';
   if (group === 'women') return "Women's Edition";
   if (group === 'men') return "Men's Edition";
-  if (group === 'daily') return 'Daily Edition';
-  if (group === 'occasion') return 'Occasion Edition';
+  if (group === 'unisex') return 'Unisex Edition';
   return product.collection || product.category || '';
 })();
 const groupLabel = editionLabel || product.collection || product.category || '';
@@ -68,7 +78,7 @@ const editionHref = editionHrefMap[editionKey];
 const groupLineLabel = editionHref ? 'Edition' : 'Collection';
 const breadcrumbCrumbs = [
   { label: 'Home', href: withBase('/') },
-  { label: designCode, href: designCodeHref },
+  { label: designCode, href: designCodeHref, kind: 'design-code' },
   ...(editionHref ? [{ label: editionLabel, href: editionHref }] : []),
   { label: product.name }
 ];
@@ -340,7 +350,8 @@ void jsonLdString;
       const prevBtn = document.querySelector('[data-image-prev]');
       const nextBtn = document.querySelector('[data-image-next]');
       const descEl = document.querySelector('[data-product-description]');
-      const defaultText = descEl ? descEl.textContent || '' : '';
+      const heroText = imageMeta[0]?.description || '';
+      const defaultText = heroText || (descEl ? descEl.textContent || '' : '');
       let index = imageMeta.findIndex((item) => item?.url === (mainImage.getAttribute('src') || ''));
       if (index < 0) index = 0;
 
@@ -356,6 +367,9 @@ void jsonLdString;
         }
       };
 
+      if (descEl) {
+        descEl.textContent = defaultText;
+      }
       setIndex(index);
 
       if (imageMeta.length > 1) {
@@ -435,6 +449,24 @@ void jsonLdString;
         });
       });
       apply();
+    })();
+  </script>
+  <script is:inline>
+    (() => {
+      const link = document.querySelector('[data-breadcrumb-kind="design-code"]');
+      if (!(link instanceof HTMLAnchorElement)) return;
+      const ref = document.referrer;
+      if (!ref) return;
+      try {
+        const url = new URL(ref);
+        if (url.origin !== window.location.origin) return;
+        const path = url.pathname;
+        const allowed = ['/mens-jewelry', '/womens-jewelry', '/inspirations'];
+        if (!allowed.some((prefix) => path.startsWith(prefix))) return;
+        link.setAttribute('href', `${url.pathname}${url.search}${url.hash}`);
+      } catch {
+        // Ignore invalid referrers.
+      }
     })();
   </script>
 </BaseLayout>

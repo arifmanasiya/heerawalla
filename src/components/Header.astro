@@ -8,21 +8,15 @@ import { withBase } from '../lib/paths';
       <span class="wordmark text-[15px] sm:text-[16px]">Heerawalla</span>
     </a>
     <nav class="hidden md:flex items-center gap-8 text-[11px] uppercase tracking-[0.28em] text-slate-500" aria-label="Primary">
-      <a href={withBase('/collections')} class="hover:text-ink">Collections</a>
       <a href={withBase('/inspirations')} class="hover:text-ink">Inspirations</a>
-      <a href={withBase('/about')} class="hover:text-ink">About</a>
-      <a href={withBase('/contact')} class="hover:text-ink">Contact</a>
-      <a href={withBase('/policies')} class="hover:text-ink">Policies</a>
-    </nav>
-    <div class="flex items-center gap-4 text-[11px] uppercase tracking-[0.28em] text-slate-500">
       <a href={withBase('/contact?intent=consultation')} class="hover:text-ink">Concierge</a>
-    </div>
+    </nav>
   </div>
   <nav
     class="md:hidden max-w-7xl mx-auto px-6 pb-3 flex items-center gap-6 text-[10px] uppercase tracking-[0.28em] text-slate-500"
     aria-label="Primary"
   >
-    <a href={withBase('/collections')} class="hover:text-ink">Collections</a>
     <a href={withBase('/inspirations')} class="hover:text-ink">Inspirations</a>
+    <a href={withBase('/contact?intent=consultation')} class="hover:text-ink">Concierge</a>
   </nav>
 </header>

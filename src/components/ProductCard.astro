@@ -1,22 +1,24 @@
 ---
 import type { ProductWithMedia } from '../lib/products';
 import { withBase } from '../lib/paths';
-const { product } = Astro.props as { product: ProductWithMedia };
+const { product, showThumbnails = false } = Astro.props as {
+  product: ProductWithMedia;
+  showThumbnails?: boolean;
+};
 const rawImage = product.media.images[0]?.url;
 const fallback = withBase('/images/products/placeholder.svg');
 const image = rawImage ? rawImage : fallback;
-const thumbnails = product.media.images.slice(1);
-const visibleThumbs = thumbnails.slice(0, 4);
-const hasThumbs = visibleThumbs.length > 0;
-const hasMoreThumbs = thumbnails.length > 4;
+const thumbnails = showThumbnails ? product.media.images.slice(1) : [];
+const visibleThumbs = showThumbnails ? thumbnails.slice(0, 4) : [];
+const hasThumbs = showThumbnails && visibleThumbs.length > 0;
+const hasMoreThumbs = showThumbnails && thumbnails.length > 4;
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const editionLabel = (() => {
   const category = product.category || '';
   const group = category.split('/')[0] || '';
   if (group === 'women') return "Women's Edition";
   if (group === 'men') return "Men's Edition";
-  if (group === 'daily') return 'Daily Edition';
-  if (group === 'occasion') return 'Occasion Edition';
+  if (group === 'unisex') return 'Unisex Edition';
   return product.collection || product.category || '';
 })();
 ---
@@ -166,6 +168,8 @@ const editionLabel = (() => {
       card.dataset.thumbLocked = 'true';
     };
 
+    const isTouch = window.matchMedia('(hover: none)').matches;
+
     document.addEventListener('mouseover', (event) => {
       const button = event.target.closest('[data-thumb-src]');
       if (!button) return;
@@ -183,6 +187,15 @@ const editionLabel = (() => {
       if (!button) return;
       event.preventDefault();
       toggleThumbLock(button);
+    });
+
+    document.addEventListener('click', (event) => {
+      const mainLink = event.target.closest('[data-thumb-main]');
+      if (!mainLink || !isTouch) return;
+      const card = mainLink.closest('[data-product-card]') || mainLink.closest('article');
+      if (!card || card.dataset.thumbLocked !== 'true') return;
+      event.preventDefault();
+      resetThumb(card);
     });
 
     document.addEventListener('mouseout', (event) => {

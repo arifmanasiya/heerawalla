@@ -7,6 +7,11 @@ import { loadSiteConfig, getConfigValue } from '../lib/config';
 const config = await loadSiteConfig();
 const contactEmail = getConfigValue(config, 'contact_email', 'support@heerawalla.com');
 const webmailComposeBase = getConfigValue(config, 'webmail_compose_url', 'https://mail.google.com/mail/?view=cm&fs=1&to=');
+const consultationBookingLink = getConfigValue(
+  config,
+  'consultation_booking_link',
+  'https://calendar.app.google/sJE4L6jMtc98ASF76'
+);
 const mailtoHref = `mailto:${contactEmail}`;
 ---
 
@@ -47,39 +52,16 @@ const mailtoHref = `mailto:${contactEmail}`;
         <span class="text-slate-600">Message</span>
         <textarea required name="message" rows="5" class="w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
       </label>
-      <div class="grid gap-3 lg:grid-cols-[1.4fr_1fr]" data-consultation-block>
-        <div class="border border-slate-200 p-4">
-          <div class="flex items-center justify-between text-sm text-slate-600">
-            <button type="button" class="px-2 py-1 hover:text-ink" data-cal-prev>Prev</button>
-            <span class="text-xs uppercase tracking-[0.2em] text-slate-500" data-cal-label></span>
-            <button type="button" class="px-2 py-1 hover:text-ink" data-cal-next>Next</button>
-          </div>
-          <div class="mt-4 grid grid-cols-7 gap-1 text-[10px] uppercase tracking-[0.2em] text-slate-500">
-            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
-          </div>
-          <div class="mt-2 grid grid-cols-7 gap-1" data-cal-grid></div>
-          <p class="mt-3 text-xs text-slate-500">
-            30-minute slots, Mon-Fri, 10:00am-4:00pm CST. Bookings open 2 days ahead.
-          </p>
-        </div>
-        <div class="border border-slate-200 p-4">
-          <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Available times (CST)</div>
-          <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3" data-time-grid></div>
-          <label class="mt-4 block text-sm space-y-1">
-            <span class="text-slate-600">Selected slot</span>
-            <input
-              type="text"
-              name="consultation_display"
-              class="w-full rounded-lg border border-slate-200 px-3 py-2"
-              data-consultation-display
-              readonly
-            />
-          </label>
-          <p class="mt-3 text-xs text-slate-500">
-            Consultations are confirmed with a $50 booking fee. We send a secure payment link to your request email, and the fee
-            is fully credited toward your final invoice with an order.
-          </p>
-        </div>
+      <div class="border border-slate-200 p-2" data-consultation-block data-booking-link={consultationBookingLink}>
+        <iframe
+          src={consultationBookingLink}
+          title="Heerawalla consultation booking"
+          width="100%"
+          height="640"
+          frameborder="0"
+          style="border:0"
+          loading="lazy"
+        ></iframe>
       </div>
       <input type="hidden" name="consultation" data-consultation-hidden />
       <div class="flex gap-3">
@@ -134,23 +116,16 @@ const mailtoHref = `mailto:${contactEmail}`;
   <script is:inline>
     (() => {
       const block = document.querySelector('[data-consultation-block]');
-      const grid = document.querySelector('[data-cal-grid]');
-      const label = document.querySelector('[data-cal-label]');
-      const prevBtn = document.querySelector('[data-cal-prev]');
-      const nextBtn = document.querySelector('[data-cal-next]');
-      const timeGrid = document.querySelector('[data-time-grid]');
       const hidden = document.querySelector('[data-consultation-hidden]');
-      const display = document.querySelector('[data-consultation-display]');
-      if (!block || !grid || !label || !prevBtn || !nextBtn || !timeGrid || !hidden || !display) return;
+      if (!block || !hidden) return;
       const params = new URLSearchParams(window.location.search);
       const isConsult = params.get('intent') === 'consultation';
       const consultCta = document.querySelector('[data-consultation-cta]');
       const responseNote = document.querySelector('[data-contact-response-note]');
       const intro = document.querySelector('[data-contact-intro]');
+      const bookingLink = block.getAttribute('data-booking-link') || '';
       if (!isConsult) {
         block.classList.add('hidden');
-        display.removeAttribute('required');
-        display.setAttribute('disabled', 'true');
         hidden.value = '';
         if (consultCta) consultCta.classList.add('hidden');
         if (responseNote) responseNote.classList.remove('hidden');
@@ -161,220 +136,13 @@ const mailtoHref = `mailto:${contactEmail}`;
         return;
       }
       block.classList.remove('hidden');
-      display.setAttribute('required', 'true');
-      display.removeAttribute('disabled');
+      hidden.value = bookingLink ? `Booking link: ${bookingLink}` : '';
       if (consultCta) consultCta.classList.remove('hidden');
       if (responseNote) responseNote.classList.add('hidden');
       if (intro) {
         const text = intro.getAttribute('data-consult-text');
         if (text) intro.textContent = text;
       }
-      const tz = 'America/Chicago';
-      const DAY_MS = 24 * 60 * 60 * 1000;
-      const monthFormatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'long', year: 'numeric' });
-      const dayFormatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, day: '2-digit' });
-      const partsFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        weekday: 'short',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-      const timeFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-
-      const getCstParts = (date) => {
-        const parts = partsFormatter.formatToParts(date);
-        const get = (type) => parts.find((p) => p.type === type)?.value;
-        return {
-          weekday: get('weekday'),
-          year: get('year'),
-          month: get('month'),
-          day: get('day')
-        };
-      };
-
-      const pad = (value) => String(value).padStart(2, '0');
-      const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const minMs = Date.now() + 2 * DAY_MS;
-      const minParts = getCstParts(new Date(minMs));
-      const minKey = `${minParts.year}-${minParts.month}-${minParts.day}`;
-      const minDateUtc = Date.UTC(Number(minParts.year), Number(minParts.month) - 1, Number(minParts.day));
-
-      const makeDate = (year, month, day) => new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
-      const dateKey = (parts) => `${parts.year}-${parts.month}-${parts.day}`;
-      const isWeekday = (weekday) => weekday !== 'Sat' && weekday !== 'Sun';
-
-      const dayOfYear = (year, month, day) => {
-        const start = Date.UTC(year, 0, 1);
-        const current = Date.UTC(year, month - 1, day);
-        return Math.floor((current - start) / DAY_MS) + 1;
-      };
-
-      const hash = (seed) => {
-        const next = (seed * 9301 + 49297) % 233280;
-        return next / 233280;
-      };
-
-      const blockRateForDay = (parts) => {
-        const currentUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
-        const daysFromMin = Math.max(0, Math.floor((currentUtc - minDateUtc) / DAY_MS));
-        const maxBlock = 0.45;
-        const minBlock = 0.12;
-        const rate = maxBlock - daysFromMin * 0.01;
-        return Math.max(minBlock, rate);
-      };
-
-      const isSlotBlocked = (parts, slotIndex) => {
-        const julian = dayOfYear(Number(parts.year), Number(parts.month), Number(parts.day));
-        const seed = Number(parts.year) * 1000 + julian + slotIndex * 17;
-        return hash(seed) < blockRateForDay(parts);
-      };
-
-      const slotTimes = [];
-      for (let hour = 10; hour < 16; hour += 1) {
-        slotTimes.push({ hour, minute: 0 });
-        slotTimes.push({ hour, minute: 30 });
-      }
-      slotTimes.push({ hour: 16, minute: 0 });
-
-      let viewYear = Number(minParts.year);
-      let viewMonth = Number(minParts.month);
-      let selectedDateKey = '';
-      let selectedTimeValue = '';
-
-      const setHiddenValue = () => {
-        if (!selectedDateKey || !selectedTimeValue) {
-          hidden.value = '';
-          display.value = '';
-          display.setCustomValidity('Select a consultation date and time.');
-          return;
-        }
-        const displayValue = `${selectedDateKey} ${selectedTimeValue} CST`;
-        hidden.value = displayValue;
-        display.value = displayValue;
-        display.setCustomValidity('');
-      };
-
-      const renderTimes = (parts) => {
-        timeGrid.innerHTML = '';
-        selectedTimeValue = '';
-        if (!parts) {
-          setHiddenValue();
-          return;
-        }
-        let blockedCount = 0;
-        slotTimes.forEach((_, index) => {
-          if (isSlotBlocked(parts, index)) blockedCount += 1;
-        });
-        const allBlocked = blockedCount === slotTimes.length;
-        slotTimes.forEach((slot, index) => {
-          const temp = new Date();
-          temp.setHours(slot.hour, slot.minute, 0, 0);
-          const labelText = timeFormatter.format(temp);
-          const value = `${pad(slot.hour)}:${pad(slot.minute)}`;
-          const blocked = allBlocked ? index !== 0 : isSlotBlocked(parts, index);
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.textContent = blocked ? `${labelText} (Unavailable)` : labelText;
-          button.className = blocked
-            ? 'w-full rounded-none border border-slate-200 px-2 py-2 text-xs text-slate-400 cursor-not-allowed'
-            : 'w-full rounded-none border border-slate-200 px-2 py-2 text-xs text-slate-600 hover:text-ink';
-          if (blocked) {
-            button.disabled = true;
-          } else {
-            button.addEventListener('click', () => {
-              selectedTimeValue = value;
-              timeGrid.querySelectorAll('[data-selected=true]').forEach((el) => el.removeAttribute('data-selected'));
-              button.setAttribute('data-selected', 'true');
-              button.classList.add('ring-1', 'ring-ink');
-              setHiddenValue();
-            });
-          }
-          timeGrid.appendChild(button);
-        });
-        setHiddenValue();
-      };
-
-      const renderCalendar = () => {
-        grid.innerHTML = '';
-        const firstDay = makeDate(viewYear, viewMonth, 1);
-        const firstParts = getCstParts(firstDay);
-        const firstIndex = weekdayOrder.indexOf(firstParts.weekday);
-        const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
-        label.textContent = monthFormatter.format(firstDay);
-
-        for (let i = 0; i < firstIndex; i += 1) {
-          const empty = document.createElement('span');
-          empty.className = 'h-9';
-          grid.appendChild(empty);
-        }
-
-        for (let day = 1; day <= daysInMonth; day += 1) {
-          const date = makeDate(viewYear, viewMonth, day);
-          const parts = getCstParts(date);
-          const key = dateKey(parts);
-          const selectable = isWeekday(parts.weekday) && key >= minKey;
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.textContent = dayFormatter.format(date);
-          button.className = selectable
-            ? 'h-9 w-full rounded-none border border-slate-200 text-xs text-slate-600 hover:text-ink'
-            : 'h-9 w-full rounded-none border border-slate-200 text-xs text-slate-300 cursor-not-allowed';
-          if (!selectable) {
-            button.disabled = true;
-          } else {
-            if (key === selectedDateKey) {
-              button.classList.add('ring-1', 'ring-ink');
-            }
-            button.addEventListener('click', () => {
-              selectedDateKey = key;
-              grid.querySelectorAll('[data-selected=true]').forEach((el) => el.removeAttribute('data-selected'));
-              button.setAttribute('data-selected', 'true');
-              grid.querySelectorAll('button').forEach((el) => el.classList.remove('ring-1', 'ring-ink'));
-              button.classList.add('ring-1', 'ring-ink');
-              renderTimes(parts);
-            });
-          }
-          grid.appendChild(button);
-        }
-      };
-
-      prevBtn.addEventListener('click', () => {
-        let nextMonth = viewMonth - 1;
-        let nextYear = viewYear;
-        if (nextMonth < 1) {
-          nextMonth = 12;
-          nextYear -= 1;
-        }
-        const targetKey = `${nextYear}-${pad(nextMonth)}-01`;
-        if (targetKey < minKey) return;
-        viewMonth = nextMonth;
-        viewYear = nextYear;
-        renderCalendar();
-      });
-
-      nextBtn.addEventListener('click', () => {
-        let nextMonth = viewMonth + 1;
-        let nextYear = viewYear;
-        if (nextMonth > 12) {
-          nextMonth = 1;
-          nextYear += 1;
-        }
-        viewMonth = nextMonth;
-        viewYear = nextYear;
-        renderCalendar();
-      });
-
-      renderCalendar();
-      renderTimes(null);
-      setHiddenValue();
-
-      prevBtn.focus();
     })();
   </script>
 </BaseLayout>

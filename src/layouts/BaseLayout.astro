@@ -171,6 +171,38 @@ void websiteJson;
           return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} CST`;
         };
 
+        const generateRequestId = () => {
+          const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+          let id = '';
+          for (let i = 0; i < 6; i += 1) {
+            id += alphabet[Math.floor(Math.random() * alphabet.length)];
+          }
+          return id;
+        };
+
+        const ensureRequestId = (picker) => {
+          let id = picker.getAttribute('data-request-id');
+          if (!id) {
+            id = generateRequestId();
+            picker.setAttribute('data-request-id', id);
+          }
+          return id;
+        };
+
+        const applyRequestMarker = (subject, body, requestId) => {
+          const marker = `HW-REQ:${requestId}`;
+          const markerLine = `Heerawalla Request ID: ${requestId}`;
+          let nextSubject = subject || 'Heerawalla request';
+          if (!nextSubject.toUpperCase().includes('HW-REQ:')) {
+            nextSubject = `${nextSubject} [${marker}]`;
+          }
+          let nextBody = body || '';
+          if (!nextBody.includes(markerLine)) {
+            nextBody = nextBody ? `${nextBody}\n\n${markerLine}` : markerLine;
+          }
+          return { subject: nextSubject, body: nextBody };
+        };
+
         const buildMailData = (picker) => {
           const email = picker.getAttribute('data-email') || '';
           const baseSubject = picker.getAttribute('data-subject') || '';
@@ -195,7 +227,9 @@ void websiteJson;
               subject = baseSubject || (name ? `Inquiry from ${name}` : 'Heerawalla inquiry');
             }
           }
-          return { email, subject, body };
+          const requestId = ensureRequestId(picker);
+          const marked = applyRequestMarker(subject, body, requestId);
+          return { email, subject: marked.subject, body: marked.body };
         };
 
         const buildHref = (provider, email, subject, body, picker) => {

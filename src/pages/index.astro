@@ -27,15 +27,13 @@ const metaDescriptionBase = getConfigValue(
 );
 const metaDescription = `${metaDescriptionBase} Often searched as Heerawala, Hirawala, Hirawalla, Herowalla, Herowala, Hero Wala, Hero Walla, Heera Walla, Heera Wala, हीरावाला.`;
 
-const collections = Array.from(new Set(products.map((p) => p.collection).filter(Boolean))).slice(0, 3);
 const normalizeDesignCode = (value?: string) => (value ? value.toLowerCase() : '');
 const editionLabel = (category?: string, fallback?: string) => {
   const raw = category || '';
   const group = raw.split('/')[0] || '';
   if (group === 'women') return "Women's Edition";
   if (group === 'men') return "Men's Edition";
-  if (group === 'daily') return 'Daily Edition';
-  if (group === 'occasion') return 'Occasion Edition';
+  if (group === 'unisex') return 'Unisex Edition';
   return fallback || raw;
 };
 const heroImage = withBase('/images/hero.png');
@@ -60,14 +58,13 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
           <!-- Discover three signatures of the same power: Axis (anchored), Continuum (fluid), Eclipse (magnetic). -->
           <!-- CMS swap: Variant C supporting line -->
           <!-- Axis. Continuum. Eclipse. -->
-          <p class="text-sm text-slate-600 max-w-lg">Axis, Continuum, and Eclipse are three design codes&mdash;each expressed through the Women's, Men's, Daily, and Occasion Editions.</p>
-          <p class="text-xs uppercase tracking-[0.24em] text-slate-500">Choose a design code&mdash;Axis, Continuum, or Eclipse. Each is a complete expression.</p>
+          <p class="text-sm text-slate-600 max-w-lg">Axis, Continuum, and Eclipse are three design codes&mdash;each expressed through the Women's and Men's Editions.</p>
           <div class="flex flex-col sm:flex-row gap-3">
             <a
               class="inline-flex items-center justify-center min-h-[44px] px-6 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              href={withBase('/collections')}
+              href={withBase('/inspirations')}
             >
-              Explore the collection
+              Explore inspirations
             </a>
             <a
               class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 text-sm uppercase tracking-[0.2em] text-ink border border-ink/20 rounded-none hover:border-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
@@ -77,79 +74,25 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
             </a>
             <a
               class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 text-sm uppercase tracking-[0.2em] text-ink border border-ink/20 rounded-none hover:border-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              href={withBase('/inspirations/spiral-continuum/quote')}
+              href={withBase('/inspirations/spiral-continuum/bespoke?direct=1')}
             >
               Bespoke atelier
             </a>
           </div>
-          <div class="mt-6">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-[10px] uppercase tracking-[0.28em] text-slate-500">Design codes</p>
-              </div>
-            </div>
-            <div class="mt-3 flex flex-wrap gap-3" role="tablist" aria-label="Design codes">
-              <button
-                type="button"
-                role="tab"
-                aria-selected="true"
-                aria-controls="revolution-panel"
-                data-line="axis"
-                data-code-name="Axis"
-                data-desc="Structured, anchored confidence"
-                data-code-link={withBase('/axis')}
-                data-active="true"
-                class="min-h-[44px] px-3 py-2 font-display text-[11px] tracking-[0.12em] text-slate-500 border border-ink/15 rounded-none transition-colors duration-200 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              >
-                Axis
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected="false"
-                aria-controls="revolution-panel"
-                data-line="continuum"
-                data-code-name="Continuum"
-                data-desc="Fluid, graceful elegance"
-                data-code-link={withBase('/continuum')}
-                data-active="false"
-                tabindex="-1"
-                class="min-h-[44px] px-3 py-2 font-display text-[11px] tracking-[0.12em] text-slate-500 border border-ink/15 rounded-none transition-colors duration-200 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              >
-                Continuum
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected="false"
-                aria-controls="revolution-panel"
-                data-line="eclipse"
-                data-code-name="Eclipse"
-                data-desc="Bold, magnetic presence"
-                data-code-link={withBase('/eclipse')}
-                data-active="false"
-                tabindex="-1"
-                class="min-h-[44px] px-3 py-2 font-display text-[11px] tracking-[0.12em] text-slate-500 border border-ink/15 rounded-none transition-colors duration-200 data-[active=true]:border-[#b08c5a] data-[active=true]:text-ink data-[active=true]:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              >
-                Eclipse
-              </button>
-            </div>
-            <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p
-                id="revolution-panel"
-                role="tabpanel"
-                aria-live="polite"
-                class="text-sm text-slate-600 transition-opacity duration-300 motion-reduce:transition-none"
-                data-revolution-panel
-              >
-                Axis &mdash; Structured, anchored confidence
-              </p>
+          <div class="text-[11px] uppercase tracking-[0.22em] text-slate-500">
+            <span class="text-slate-400">Explore design codes for</span>
+            <div class="mt-2 flex flex-nowrap items-center gap-2">
               <a
-                href={withBase('/axis')}
-                class="text-xs uppercase tracking-[0.24em] text-slate-500 underline underline-offset-4 hover:text-ink"
-                data-revolution-link
+                href={withBase('/mens-jewelry')}
+                class="px-3 py-1 border border-ink/15 rounded-none hover:border-ink/40 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               >
-                Explore Axis
+                Men
+              </a>
+              <a
+                href={withBase('/womens-jewelry')}
+                class="px-3 py-1 border border-ink/15 rounded-none hover:border-ink/40 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              >
+                Women
               </a>
             </div>
           </div>
@@ -237,47 +180,6 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
         }
       }
     </style>
-    <script is:inline>
-      (() => {
-        const tabs = Array.from(document.querySelectorAll('[role="tab"][data-line]'));
-        const panel = document.querySelector('[data-revolution-panel]');
-        const link = document.querySelector('[data-revolution-link]');
-        if (!tabs.length || !panel) return;
-
-        const setActive = (tab) => {
-          tabs.forEach((btn) => {
-            const isActive = btn === tab;
-            btn.setAttribute('aria-selected', String(isActive));
-            btn.setAttribute('data-active', String(isActive));
-            btn.tabIndex = isActive ? 0 : -1;
-          });
-          const codeName = tab.getAttribute('data-code-name') || '';
-          const desc = tab.getAttribute('data-desc') || '';
-          panel.textContent = `${codeName} \u2014 ${desc}`;
-          if (link) {
-            const href = tab.getAttribute('data-code-link') || '/collections';
-            link.setAttribute('href', href);
-            link.textContent = `Explore ${codeName}`;
-          }
-          const cards = Array.from(document.querySelectorAll('[data-design-card]'));
-          if (cards.length) {
-            cards.forEach((card) => {
-              card.toggleAttribute('data-hidden', false);
-              card.classList.remove('hidden');
-            });
-          }
-        };
-
-        tabs.forEach((tab) => {
-          tab.addEventListener('click', () => setActive(tab));
-        });
-        window.addEventListener('load', () => {
-          const initial = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true') || tabs[0];
-          if (initial) setActive(initial);
-        });
-      })();
-    </script>
-
     <section class="max-w-7xl mx-auto px-6 pt-6 lg:pt-10 space-y-8">
       <div class="flex flex-col gap-10">
         {featured.map((product) => {
@@ -326,27 +228,12 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
           );
         })}
       </div>
-      <div class="flex justify-end">
-        <a href={withBase('/collections')} class="text-xs uppercase tracking-[0.3em] text-slate-500 hover:text-ink">View all collections</a>
-      </div>
-    </section>
-
-    <section class="container space-y-6">
-      <div>
-        <p class="text-xs uppercase tracking-[0.28em] text-slate-500">Collections</p>
-        <h2 class="font-display text-3xl sm:text-4xl tracking-tight">Composed as heirlooms</h2>
-      </div>
-      <div class="grid gap-0 divide-y border-y border-slate-200 md:grid-cols-3 md:divide-y-0 md:divide-x">
-        {collections.map((c) => (
-          <a
-            href={withBase(`/collections?collection=${encodeURIComponent(c)}`)}
-            class="group flex flex-col gap-3 px-0 py-6 md:px-6 md:py-8"
-          >
-            <span class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Collection</span>
-            <span class="font-display text-2xl tracking-tight">{c}</span>
-            <span class="text-sm text-slate-500 group-hover:text-ink">View collection -></span>
-          </a>
-        ))}
+      <div class="flex flex-col sm:flex-row sm:items-center sm:gap-6 gap-2 text-xs uppercase tracking-[0.3em] text-slate-500">
+        <span class="text-[11px] tracking-[0.24em] text-slate-400">Looking for a custom direction?</span>
+        <div class="flex items-center gap-4">
+          <a href={withBase('/inspirations')} class="hover:text-ink">Explore inspirations</a>
+          <a href={withBase('/inspirations/spiral-continuum/bespoke?direct=1')} class="hover:text-ink">Request bespoke</a>
+        </div>
       </div>
     </section>
 

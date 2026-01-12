@@ -1,0 +1,1162 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Header from '../../../components/Header.astro';
+import Footer from '../../../components/Footer.astro';
+import { loadInspirations, INSPIRATION_DISCLAIMER, type Inspiration } from '../../../lib/inspirations';
+import { withBase } from '../../../lib/paths';
+
+export async function getStaticPaths() {
+  const inspirations = await loadInspirations();
+  return inspirations.map((item) => ({
+    params: { slug: item.slug },
+    props: { item }
+  }));
+}
+
+const { item } = Astro.props as { item: Inspiration };
+const metaTitle = `Request Quote | ${item.title} | Heerawalla`;
+const metaDescription = `Request a bespoke quote inspired by ${item.title}. Private atelier request process.`;
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+const defaultCategory = item.categories[0] || 'ring';
+const inspirationsUrl = withBase('/inspirations');
+const homeUrl = withBase('/');
+const normalizeMetal = (value?: string) => {
+  if (!value) return undefined;
+  const label = value.toLowerCase();
+  if (label.includes('platinum')) return 'Platinum';
+  if (label.includes('white')) return '18K White Gold';
+  if (label.includes('rose')) return '18K Rose Gold';
+  if (label.includes('yellow')) return '18K Yellow Gold';
+  if (label.includes('18k')) return value;
+  return undefined;
+};
+const defaultMetalPreference =
+  normalizeMetal(item.palette.find((entry) => entry.type === 'metal')?.label) ||
+  normalizeMetal(item.metals[0]) ||
+  '18K Yellow Gold';
+const defaultStoneType = (() => {
+  const label = item.palette.find((entry) => entry.type === 'stone')?.label?.toLowerCase() || '';
+  if (label.includes('lab')) return 'Lab diamond';
+  if (label.includes('natural')) return 'Natural diamond';
+  if (label.includes('diamond')) return 'Lab diamond';
+  return 'Gemstones';
+})();
+---
+
+<BaseLayout title={metaTitle} description={metaDescription}>
+  <Header />
+
+  <main class="max-w-7xl mx-auto px-6 py-12 space-y-10">
+    <div class="space-y-3">
+          <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Bespoke</p>
+      <h1 class="font-display text-4xl sm:text-5xl tracking-tight">Request a bespoke quote</h1>
+      <p class="text-sm text-slate-600 max-w-2xl">
+        Share your vision and submit directly to our atelier. We follow up with a personal reply.
+      </p>
+      <div class="text-xs uppercase tracking-[0.2em] text-slate-500">
+        Inspiration: {item.title}
+      </div>
+    </div>
+
+    <section class="max-w-3xl mt-10 space-y-6">
+      <ol class="grid gap-6 sm:grid-cols-4">
+        <li class="space-y-2">
+          <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Step 1</p>
+          <h2 class="text-sm font-semibold tracking-tight">Choose a Direction</h2>
+          <p class="text-sm text-slate-600">Select an inspiration or share your own reference.</p>
+        </li>
+        <li class="space-y-2">
+          <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Step 2</p>
+          <h2 class="text-sm font-semibold tracking-tight">Request a Quote</h2>
+          <p class="text-sm text-slate-600">Tell us your metal, stone, budget, and timeline.</p>
+        </li>
+        <li class="space-y-2">
+          <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Step 3</p>
+          <h2 class="text-sm font-semibold tracking-tight">Design &amp; Confirm</h2>
+          <p class="text-sm text-slate-600">We refine the concept and confirm details with you.</p>
+        </li>
+        <li class="space-y-2">
+          <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Step 4</p>
+          <h2 class="text-sm font-semibold tracking-tight">Craft &amp; Deliver</h2>
+          <p class="text-sm text-slate-600">Your one-of-one Heerawalla piece is handcrafted.</p>
+        </li>
+      </ol>
+      <div class="space-y-2 text-sm text-slate-500 max-w-2xl">
+        <p>Each request begins a private conversation with our atelier.</p>
+        <p>We contact you only regarding your design.</p>
+      </div>
+      <p class="text-xs text-slate-500">
+        You can expect a personal reply from our atelier at
+        <span class="font-medium">atelier@heerawalla.com</span>
+        within 1-2 business days.
+      </p>
+    </section>
+
+    <div class="space-y-10">
+      <aside class="space-y-6">
+        <div class="space-y-2">
+          <div class="flex flex-col items-start gap-2">
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-500 shrink-0">Progress</p>
+            <ol class="flex flex-wrap gap-2 text-sm text-slate-500" data-step-list>
+              <li class="border-b border-transparent pb-1 transition-colors duration-200 motion-reduce:transition-none data-[active=true]:border-ink data-[active=true]:text-ink data-[active=true]:font-semibold" data-step-label="1" data-active="false">Piece</li>
+              <li class="border-b border-transparent pb-1 transition-colors duration-200 motion-reduce:transition-none data-[active=true]:border-ink data-[active=true]:text-ink data-[active=true]:font-semibold" data-step-label="2" data-active="false">Materials</li>
+              <li class="border-b border-transparent pb-1 transition-colors duration-200 motion-reduce:transition-none data-[active=true]:border-ink data-[active=true]:text-ink data-[active=true]:font-semibold" data-step-label="3" data-active="false">Specs</li>
+              <li class="border-b border-transparent pb-1 transition-colors duration-200 motion-reduce:transition-none data-[active=true]:border-ink data-[active=true]:text-ink data-[active=true]:font-semibold" data-step-label="4" data-active="false">References</li>
+              <li class="border-b border-transparent pb-1 transition-colors duration-200 motion-reduce:transition-none data-[active=true]:border-ink data-[active=true]:text-ink data-[active=true]:font-semibold" data-step-label="5" data-active="false">Sign + Send</li>
+            </ol>
+          </div>
+          <div class="h-px w-full bg-slate-200 relative" aria-hidden="true">
+            <span class="absolute left-0 top-0 h-px bg-ink/70 transition-[width] duration-300 motion-reduce:transition-none" data-step-fill style="width:0%"></span>
+          </div>
+        </div>
+      </aside>
+
+      <section class="space-y-6">
+        <div class="hidden rounded-none border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" data-return-note aria-live="polite"></div>
+        <div class="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-slate-500">
+          <span data-step-indicator>Step 1 of 5</span>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" class="h-4 w-4" data-save-draft />
+            <span>Save Draft on this Device</span>
+          </label>
+        </div>
+
+        <form class="space-y-8" data-quote-form>
+          <section class="space-y-6" data-step="1">
+            <div class="space-y-2">
+              <h2 class="font-display text-2xl tracking-tight">Piece</h2>
+              <p class="text-sm text-slate-500">Define the piece, occasion, and working budget.</p>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="text-sm space-y-1">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Category</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="category">
+                  <option value="ring" selected={defaultCategory === 'ring'}>Ring</option>
+                  <option value="pendant" selected={defaultCategory === 'pendant'}>Pendant</option>
+                  <option value="earrings" selected={defaultCategory === 'earrings'}>Earrings</option>
+                  <option value="bracelet" selected={defaultCategory === 'bracelet'}>Bracelet</option>
+                  <option value="necklace" selected={defaultCategory === 'necklace'}>Necklace</option>
+                  <option value="set" selected={defaultCategory === 'set'}>Set</option>
+                </select>
+              </label>
+              <label class="text-sm space-y-1">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Occasion</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="occasion">
+                  <option value="Gift">Gift</option>
+                  <option value="Engagement">Engagement</option>
+                  <option value="Anniversary">Anniversary</option>
+                  <option value="Self-purchase">Self-purchase</option>
+                  <option value="Milestone">Milestone</option>
+                </select>
+              </label>
+              <label class="text-sm space-y-1">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Budget min</span>
+                <div class="flex gap-2">
+                  <select class="border border-slate-200 px-2 py-2 text-sm" data-field="currency">
+                    <option value="USD">USD</option>
+                    <option value="INR">INR</option>
+                  </select>
+                  <input type="number" min="0" class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="budgetMin" placeholder="e.g. 8000" required />
+                </div>
+              </label>
+              <label class="text-sm space-y-1">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Budget max</span>
+                <input type="number" min="0" class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="budgetMax" placeholder="e.g. 15000" required />
+              </label>
+              <label class="text-sm space-y-1 sm:col-span-2">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Timeline</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="timeline">
+                  <option value="Standard (4-6 weeks)">Standard (4-6 weeks)</option>
+                  <option value="Rush (limited)">Rush (limited)</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="space-y-6 hidden" data-step="2">
+            <div class="space-y-2">
+              <h2 class="font-display text-2xl tracking-tight">Materials</h2>
+              <p class="text-sm text-slate-500">Share metal and stone direction.</p>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="text-sm space-y-1">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Metal preference</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="metal">
+                  <option value="18K Yellow Gold" selected={defaultMetalPreference === '18K Yellow Gold'}>18K Yellow Gold</option>
+                  <option value="18K White Gold" selected={defaultMetalPreference === '18K White Gold'}>18K White Gold</option>
+                  <option value="18K Rose Gold" selected={defaultMetalPreference === '18K Rose Gold'}>18K Rose Gold</option>
+                  <option value="Platinum" selected={defaultMetalPreference === 'Platinum'}>Platinum</option>
+                </select>
+              </label>
+              <label class="text-sm space-y-1">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Stone type</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="stoneType">
+                  <option value="Lab diamond" selected={defaultStoneType === 'Lab diamond'}>Lab diamond</option>
+                  <option value="Natural diamond" selected={defaultStoneType === 'Natural diamond'}>Natural diamond</option>
+                  <option value="Gemstones" selected={defaultStoneType === 'Gemstones'}>Gemstones</option>
+                </select>
+              </label>
+              <label class="text-sm space-y-1">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Center stone shape</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="centerShape">
+                  <option value="Round">Round</option>
+                  <option value="Oval">Oval</option>
+                  <option value="Pear">Pear</option>
+                  <option value="Emerald cut">Emerald cut</option>
+                  <option value="Cushion">Cushion</option>
+                  <option value="Marquise">Marquise</option>
+                  <option value="No preference">No preference</option>
+                </select>
+              </label>
+              <label class="text-sm space-y-1">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Center stone size range</span>
+                <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="centerSize" placeholder="e.g. 1.5-2.0ct" />
+              </label>
+            </div>
+          </section>
+
+          <section class="space-y-6 hidden" data-step="3">
+            <div class="space-y-2">
+              <h2 class="font-display text-2xl tracking-tight">Specs</h2>
+              <p class="text-sm text-slate-500">Sizing, scale, and intensity.</p>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="text-sm space-y-1" data-size="ring">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Ring size</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="ringSize" required>
+                  <option value="" disabled selected>Select a size</option>
+                  <option value="4">4</option>
+                  <option value="4.5">4.5</option>
+                  <option value="5">5</option>
+                  <option value="5.5">5.5</option>
+                  <option value="6">6</option>
+                  <option value="6.5">6.5</option>
+                  <option value="7">7</option>
+                  <option value="7.5">7.5</option>
+                  <option value="8">8</option>
+                  <option value="8.5">8.5</option>
+                  <option value="9">9</option>
+                  <option value="9.5">9.5</option>
+                  <option value="10">10</option>
+                  <option value="10.5">10.5</option>
+                  <option value="11">11</option>
+                  <option value="11.5">11.5</option>
+                  <option value="12">12</option>
+                  <option value="12.5">12.5</option>
+                </select>
+              </label>
+              <label class="text-sm space-y-1" data-size="bracelet">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Wrist size</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="wristSize" required>
+                  <option value="" disabled selected>Select a size</option>
+                  <option value="5.5 in">5.5 in</option>
+                  <option value="5.75 in">5.75 in</option>
+                  <option value="6 in">6 in</option>
+                  <option value="6.25 in">6.25 in</option>
+                  <option value="6.5 in">6.5 in</option>
+                  <option value="6.75 in">6.75 in</option>
+                  <option value="7 in">7 in</option>
+                  <option value="7.25 in">7.25 in</option>
+                  <option value="7.5 in">7.5 in</option>
+                  <option value="7.75 in">7.75 in</option>
+                  <option value="8 in">8 in</option>
+                </select>
+              </label>
+              <label class="text-sm space-y-1" data-size="necklace">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Chain length</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="chainLength" required>
+                  <option value="" disabled selected>Select a length</option>
+                  <option value="16 in">16 in</option>
+                  <option value="18 in">18 in</option>
+                  <option value="20 in">20 in</option>
+                  <option value="22 in">22 in</option>
+                  <option value="24 in">24 in</option>
+                </select>
+              </label>
+              <label class="text-sm space-y-1" data-size="earrings">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Earring preference</span>
+                <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="earringPreference" required>
+                  <option value="" disabled selected>Select a style</option>
+                  <option value="Stud">Stud</option>
+                  <option value="Drop">Drop</option>
+                  <option value="Hoop">Hoop</option>
+                  <option value="No preference">No preference</option>
+                </select>
+              </label>
+              <label class="text-sm space-y-2 sm:col-span-2">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Style intensity</span>
+                <input type="range" min="0" max="100" value="35" class="w-full" data-field="styleIntensity" />
+                <div class="flex justify-between text-xs text-slate-500">
+                  <span>Minimal</span>
+                  <span data-style-label>Balanced</span>
+                  <span>Bold</span>
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <section class="space-y-6 hidden" data-step="4">
+            <div class="space-y-3 hidden" data-link-section>
+              <p class="text-xs text-slate-500">
+                If you are not selecting an inspiration, please add at least one reference link.
+              </p>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div class="grid gap-3 sm:grid-cols-[1.5fr_1fr]">
+                  <input
+                    class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm"
+                    placeholder={`Inspiration link ${index + 1}`}
+                    data-link={index}
+                  />
+                  <input
+                    class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm"
+                    placeholder="Note"
+                    data-link-note={index}
+                  />
+                </div>
+              ))}
+            </div>
+            <label class="text-sm space-y-1">
+              <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Additional notes</span>
+              <textarea class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm min-h-[120px]" data-field="notes"></textarea>
+            </label>
+          </section>
+
+          <section class="space-y-6 hidden" data-step="5">
+            <div class="space-y-2">
+              <h2 class="font-display text-2xl tracking-tight">Sign + Send</h2>
+              <p class="text-sm text-slate-500">
+                Review your details, sign the disclaimer, and submit directly to our atelier. No data is stored by Heerawalla.
+              </p>
+            </div>
+            <div class="space-y-4">
+              <label class="text-sm space-y-1">
+                <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Your name</span>
+                <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="name" required />
+              </label>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label class="text-sm space-y-1">
+                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Preferred / CC email</span>
+                  <input type="email" class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="email" required />
+                </label>
+                <label class="text-sm space-y-1">
+                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Phone (optional)</span>
+                  <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="phone" />
+                </label>
+              </div>
+            </div>
+
+            <div class="border border-slate-200 p-4 space-y-4 text-sm text-slate-600">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Confirm details</div>
+                <div class="text-[10px] uppercase tracking-[0.3em] text-slate-400">
+                  Request ID <span class="font-semibold text-ink" data-review-request-id></span>
+                </div>
+              </div>
+              <p>Before you send, confirm the details and use Back to revise.</p>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div class="space-y-2">
+                  <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Request</div>
+                  <ul class="space-y-2" data-review-specs></ul>
+                </div>
+                <div class="space-y-2">
+                  <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Materials</div>
+                  <ul class="space-y-2" data-review-materials></ul>
+                </div>
+                <div class="space-y-2">
+                  <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Sizing</div>
+                  <ul class="space-y-2" data-review-sizes></ul>
+                </div>
+                <div class="space-y-2">
+                  <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Contact</div>
+                  <ul class="space-y-2" data-review-contact></ul>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Inspiration links</div>
+                <ul class="space-y-2" data-review-links></ul>
+              </div>
+              <div class="space-y-2">
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Notes</div>
+                <p class="whitespace-pre-wrap" data-review-notes></p>
+              </div>
+              <div class="space-y-2">
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Attachments</div>
+                <p data-review-attachments></p>
+              </div>
+              <div class="space-y-2">
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Acknowledgment</div>
+                <p data-review-acknowledgment></p>
+              </div>
+            </div>
+
+            <label class="flex items-start gap-3 text-sm text-slate-600">
+              <input type="checkbox" class="mt-1" data-disclaimer />
+              <span>I acknowledge the inspiration disclaimer.</span>
+            </label>
+            <p class="text-sm text-slate-500 border border-slate-200 p-4">
+              {INSPIRATION_DISCLAIMER}
+            </p>
+
+            <div class="flex flex-col gap-4">
+              {turnstileSiteKey ? (
+                <div class="cf-turnstile" data-sitekey={turnstileSiteKey} data-theme="light"></div>
+              ) : null}
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 border border-ink/20 text-xs uppercase tracking-[0.2em] text-ink rounded-none transition-colors duration-200"
+                  data-send-worker
+                >
+                  Send Request
+                </button>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500 hidden" data-worker-status></p>
+            <p class="text-xs text-slate-500">
+              We reply to all requests within 1-2 business days.
+            </p>
+          </section>
+
+          <div class="flex items-center justify-between">
+            <button type="button" class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink" data-prev>
+              Back
+            </button>
+            <button type="button" class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink" data-next>
+              Next
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<script is:inline define:vars={{ slug: item.slug, inspirationTitle: item.title, disclaimer: INSPIRATION_DISCLAIMER, inspirationImage: item.heroImage, inspirationsUrl, homeUrl, defaultCategory, turnstileSiteKey }}>
+  (() => {
+    const form = document.querySelector('[data-quote-form]');
+    if (!form) return;
+
+    const steps = Array.from(form.querySelectorAll('[data-step]'));
+    const stepLabels = Array.from(document.querySelectorAll('[data-step-label]'));
+    const stepIndicator = document.querySelector('[data-step-indicator]');
+    const stepFill = document.querySelector('[data-step-fill]');
+    const prevBtn = form.querySelector('[data-prev]');
+    const nextBtn = form.querySelector('[data-next]');
+    const saveDraftToggle = document.querySelector('[data-save-draft]');
+    const styleLabel = form.querySelector('[data-style-label]');
+    const sendWorkerBtn = form.querySelector('[data-send-worker]');
+    const workerStatus = form.querySelector('[data-worker-status]');
+    const returnNote = document.querySelector('[data-return-note]');
+    const reviewRequestId = form.querySelector('[data-review-request-id]');
+    const reviewSpecs = form.querySelector('[data-review-specs]');
+    const reviewMaterials = form.querySelector('[data-review-materials]');
+    const reviewSizes = form.querySelector('[data-review-sizes]');
+    const reviewContact = form.querySelector('[data-review-contact]');
+    const reviewLinks = form.querySelector('[data-review-links]');
+    const reviewNotes = form.querySelector('[data-review-notes]');
+    const reviewAttachments = form.querySelector('[data-review-attachments]');
+    const reviewAcknowledgment = form.querySelector('[data-review-acknowledgment]');
+    let returnNoteMessage = '';
+    let returnNoteTimeout = 0;
+    const disclaimerCheck = form.querySelector('[data-disclaimer]');
+    const linkSection = form.querySelector('[data-link-section]');
+    const storageKey = `hw-inspiration-quote-${slug}`;
+    const returnUrl = inspirationImage ? inspirationsUrl : homeUrl;
+    const mailReturnKey = `hw-bespoke-mail-${slug}`;
+    const workerSubmitUrl = 'https://herawalla-email-atelier.arifmanasiya.workers.dev/submit';
+    const workerSubmitStatusUrl = workerSubmitUrl.replace(/\/submit$/, '/submit-status');
+    const buildInspirationMessage = (prefix) => {
+      const link = inspirationsUrl
+        ? `<a href="${inspirationsUrl}" class="font-medium text-emerald-700 underline decoration-emerald-300/80 hover:text-emerald-800">explore more inspirations</a>`
+        : 'explore more inspirations';
+      return `${prefix} Meanwhile, ${link}.`;
+    };
+    const directRequest = new URLSearchParams(window.location.search).has('direct');
+    const requiresReferenceLinks = !inspirationImage || directRequest;
+    let workerSubmitEnabled = true;
+    let hasSubmitted = false;
+    const getTurnstileToken = () => {
+      const tokenEl = form.querySelector('[name="cf-turnstile-response"]');
+      return tokenEl ? (tokenEl.value || '').trim() : '';
+    };
+    let currentStep = 0;
+    let allowStorage = false;
+    const requestId = (() => {
+      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const length = 12;
+      try {
+        const buffer = new Uint8Array(length);
+        crypto.getRandomValues(buffer);
+        return Array.from(buffer, (value) => alphabet[value % alphabet.length]).join('');
+      } catch {
+        return Array.from({ length }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+      }
+    })();
+
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const isValidEmail = (value) => {
+      const normalized = String(value || '').trim();
+      if (!normalized || normalized.length > 254) return false;
+      const atIndex = normalized.lastIndexOf('@');
+      if (atIndex <= 0 || atIndex === normalized.length - 1) return false;
+      const local = normalized.slice(0, atIndex);
+      const domain = normalized.slice(atIndex + 1);
+      if (!local || !domain || local.length > 64 || domain.length > 253) return false;
+      if (local.startsWith('.') || local.endsWith('.') || local.includes('..')) return false;
+      if (domain.startsWith('.') || domain.endsWith('.') || domain.includes('..')) return false;
+      if (!domain.includes('.')) return false;
+      if (!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/.test(local)) return false;
+      if (!/^[A-Za-z0-9.-]+$/.test(domain)) return false;
+      const labels = domain.split('.');
+      if (labels.some((label) => !label || label.length > 63 || label.startsWith('-') || label.endsWith('-'))) {
+        return false;
+      }
+      return true;
+    };
+    const styleFromIntensity = (value) => {
+      const num = Number(value || 0);
+      if (num <= 33) return 'Minimal';
+      if (num <= 66) return 'Balanced';
+      return 'Bold';
+    };
+
+    const sizeFields = {
+      ring: form.querySelector('[data-size="ring"]'),
+      bracelet: form.querySelector('[data-size="bracelet"]'),
+      necklace: form.querySelector('[data-size="necklace"]'),
+      earrings: form.querySelector('[data-size="earrings"]')
+    };
+
+    const updateSizeVisibility = (category) => {
+      const showAll = category === 'set';
+      Object.entries(sizeFields).forEach(([key, el]) => {
+        if (!el) return;
+        const show = showAll || key === category || (category === 'pendant' && key === 'necklace');
+        el.classList.toggle('hidden', !show);
+        el.setAttribute('aria-hidden', String(!show));
+      });
+    };
+
+    const fieldValue = (selector) => {
+      const el = form.querySelector(selector);
+      if (!el) return '';
+      return (el.value || '').trim();
+    };
+
+    const getLinks = () => {
+      if (linkSection && linkSection.classList.contains('hidden')) return [];
+      const links = [];
+      form.querySelectorAll('[data-link]').forEach((input) => {
+        const index = input.getAttribute('data-link');
+        const value = (input.value || '').trim();
+        const noteEl = form.querySelector(`[data-link-note="${index}"]`);
+        const note = noteEl ? (noteEl.value || '').trim() : '';
+        if (value) {
+          links.push({ url: value, note });
+        }
+      });
+      return links;
+    };
+
+    const buildEmail = () => {
+      const category = fieldValue('[data-field="category"]') || 'Piece';
+      const currency = fieldValue('[data-field="currency"]') || 'USD';
+      const budgetMin = fieldValue('[data-field="budgetMin"]');
+      const budgetMax = fieldValue('[data-field="budgetMax"]');
+      const styleIntensity = fieldValue('[data-field="styleIntensity"]');
+      const style = styleFromIntensity(styleIntensity);
+      const subject = `Heerawalla Bespoke Request [HW-REQ:${requestId}]`;
+      const hasInspiration = !requiresReferenceLinks;
+
+      const specs = [
+        `Category: ${category}`,
+        `Occasion: ${fieldValue('[data-field="occasion"]') || 'Not specified'}`,
+        `Timeline: ${fieldValue('[data-field="timeline"]') || 'Standard'}`,
+        `Style intensity: ${style}`,
+        `Budget: ${currency} ${budgetMin || '?'}-${budgetMax || '?'}`
+      ];
+
+      const sizes = [];
+      const ringSize = fieldValue('[data-field="ringSize"]');
+      const wristSize = fieldValue('[data-field="wristSize"]');
+      const chainLength = fieldValue('[data-field="chainLength"]');
+      const earringPreference = fieldValue('[data-field="earringPreference"]');
+      if (ringSize) sizes.push(`Ring size: ${ringSize}`);
+      if (wristSize) sizes.push(`Wrist size: ${wristSize}`);
+      if (chainLength) sizes.push(`Chain length: ${chainLength}`);
+      if (earringPreference) sizes.push(`Earring preference: ${earringPreference}`);
+
+      const materials = [
+        `Metal: ${fieldValue('[data-field="metal"]') || 'Not specified'}`,
+        `Stone type: ${fieldValue('[data-field="stoneType"]') || 'Not specified'}`,
+        `Center stone shape: ${fieldValue('[data-field="centerShape"]') || 'Not specified'}`,
+        `Center stone size: ${fieldValue('[data-field="centerSize"]') || 'Not specified'}`
+      ];
+
+      const links = getLinks();
+      const linkLines = links.length
+        ? links.map((link) => `- ${link.url}${link.note ? ` (${link.note})` : ''}`)
+        : ['- None provided'];
+
+      const notes = fieldValue('[data-field="notes"]') || 'None';
+      const name = fieldValue('[data-field="name"]') || 'Name withheld';
+      const email = fieldValue('[data-field="email"]') || 'Not provided';
+      const phone = fieldValue('[data-field="phone"]') || 'Not provided';
+      const attachmentNote = 'Attachments: Not accepted via web form. Please include links.';
+
+      const acknowledgment =
+        'I acknowledge that Heerawalla does not reproduce copyrighted designs. Inspiration references help us understand mood, proportion, and direction. Final designs are original Heerawalla creations.';
+      const acknowledgmentLine = disclaimerCheck?.checked
+        ? `Acknowledgment: ${acknowledgment}`
+        : 'Acknowledgment: Pending';
+      const origin = window.location.origin || '';
+      const imageUrl = hasInspiration
+        ? inspirationImage?.startsWith('http')
+          ? inspirationImage
+          : `${origin}${inspirationImage?.startsWith('/') ? '' : '/'}${inspirationImage || ''}`
+        : '';
+      const inspirationLine = hasInspiration
+        ? `I would like to request a bespoke quote inspired by "${inspirationTitle}".`
+        : 'I would like to request a bespoke quote.';
+      const inspirationImageLine = hasInspiration ? `Inspiration image: ${imageUrl}` : 'Inspiration image: Not provided';
+      const body = [
+        'Hello Heerawalla,',
+        '',
+        inspirationLine,
+        inspirationImageLine,
+        `Heerawalla Request ID: ${requestId}`,
+        '',
+        'Specifications:',
+        ...specs.map((line) => `- ${line}`),
+        ...(sizes.length ? ['- ' + sizes.join(' | ')] : []),
+        '',
+        'Materials:',
+        ...materials.map((line) => `- ${line}`),
+        '',
+        'Inspiration links:',
+        ...linkLines,
+        '',
+        'Notes:',
+        notes,
+        '',
+        attachmentNote,
+        '',
+        'Signature:',
+        `Name: ${name}`,
+        `Preferred/CC email: ${email}`,
+        `Phone: ${phone}`,
+        '',
+        acknowledgmentLine
+      ].join('\n');
+
+      return { subject, body, style };
+    };
+
+    const renderReviewList = (listEl, items, emptyLabel) => {
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      if (!items.length) {
+        const emptyItem = document.createElement('li');
+        emptyItem.className = 'text-sm text-slate-500';
+        emptyItem.textContent = emptyLabel;
+        listEl.appendChild(emptyItem);
+        return;
+      }
+      items.forEach(({ label, value }) => {
+        const item = document.createElement('li');
+        item.className = 'flex flex-wrap items-baseline gap-2';
+        const labelEl = document.createElement('span');
+        labelEl.className = 'text-[10px] uppercase tracking-[0.2em] text-slate-400';
+        labelEl.textContent = label;
+        const valueEl = document.createElement('span');
+        valueEl.className = 'text-sm text-ink';
+        valueEl.textContent = value;
+        item.append(labelEl, valueEl);
+        listEl.appendChild(item);
+      });
+    };
+
+    const renderReviewLinks = (listEl, links) => {
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      if (!links.length) {
+        const emptyItem = document.createElement('li');
+        emptyItem.className = 'text-sm text-slate-500';
+        emptyItem.textContent = 'No links provided.';
+        listEl.appendChild(emptyItem);
+        return;
+      }
+      links.forEach((link) => {
+        const item = document.createElement('li');
+        item.className = 'flex flex-col gap-1';
+        const anchor = document.createElement('a');
+        anchor.href = link.url;
+        anchor.textContent = link.url;
+        anchor.className = 'text-sm text-ink underline decoration-ink/30 hover:decoration-ink';
+        anchor.target = '_blank';
+        anchor.rel = 'noreferrer noopener';
+        item.appendChild(anchor);
+        if (link.note) {
+          const note = document.createElement('span');
+          note.className = 'text-xs text-slate-500';
+          note.textContent = link.note;
+          item.appendChild(note);
+        }
+        listEl.appendChild(item);
+      });
+    };
+
+    const updateReview = (style) => {
+      if (reviewRequestId) reviewRequestId.textContent = requestId;
+      const category = fieldValue('[data-field="category"]') || 'Not specified';
+      const occasion = fieldValue('[data-field="occasion"]') || 'Not specified';
+      const timeline = fieldValue('[data-field="timeline"]') || 'Standard';
+      const currency = fieldValue('[data-field="currency"]') || 'USD';
+      const budgetMin = fieldValue('[data-field="budgetMin"]');
+      const budgetMax = fieldValue('[data-field="budgetMax"]');
+      const budget =
+        budgetMin || budgetMax ? `${currency} ${budgetMin || '?'}-${budgetMax || '?'}` : 'Not specified';
+      const hasInspiration = !requiresReferenceLinks;
+      const origin = window.location.origin || '';
+      const imageUrl = inspirationImage?.startsWith('http')
+        ? inspirationImage
+        : `${origin}${inspirationImage?.startsWith('/') ? '' : '/'}${inspirationImage || ''}`;
+      const specs = [
+        { label: 'Inspiration', value: hasInspiration ? inspirationTitle || 'Not specified' : 'Custom references' },
+        {
+          label: 'Inspiration image',
+          value: hasInspiration ? (imageUrl || 'Not provided') : 'Not provided',
+        },
+        { label: 'Category', value: category },
+        { label: 'Occasion', value: occasion },
+        { label: 'Timeline', value: timeline },
+        { label: 'Style', value: style || 'Not specified' },
+        { label: 'Budget', value: budget },
+      ];
+      const materials = [
+        { label: 'Metal', value: fieldValue('[data-field="metal"]') || 'Not specified' },
+        { label: 'Stone type', value: fieldValue('[data-field="stoneType"]') || 'Not specified' },
+        { label: 'Center shape', value: fieldValue('[data-field="centerShape"]') || 'Not specified' },
+        { label: 'Center size', value: fieldValue('[data-field="centerSize"]') || 'Not specified' },
+      ];
+      const sizes = [];
+      const ringSize = fieldValue('[data-field="ringSize"]');
+      const wristSize = fieldValue('[data-field="wristSize"]');
+      const chainLength = fieldValue('[data-field="chainLength"]');
+      const earringPreference = fieldValue('[data-field="earringPreference"]');
+      if (ringSize) sizes.push({ label: 'Ring', value: ringSize });
+      if (wristSize) sizes.push({ label: 'Wrist', value: wristSize });
+      if (chainLength) sizes.push({ label: 'Chain', value: chainLength });
+      if (earringPreference) sizes.push({ label: 'Earring', value: earringPreference });
+      const contact = [
+        { label: 'Name', value: fieldValue('[data-field="name"]') || 'Not provided' },
+        { label: 'Email', value: fieldValue('[data-field="email"]') || 'Not provided' },
+        { label: 'Phone', value: fieldValue('[data-field="phone"]') || 'Not provided' },
+      ];
+      const links = getLinks();
+      renderReviewList(reviewSpecs, specs, 'No details provided.');
+      renderReviewList(reviewMaterials, materials, 'No materials provided.');
+      renderReviewList(reviewSizes, sizes, 'No sizing details provided.');
+      renderReviewList(reviewContact, contact, 'No contact details provided.');
+      renderReviewLinks(reviewLinks, links);
+      if (reviewNotes) {
+        reviewNotes.textContent = fieldValue('[data-field="notes"]') || 'None provided.';
+      }
+      if (reviewAttachments) {
+        reviewAttachments.textContent = 'Links only (attachments are not accepted via the web form).';
+      }
+      if (reviewAcknowledgment) {
+        reviewAcknowledgment.textContent = disclaimerCheck?.checked ? 'Confirmed' : 'Pending';
+      }
+    };
+
+    const updateEmail = () => {
+      const { subject, body, style } = buildEmail();
+      if (styleLabel) styleLabel.textContent = style;
+      updateReview(style);
+      if (allowStorage) {
+        const payload = collectDraft();
+        localStorage.setItem(storageKey, JSON.stringify(payload));
+      }
+    };
+
+    const collectDraft = () => {
+      const payload = {};
+      form.querySelectorAll('[data-field]').forEach((input) => {
+        payload[input.getAttribute('data-field')] = input.value;
+      });
+      form.querySelectorAll('[data-link]').forEach((input) => {
+        payload[`link-${input.getAttribute('data-link')}`] = input.value;
+      });
+      form.querySelectorAll('[data-link-note]').forEach((input) => {
+        payload[`link-note-${input.getAttribute('data-link-note')}`] = input.value;
+      });
+      return payload;
+    };
+
+    const applyDraft = (payload) => {
+      if (!payload) return;
+      form.querySelectorAll('[data-field]').forEach((input) => {
+        const key = input.getAttribute('data-field');
+        if (key in payload) input.value = payload[key];
+      });
+      form.querySelectorAll('[data-link]').forEach((input) => {
+        const key = `link-${input.getAttribute('data-link')}`;
+        if (key in payload) input.value = payload[key];
+      });
+      form.querySelectorAll('[data-link-note]').forEach((input) => {
+        const key = `link-note-${input.getAttribute('data-link-note')}`;
+        if (key in payload) input.value = payload[key];
+      });
+    };
+
+    const updateReturnNoteVisibility = () => {
+      if (!returnNote) return;
+      const shouldShow = Boolean(returnNoteMessage) && currentStep === steps.length - 1;
+      returnNote.classList.toggle('hidden', !shouldShow);
+      if (shouldShow) {
+        returnNote.innerHTML = returnNoteMessage;
+      }
+    };
+
+    const updateFinishCta = () => {
+      if (!nextBtn) return;
+      const isLastStep = currentStep === steps.length - 1;
+      if (!isLastStep) {
+        nextBtn.classList.remove('hidden');
+        nextBtn.textContent = 'Next';
+        return;
+      }
+      if (hasSubmitted) {
+        nextBtn.classList.remove('hidden');
+        nextBtn.textContent = 'Finish';
+      } else {
+        nextBtn.classList.add('hidden');
+      }
+    };
+
+    const showStep = (index) => {
+      currentStep = clamp(index, 0, steps.length - 1);
+      steps.forEach((step, idx) => {
+        step.classList.toggle('hidden', idx !== currentStep);
+      });
+      stepLabels.forEach((label, idx) => {
+        const isActive = idx === currentStep;
+        label.setAttribute('data-active', String(isActive));
+      });
+      if (stepIndicator) {
+        stepIndicator.textContent = `Step ${currentStep + 1} of ${steps.length}`;
+      }
+      if (stepFill) {
+        const total = steps.length || 1;
+        const percent = Math.round(((currentStep + 1) / total) * 100);
+        stepFill.style.width = `${percent}%`;
+      }
+      if (prevBtn) prevBtn.toggleAttribute('disabled', currentStep === 0);
+      updateFinishCta();
+      updateReturnNoteVisibility();
+      updateEmail();
+    };
+
+    const validateStep = (index) => {
+      const step = steps[index];
+      if (!step) return true;
+      if (requiresReferenceLinks && step.getAttribute('data-step') === '4' && linkSection && !linkSection.classList.contains('hidden')) {
+        const linkInputs = Array.from(step.querySelectorAll('[data-link]'));
+        const hasLink = linkInputs.some((input) => (input.value || '').trim().length > 0);
+        if (!hasLink) {
+          const firstLink = linkInputs[0];
+          if (firstLink) {
+            firstLink.setCustomValidity('Please add at least one reference link.');
+            if (typeof firstLink.reportValidity === 'function') {
+              firstLink.reportValidity();
+            }
+            firstLink.focus();
+            firstLink.setCustomValidity('');
+          }
+          return false;
+        }
+      }
+      const requiredFields = Array.from(step.querySelectorAll('[required], [data-required="true"]'));
+      let firstInvalid = null;
+      requiredFields.forEach((field) => {
+        if (field.closest('.hidden') || field.closest('[aria-hidden="true"]')) return;
+        if (typeof field.checkValidity === 'function' && !field.checkValidity()) {
+          if (!firstInvalid) firstInvalid = field;
+          return;
+        }
+        const value = 'value' in field ? (field.value || '').trim() : '';
+        if (!value && !firstInvalid) {
+          firstInvalid = field;
+        }
+      });
+      if (firstInvalid) {
+        if (typeof firstInvalid.reportValidity === 'function') {
+          firstInvalid.reportValidity();
+        }
+        firstInvalid.focus();
+        return false;
+      }
+      return true;
+    };
+
+    const enforceDisclaimer = () => {
+      const allowed = disclaimerCheck ? disclaimerCheck.checked : false;
+      if (sendWorkerBtn) {
+        const canUseWorker = allowed && workerSubmitEnabled;
+        sendWorkerBtn.classList.toggle('opacity-40', !canUseWorker);
+        sendWorkerBtn.classList.toggle('pointer-events-none', !canUseWorker);
+        sendWorkerBtn.toggleAttribute('disabled', !canUseWorker);
+        sendWorkerBtn.setAttribute('aria-disabled', String(!canUseWorker));
+      }
+    };
+
+    const setWorkerStatus = (message, tone = 'text-slate-500', isHtml = false) => {
+      if (!workerStatus) return;
+      if (isHtml) {
+        workerStatus.innerHTML = message;
+      } else {
+        workerStatus.textContent = message;
+      }
+      workerStatus.className = `text-xs ${tone}`;
+      workerStatus.classList.remove('hidden');
+    };
+
+    const enableWorkerSubmit = () => {
+      workerSubmitEnabled = true;
+      if (!sendWorkerBtn) return;
+      sendWorkerBtn.classList.remove('opacity-40', 'pointer-events-none');
+      sendWorkerBtn.toggleAttribute('disabled', false);
+      sendWorkerBtn.setAttribute('aria-disabled', 'false');
+    };
+
+    const disableWorkerSubmit = (message) => {
+      workerSubmitEnabled = false;
+      if (sendWorkerBtn) {
+        sendWorkerBtn.classList.add('opacity-40', 'pointer-events-none');
+        sendWorkerBtn.toggleAttribute('disabled', true);
+        sendWorkerBtn.setAttribute('aria-disabled', 'true');
+      }
+      if (message) setWorkerStatus(message);
+    };
+
+    const showReturnNote = (message) => {
+      if (!returnNote) return;
+      returnNoteMessage = message;
+      updateReturnNoteVisibility();
+      if (returnNoteTimeout) {
+        window.clearTimeout(returnNoteTimeout);
+      }
+      returnNoteTimeout = window.setTimeout(() => {
+        returnNoteMessage = '';
+        updateReturnNoteVisibility();
+      }, 4500);
+    };
+
+    const handleReturnNote = () => {
+      const mailState = sessionStorage.getItem(mailReturnKey);
+      if (mailState === 'sent') {
+        showReturnNote(buildInspirationMessage('Request sent. We will reply shortly.'));
+        sessionStorage.removeItem(mailReturnKey);
+      }
+    };
+
+    const checkWorkerSubmitStatus = async () => {
+      if (!sendWorkerBtn) return;
+      try {
+        const response = await fetch(workerSubmitStatusUrl, {
+          headers: { Accept: 'application/json' }
+        });
+        if (!response.ok) return;
+        const result = await response.json().catch(() => ({}));
+        if (result && result.enabled === false) {
+          disableWorkerSubmit('Direct submissions are paused. Please contact the atelier.');
+        } else if (result && result.enabled === true) {
+          enableWorkerSubmit();
+          enforceDisclaimer();
+        }
+      } catch (error) {
+        console.warn('Worker status check failed', error);
+      }
+    };
+
+
+    form.querySelectorAll('[data-field]').forEach((input) => {
+      input.addEventListener('input', () => {
+        if (input.getAttribute('data-field') === 'category') {
+          updateSizeVisibility(input.value);
+        }
+        updateEmail();
+      });
+    });
+
+    form.querySelectorAll('[data-link],[data-link-note]').forEach((input) => {
+      input.addEventListener('input', () => {
+        if (input.hasAttribute('data-link')) {
+          input.setCustomValidity('');
+        }
+        updateEmail();
+      });
+    });
+
+    if (saveDraftToggle) {
+      saveDraftToggle.addEventListener('change', () => {
+        allowStorage = saveDraftToggle.checked;
+        if (!allowStorage) {
+          localStorage.removeItem(storageKey);
+          return;
+        }
+        const existing = localStorage.getItem(storageKey);
+        if (existing) {
+          try {
+            applyDraft(JSON.parse(existing));
+          } catch {
+            localStorage.removeItem(storageKey);
+          }
+        }
+        updateEmail();
+      });
+    }
+
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        if (currentStep === 0) {
+          window.location.assign(returnUrl);
+          return;
+        }
+        showStep(currentStep - 1);
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        if (!validateStep(currentStep)) return;
+        if (currentStep >= steps.length - 1) {
+          if (!hasSubmitted) {
+            setWorkerStatus('Please submit your request before finishing.');
+            if (sendWorkerBtn) sendWorkerBtn.focus();
+            return;
+          }
+          window.location.assign(returnUrl);
+          return;
+        }
+        showStep(currentStep + 1);
+      });
+    }
+
+    if (sendWorkerBtn) {
+      sendWorkerBtn.addEventListener('click', async () => {
+        if (disclaimerCheck && !disclaimerCheck.checked) return;
+        if (!workerSubmitEnabled) {
+          setWorkerStatus('Direct submissions are paused. Please contact the atelier.');
+          return;
+        }
+        if (turnstileSiteKey && !getTurnstileToken()) {
+          setWorkerStatus('Please complete the verification before sending.');
+          return;
+        }
+        if (!validateStep(currentStep)) return;
+        const emailValue = fieldValue('[data-field="email"]');
+        if (!isValidEmail(emailValue)) {
+          setWorkerStatus('Please enter a valid email address.');
+          const emailField = form.querySelector('[data-field="email"]');
+          if (emailField && typeof emailField.reportValidity === 'function') {
+            emailField.reportValidity();
+          }
+          return;
+        }
+        const { subject, body } = buildEmail();
+        const payload = {
+          subject,
+          body,
+          email: fieldValue('[data-field="email"]'),
+          name: fieldValue('[data-field="name"]'),
+          requestId,
+          turnstileToken: getTurnstileToken()
+        };
+
+        const originalText = sendWorkerBtn.textContent || '';
+        let submitSucceeded = false;
+        sendWorkerBtn.textContent = 'Sending...';
+        sendWorkerBtn.setAttribute('aria-busy', 'true');
+        sendWorkerBtn.toggleAttribute('disabled', true);
+
+        try {
+          const response = await fetch(workerSubmitUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            if (result?.error === 'send_disabled') {
+              disableWorkerSubmit('Direct submissions are paused. Please contact the atelier.');
+              return;
+            }
+            setWorkerStatus('Unable to send. Please try again later.');
+            return;
+          }
+          if (result?.duplicate) {
+            setWorkerStatus(buildInspirationMessage('Request already received. We will reply shortly.'), 'text-ink', true);
+          } else {
+            setWorkerStatus(buildInspirationMessage('Request sent. We will reply shortly.'), 'text-ink', true);
+          }
+          submitSucceeded = true;
+          hasSubmitted = true;
+          updateFinishCta();
+          sessionStorage.setItem(mailReturnKey, 'sent');
+          showReturnNote(buildInspirationMessage('Request sent. We will reply shortly.'));
+        } catch (error) {
+          console.warn('Worker send failed', error);
+          setWorkerStatus('Unable to send. Please try again later.');
+        } finally {
+          sendWorkerBtn.removeAttribute('aria-busy');
+          if (submitSucceeded) {
+            sendWorkerBtn.textContent = 'Sent';
+            sendWorkerBtn.setAttribute('data-sent', 'true');
+            sendWorkerBtn.classList.remove('bg-ink', 'text-white', 'border-ink/20');
+            sendWorkerBtn.classList.add('bg-slate-100', 'text-slate-500', 'border-slate-200');
+            sendWorkerBtn.toggleAttribute('disabled', true);
+            sendWorkerBtn.setAttribute('aria-disabled', 'true');
+          } else {
+            sendWorkerBtn.textContent = originalText;
+            sendWorkerBtn.toggleAttribute('disabled', false);
+          }
+        }
+      });
+    }
+
+    if (disclaimerCheck) {
+      disclaimerCheck.addEventListener('change', enforceDisclaimer);
+      disclaimerCheck.addEventListener('change', updateEmail);
+    }
+
+    window.addEventListener('pageshow', () => {
+      handleReturnNote();
+    });
+
+    window.addEventListener('focus', () => {
+      handleReturnNote();
+    });
+
+    handleReturnNote();
+    checkWorkerSubmitStatus();
+
+
+    if (linkSection) {
+      const shouldHide = !requiresReferenceLinks;
+      linkSection.classList.toggle('hidden', shouldHide);
+    }
+    updateSizeVisibility(defaultCategory);
+    showStep(0);
+    enforceDisclaimer();
+    updateEmail();
+  })();
+</script>
+
+{turnstileSiteKey ? (
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+) : null}
