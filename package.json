@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
+    "deploy": "node scripts/deploy.mjs",
     "preview": "astro preview",
     "lint": "echo \"Add your linter of choice\""
   },
