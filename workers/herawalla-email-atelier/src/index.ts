@@ -204,7 +204,7 @@ export default {
 
       try {
         const payload = await safeJson(request);
-        if (!payload) {
+        if (!isRecord(payload)) {
           logWarn("submit_invalid_payload", { origin });
           return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
             status: 400,
@@ -212,12 +212,12 @@ export default {
           });
         }
 
-        const subject = String(payload.subject || "").trim();
-        const body = String(payload.body || "").trim();
-        const senderEmail = String(payload.email || "").trim();
-        const senderName = String(payload.name || "").trim();
-        const requestId = String(payload.requestId || "").trim();
-        const turnstileToken = String(payload.turnstileToken || "").trim();
+        const subject = getString(payload.subject);
+        const body = getString(payload.body);
+        const senderEmail = getString(payload.email);
+        const senderName = getString(payload.name);
+        const requestId = getString(payload.requestId);
+        const turnstileToken = getString(payload.turnstileToken);
         const normalizedRequestId = normalizeRequestId(requestId);
 
         if (!subject || !body || !senderEmail || !normalizedRequestId) {
@@ -1007,6 +1007,14 @@ async function safeJson(request: Request) {
   } catch {
     return null;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function getString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function escapeHtml(value: string) {
