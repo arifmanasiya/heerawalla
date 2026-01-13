@@ -121,7 +121,12 @@ const defaultStoneType = (() => {
           </label>
         </div>
 
-        <form class="space-y-8" data-quote-form>
+        <form
+          class="space-y-8"
+          data-quote-form
+          data-inspiration-title={item.title}
+          data-inspiration-image={item.heroImage}
+        >
           <section class="space-y-6" data-step="1">
             <div class="space-y-2">
               <h2 class="font-display text-2xl tracking-tight">Piece</h2>
@@ -434,10 +439,12 @@ const defaultStoneType = (() => {
   <Footer />
 </BaseLayout>
 
-<script is:inline define:vars={{ slug: item.slug, inspirationTitle: item.title, disclaimer: INSPIRATION_DISCLAIMER, inspirationImage: item.heroImage, inspirationsUrl, homeUrl, defaultCategory, turnstileSiteKey }}>
+<script is:inline define:vars={{ slug: item.slug, disclaimer: INSPIRATION_DISCLAIMER, inspirationsUrl, homeUrl, defaultCategory, turnstileSiteKey }}>
   (() => {
     const form = document.querySelector('[data-quote-form]');
     if (!form) return;
+    const inspirationTitleValue = form.getAttribute('data-inspiration-title') || '';
+    const inspirationImageValue = form.getAttribute('data-inspiration-image') || '';
 
     const steps = Array.from(form.querySelectorAll('[data-step]'));
     const stepLabels = Array.from(document.querySelectorAll('[data-step-label]'));
@@ -464,7 +471,7 @@ const defaultStoneType = (() => {
     const disclaimerCheck = form.querySelector('[data-disclaimer]');
     const linkSection = form.querySelector('[data-link-section]');
     const storageKey = `hw-inspiration-quote-${slug}`;
-    const returnUrl = inspirationImage ? inspirationsUrl : homeUrl;
+    const returnUrl = inspirationImageValue ? inspirationsUrl : homeUrl;
     const mailReturnKey = `hw-bespoke-mail-${slug}`;
     const workerSubmitUrl = 'https://herawalla-email-atelier.arifmanasiya.workers.dev/submit';
     const workerSubmitStatusUrl = workerSubmitUrl.replace(/\/submit$/, '/submit-status');
@@ -475,7 +482,7 @@ const defaultStoneType = (() => {
       return `${prefix} Meanwhile, ${link}.`;
     };
     const directRequest = new URLSearchParams(window.location.search).has('direct');
-    const requiresReferenceLinks = !inspirationImage || directRequest;
+    const requiresReferenceLinks = !inspirationImageValue || directRequest;
     let workerSubmitEnabled = true;
     let hasSubmitted = false;
     const getTurnstileToken = () => {
@@ -614,12 +621,12 @@ const defaultStoneType = (() => {
         : 'Acknowledgment: Pending';
       const origin = window.location.origin || '';
       const imageUrl = hasInspiration
-        ? inspirationImage?.startsWith('http')
-          ? inspirationImage
-          : `${origin}${inspirationImage?.startsWith('/') ? '' : '/'}${inspirationImage || ''}`
+        ? inspirationImageValue.startsWith('http')
+          ? inspirationImageValue
+          : `${origin}${inspirationImageValue.startsWith('/') ? '' : '/'}${inspirationImageValue}`
         : '';
       const inspirationLine = hasInspiration
-        ? `I would like to request a bespoke quote inspired by "${inspirationTitle}".`
+        ? `I would like to request a bespoke quote inspired by "${inspirationTitleValue}".`
         : 'I would like to request a bespoke quote.';
       const inspirationImageLine = hasInspiration ? `Inspiration image: ${imageUrl}` : 'Inspiration image: Not provided';
       const body = [
@@ -721,11 +728,11 @@ const defaultStoneType = (() => {
         budgetMin || budgetMax ? `${currency} ${budgetMin || '?'}-${budgetMax || '?'}` : 'Not specified';
       const hasInspiration = !requiresReferenceLinks;
       const origin = window.location.origin || '';
-      const imageUrl = inspirationImage?.startsWith('http')
-        ? inspirationImage
-        : `${origin}${inspirationImage?.startsWith('/') ? '' : '/'}${inspirationImage || ''}`;
+      const imageUrl = inspirationImageValue.startsWith('http')
+        ? inspirationImageValue
+        : `${origin}${inspirationImageValue.startsWith('/') ? '' : '/'}${inspirationImageValue}`;
       const specs = [
-        { label: 'Inspiration', value: hasInspiration ? inspirationTitle || 'Not specified' : 'Custom references' },
+        { label: 'Inspiration', value: hasInspiration ? inspirationTitleValue || 'Not specified' : 'Custom references' },
         {
           label: 'Inspiration image',
           value: hasInspiration ? (imageUrl || 'Not provided') : 'Not provided',
@@ -774,7 +781,7 @@ const defaultStoneType = (() => {
     };
 
     const updateEmail = () => {
-      const { subject, body, style } = buildEmail();
+      const { style } = buildEmail();
       if (styleLabel) styleLabel.textContent = style;
       updateReview(style);
       if (allowStorage) {
@@ -1158,5 +1165,5 @@ const defaultStoneType = (() => {
 </script>
 
 {turnstileSiteKey ? (
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 ) : null}

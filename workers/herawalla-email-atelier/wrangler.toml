@@ -25,6 +25,7 @@ SEND_ACK = "true"
 SEND_REJECT = "false"
 SEND_SUBMIT = "true"
 SUBSCRIBE_TO = "noreply.heerawalla@gmail.com"
+ATELIER_SENDERS = "atelier.heerawalla@gmail.com"
 
 # Secrets are configured via `wrangler secret put` or in the Cloudflare dashboard.
 

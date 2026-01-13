@@ -62,6 +62,34 @@ Build will fail if required CSV columns are missing or data is invalid.
 - Optionally set `SITE=https://heerawalla.com` (or your Pages URL) to override the canonical/OG base URL.
 - Configure your Pages custom domain (optional) to `heerawalla.com`.
 
+## Google Calendar + People API setup (Worker)
+The concierge booking and contact sync use Google APIs via the worker at `workers/herawalla-email-atelier`.
+
+### Enable APIs
+- Google Calendar API
+- People API
+
+### OAuth consent screen + scopes
+Add these scopes on the same Google Cloud project:
+- `https://www.googleapis.com/auth/calendar` (concierge booking)
+- `https://www.googleapis.com/auth/contacts` (People API sync)
+
+### Generate a refresh token (OAuth Playground)
+1) In Google Cloud Console, create an OAuth Client ID (Web).
+2) Add `https://developers.google.com/oauthplayground` as an authorized redirect URI.
+3) Open OAuth Playground, click the gear icon, and use your own OAuth credentials.
+4) Authorize with the scopes above, then exchange the code for tokens.
+5) Copy the refresh token.
+
+### Set worker secrets
+Set these secrets on the worker (Wrangler or Cloudflare UI):
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REFRESH_TOKEN` (must include the Contacts scope if People API is used)
+- `GOOGLE_CALENDAR_ID` (calendar to book against)
+
+After updating secrets, redeploy the worker.
+
 ## Project structure
 ```
 src/

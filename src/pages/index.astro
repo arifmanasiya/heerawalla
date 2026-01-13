@@ -7,18 +7,12 @@ import { loadInspirations, type Inspiration } from '../lib/inspirations';
 import { loadSiteConfig, getConfigValue } from '../lib/config';
 import { withBase } from '../lib/paths';
 
-const products: ProductWithMedia[] = await loadProductsWithMedia();
-const featured = products.filter((p) => p.is_featured);
+const featured: ProductWithMedia[] = (await loadProductsWithMedia()).filter((p) => p.is_featured);
 const inspirations: Inspiration[] = await loadInspirations();
 const inspirationHighlights = inspirations.slice(0, 3);
 const primaryInspiration = inspirationHighlights[0];
 const secondaryInspirations = inspirationHighlights.slice(1);
 const config = await loadSiteConfig();
-const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-const applyDiscount = (value: number, pct?: number) => {
-  const ratio = 1 + (pct ?? 0) / 100;
-  return Math.round(value * ratio * 100) / 100;
-};
 
 const metaTitle = getConfigValue(
   config,
@@ -32,17 +26,7 @@ const metaDescriptionBase = getConfigValue(
 );
 const metaDescription = `${metaDescriptionBase} Often searched as Heerawala, Hirawala, Hirawalla, Herowalla, Herowala, Hero Wala, Hero Walla, Heera Walla, Heera Wala, हीरावाला.`;
 
-const normalizeDesignCode = (value?: string) => (value ? value.toLowerCase() : '');
-const editionLabel = (category?: string, fallback?: string) => {
-  const raw = category || '';
-  const group = raw.split('/')[0] || '';
-  if (group === 'women') return "Women's Edition";
-  if (group === 'men') return "Men's Edition";
-  if (group === 'unisex') return 'Unisex Edition';
-  return fallback || raw;
-};
 const heroImage = withBase('/images/hero.png');
-const fallbackImage = withBase('/images/products/placeholder.svg');
 const heroSlides = [
   heroImage,
   ...featured.map((product) => product.media.images[0]?.url).filter(Boolean),
@@ -347,7 +331,6 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
         const slides = Array.from(container.querySelectorAll('.hero-media__slide'));
         if (slides.length < 2) return;
         const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-        const mobileView = window.matchMedia('(max-width: 640px)');
         if (prefersReduced.matches) return;
         const slideDuration = Number(container.dataset.slideDuration) || 7000;
         const fadeDuration = Number(container.dataset.fadeDuration) || 2000;

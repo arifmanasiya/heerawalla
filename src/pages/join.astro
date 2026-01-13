@@ -1,0 +1,161 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { loadSiteConfig, getConfigValue } from '../lib/config';
+
+const config = await loadSiteConfig();
+const atelierApiBase = getConfigValue(
+  config,
+  'atelier_api_base',
+  'https://herawalla-email-atelier.arifmanasiya.workers.dev'
+);
+const joinInterests = [
+  { value: 'Design codes - Men', label: 'Design codes (Men)' },
+  { value: 'Design codes - Women', label: 'Design codes (Women)' },
+  { value: 'Inspirations', label: 'Inspirations' },
+  { value: 'Bespoke & Custom', label: 'Bespoke & Custom' },
+  { value: 'Drops & Events', label: 'Drops & Events' },
+];
+---
+
+<BaseLayout title="Join | Heerawalla" description="Join the Heerawalla list for limited drops, atelier updates, and bespoke highlights.">
+  <Header />
+
+  <main class="container py-12 space-y-10">
+    <div class="grid gap-10 lg:grid-cols-[1.1fr_1fr] items-start">
+      <div class="space-y-4">
+        <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Join</p>
+        <h1 class="font-display text-4xl sm:text-5xl tracking-tight text-ink">Join the Heerawalla list</h1>
+        <p class="text-sm text-slate-600 max-w-xl">
+          Receive limited drops, atelier notes, and bespoke highlights. We keep it rare and intentional.
+        </p>
+        <p class="text-xs text-slate-500">
+          Tell us what moves you, and we will tailor the updates.
+        </p>
+      </div>
+
+      <form class="card border border-slate-200 p-6 space-y-4" data-join-form data-atelier-api={atelierApiBase}>
+        <label class="text-xs uppercase tracking-[0.2em] text-slate-500">
+          Name
+          <input
+            type="text"
+            name="name"
+            required
+            class="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm normal-case tracking-normal text-ink"
+            placeholder="Your name"
+            data-join-name
+          />
+        </label>
+        <label class="text-xs uppercase tracking-[0.2em] text-slate-500">
+          Email
+          <input
+            type="email"
+            name="email"
+            required
+            class="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm normal-case tracking-normal text-ink"
+            placeholder="you@example.com"
+            data-join-email
+          />
+        </label>
+        <label class="text-xs uppercase tracking-[0.2em] text-slate-500">
+          Phone (optional)
+          <input
+            type="tel"
+            name="phone"
+            class="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm normal-case tracking-normal text-ink"
+            placeholder="+1 312 555 0198"
+            data-join-phone
+          />
+        </label>
+        <fieldset class="space-y-2">
+          <legend class="text-xs uppercase tracking-[0.2em] text-slate-500">Design interests</legend>
+          <div class="grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+            {joinInterests.map((option) => (
+              <label class="flex items-center gap-2">
+                <input type="checkbox" value={option.value} class="h-4 w-4" data-join-interest />
+                {option.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <div class="flex items-center gap-3">
+          <button type="submit" class="btn btn-primary" data-join-submit>Join</button>
+          <p class="text-xs text-slate-500" data-join-status></p>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<script is:inline>
+  (() => {
+    const form = document.querySelector('[data-join-form]');
+    if (!form) return;
+    const nameInput = form.querySelector('[data-join-name]');
+    const emailInput = form.querySelector('[data-join-email]');
+    const phoneInput = form.querySelector('[data-join-phone]');
+    const interestInputs = Array.from(form.querySelectorAll('[data-join-interest]'));
+    const submitButton = form.querySelector('[data-join-submit]');
+    const status = form.querySelector('[data-join-status]');
+    const apiBase = form.getAttribute('data-atelier-api') || '';
+
+    const setStatus = (message) => {
+      if (status) status.textContent = message;
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const name = nameInput?.value.trim() || '';
+      const email = emailInput?.value.trim() || '';
+      const phone = phoneInput?.value.trim() || '';
+      const interests = interestInputs.filter((input) => input.checked).map((input) => input.value);
+
+      if (!name) {
+        setStatus('Name is required.');
+        return;
+      }
+      if (!email) {
+        setStatus('Email is required.');
+        return;
+      }
+      if (!interests.length) {
+        setStatus('Select at least one interest.');
+        return;
+      }
+      if (!apiBase) {
+        setStatus('Join service is unavailable.');
+        return;
+      }
+
+      if (submitButton) submitButton.setAttribute('disabled', 'true');
+      setStatus('Submitting...');
+      try {
+        const response = await fetch(`${apiBase.replace(/\/$/, '')}/subscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            email,
+            phone,
+            interests,
+            source: 'join-page',
+            pageUrl: window.location.href,
+          }),
+        });
+        if (!response.ok) {
+          setStatus('Unable to join right now.');
+          return;
+        }
+        form.reset();
+        setStatus('Thanks. You are on the list.');
+      } catch {
+        setStatus('Unable to join right now.');
+      } finally {
+        if (submitButton) submitButton.removeAttribute('disabled');
+      }
+    });
+  })();
+</script>

@@ -30,7 +30,7 @@ const EMAIL_TEXT = [
   "",
   "Your request now enters a deliberate, best-in-class craftsmanship process - measured, personal, and worth the wait.",
   "",
-  "If you would like to add details, simply reply to this email to keep your request in the same thread.",
+  "If you would like to add details, submit a new note at Heerawalla.com/contact and include your request ID.",
   "",
   "Warm regards,",
   "Heerawalla",
@@ -71,7 +71,9 @@ const EMAIL_HTML = `<!DOCTYPE html>
                 Your request now enters a deliberate, best-in-class craftsmanship process - measured, personal, and worth the wait.
               </p>
               <p style="margin:0 0 24px 0;font-size:15px;line-height:1.7;color:#334155;">
-                If you would like to add details, simply reply to this email to keep your request in the same thread.
+                If you would like to add details, submit a new note at
+                <a href="https://www.heerawalla.com/contact" style="color:#0f172a;text-decoration:underline;">Heerawalla.com/contact</a>
+                and include your request ID.
               </p>
               <div style="height:1px;background:#e5e7eb;margin:0 0 18px 0;"></div>
               <p style="margin:0 0 6px 0;font-size:14px;color:#0f172a;">Warm regards,</p>
@@ -99,7 +101,7 @@ const CONTACT_ACK_TEXT = [
   "",
   "We have received your message and will respond within 1-2 business days.",
   "",
-  "If you need to add details, simply reply to this email.",
+  "If you need to add details, submit a new note at Heerawalla.com/contact.",
   "",
   "Warm regards,",
   "Heerawalla",
@@ -132,7 +134,8 @@ const CONTACT_ACK_HTML = `<!DOCTYPE html>
                 We have received your message and will respond within 1-2 business days.
               </p>
               <p style="margin:0 0 24px 0;font-size:15px;line-height:1.7;color:#334155;">
-                If you need to add details, simply reply to this email.
+                If you need to add details, submit a new note at
+                <a href="https://www.heerawalla.com/contact" style="color:#0f172a;text-decoration:underline;">Heerawalla.com/contact</a>.
               </p>
               <div style="height:1px;background:#e5e7eb;margin:0 0 18px 0;"></div>
               <p style="margin:0 0 6px 0;font-size:14px;color:#0f172a;">Warm regards,</p>
@@ -153,12 +156,14 @@ const CONTACT_ACK_HTML = `<!DOCTYPE html>
 </html>`;
 
 const SUBSCRIBE_ACK_SUBJECT = "Heerawalla - You're on the list";
+const UNSUBSCRIBE_URL = "https://www.heerawalla.com/unsubscribe";
 const SUBSCRIBE_ACK_TEXT = [
   "Thank you for joining Heerawalla.",
   "",
   "You're on the list for new drops, atelier updates, and bespoke highlights.",
   "",
-  "If you'd like to refine your interests, reply to this email.",
+  "To refine your interests, visit Heerawalla.com/join.",
+  `To unsubscribe, visit ${UNSUBSCRIBE_URL}.`,
   "",
   "Warm regards,",
   "Heerawalla",
@@ -191,7 +196,12 @@ const SUBSCRIBE_ACK_HTML = `<!DOCTYPE html>
                 Thank you for joining Heerawalla. You're on the list for new drops, atelier updates, and bespoke highlights.
               </p>
               <p style="margin:0 0 24px 0;font-size:15px;line-height:1.7;color:#334155;">
-                If you'd like to refine your interests, reply to this email.
+                To refine your interests, visit
+                <a href="https://www.heerawalla.com/join" style="color:#0f172a;text-decoration:underline;">Heerawalla.com/join</a>.
+              </p>
+              <p style="margin:0 0 24px 0;font-size:13px;line-height:1.7;color:#64748b;">
+                Prefer not to receive updates? You can unsubscribe at
+                <a href="${UNSUBSCRIBE_URL}" style="color:#0f172a;text-decoration:underline;">Heerawalla.com/unsubscribe</a>.
               </p>
               <div style="height:1px;background:#e5e7eb;margin:0 0 18px 0;"></div>
               <p style="margin:0 0 6px 0;font-size:14px;color:#0f172a;">Warm regards,</p>
@@ -219,6 +229,7 @@ const SUBMIT_PATH = "/submit";
 const SUBMIT_STATUS_PATH = "/submit-status";
 const CONTACT_SUBMIT_PATH = "/contact-submit";
 const SUBSCRIBE_PATH = "/subscribe";
+const UNSUBSCRIBE_PATH = "/unsubscribe";
 const REQUEST_ORIGIN_TTL = 60 * 60 * 24 * 180;
 const REQUEST_SUMMARY_TTL = 60 * 60 * 24 * 180;
 const REQUEST_SUMMARY_MAX_LINES = 60;
@@ -441,6 +452,15 @@ export default {
             }
           }
 
+          await syncGoogleContact(env, {
+            email,
+            name,
+            phone,
+            source: "concierge",
+            requestId,
+            contactPreference: contactPreference || (phonePreferred ? "phone" : ""),
+          });
+
           return new Response(JSON.stringify({ ok: true, booking }), {
             status: 200,
             headers: buildCorsHeaders(allowedOrigin, true),
@@ -515,6 +535,7 @@ export default {
         const source = getString(payload.source);
         const pageUrl = getString(payload.pageUrl);
         const requestId = generateRequestId();
+        const sourceLabel = source || "subscribe";
 
         if (!senderEmail) {
           logWarn("subscribe_missing_fields", { requestId });
@@ -627,6 +648,31 @@ export default {
               headers: autoReplyHeaders(),
             });
           }
+
+          try {
+            await storeSubscription(env, {
+              email: senderEmail,
+              name,
+              phone,
+              interests,
+              source: sourceLabel,
+              pageUrl,
+              requestId,
+              createdAt: new Date().toISOString(),
+            });
+          } catch (error) {
+            logWarn("subscribe_store_failed", { requestId, error: String(error) });
+          }
+
+          await syncGoogleContact(env, {
+            email: senderEmail,
+            name,
+            phone,
+            interests,
+            source: sourceLabel,
+            requestId,
+            pageUrl,
+          });
         } catch (error) {
           logError("subscribe_send_failed", { requestId, email: maskEmail(senderEmail) });
           throw error;
@@ -640,6 +686,72 @@ export default {
         const message = String(error);
         logError("subscribe_error", { message });
         return new Response(JSON.stringify({ ok: false, error: "send_failed", detail: message }), {
+          status: 500,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+    }
+
+    if (url.pathname === UNSUBSCRIBE_PATH) {
+      logInfo("unsubscribe_received", { origin, method: request.method });
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+
+      if (request.method !== "POST") {
+        logWarn("unsubscribe_invalid_method", { method: request.method });
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+
+      if (!allowedOrigin) {
+        logWarn("unsubscribe_forbidden_origin", { origin });
+        return new Response("Forbidden", { status: 403 });
+      }
+
+      try {
+        const payload = await safeJson(request);
+        if (!isRecord(payload)) {
+          logWarn("unsubscribe_invalid_payload", { origin });
+          return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        const senderEmail = getString(payload.email);
+        const reason = getString(payload.reason);
+        if (!senderEmail) {
+          logWarn("unsubscribe_missing_fields");
+          return new Response(JSON.stringify({ ok: false, error: "missing_fields" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        if (!isValidEmail(senderEmail)) {
+          logWarn("unsubscribe_invalid_email", { email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "invalid_email" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        await markUnsubscribed(env, senderEmail, reason);
+
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      } catch (error) {
+        const message = String(error);
+        logError("unsubscribe_error", { message });
+        return new Response(JSON.stringify({ ok: false, error: "unsubscribe_failed", detail: message }), {
           status: 500,
           headers: buildCorsHeaders(allowedOrigin, true),
         });
@@ -788,14 +900,23 @@ export default {
           if (isEnabled(env.SEND_ACK, true)) {
             await sendEmail(env, {
               to: [senderEmail],
-              sender: "Heerawalla <atelier@heerawalla.com>",
-              replyTo: getCustomerReplyTo(),
+              sender: "Heerawalla <no-reply@heerawalla.com>",
+              replyTo: "no-reply@heerawalla.com",
               subject: CONTACT_ACK_SUBJECT,
               textBody: CONTACT_ACK_TEXT,
               htmlBody: CONTACT_ACK_HTML,
               headers: autoReplyHeaders(),
             });
           }
+
+          await syncGoogleContact(env, {
+            email: senderEmail,
+            name,
+            phone,
+            source: "contact",
+            requestId,
+            contactPreference: phonePreferred ? "phone" : "",
+          });
         } catch (error) {
           logError("contact_submit_send_failed", { requestId, email: maskEmail(senderEmail) });
           throw error;
@@ -1007,8 +1128,8 @@ export default {
             logInfo("submit_ack_start", { requestId, email: maskEmail(senderEmail) });
           await sendEmail(env, {
             to: [senderEmail],
-            sender: "Heerawalla <atelier@heerawalla.com>",
-            replyTo: getCustomerReplyTo(),
+            sender: "Heerawalla <no-reply@heerawalla.com>",
+            replyTo: "no-reply@heerawalla.com",
             subject: buildAckSubject(normalizedRequestId),
             textBody: EMAIL_TEXT,
             htmlBody: EMAIL_HTML,
@@ -1016,6 +1137,13 @@ export default {
             });
             logInfo("submit_ack_sent", { requestId, email: maskEmail(senderEmail) });
           }
+
+          await syncGoogleContact(env, {
+            email: senderEmail,
+            name: senderName,
+            source: "bespoke",
+            requestId: normalizedRequestId,
+          });
         } catch (error) {
           logError("submit_send_failed", { requestId, email: maskEmail(senderEmail) });
           if (env.HEERAWALLA_ACKS && requestKey) {
@@ -1103,6 +1231,11 @@ export default {
       const headers = message.headers;
       const fromHeader = (headers.get("from") || message.from || "").trim();
       if (!fromHeader) return;
+      const toHeader = (headers.get("to") || (message as { to?: string | string[] }).to || "").toString();
+      if (toHeader.toLowerCase().includes("no-reply@heerawalla.com")) {
+        logInfo("email_sink_no_reply", { to: toHeader });
+        return;
+      }
 
       const subjectLine = (headers.get("subject") || "").trim();
       const normalizedSubject = normalizeSubject(subjectLine);
@@ -2020,6 +2153,253 @@ async function getAccessToken(env: Env) {
   return payload.access_token;
 }
 
+type ContactSyncPayload = {
+  email: string;
+  name?: string;
+  phone?: string;
+  interests?: string[];
+  source: string;
+  requestId?: string;
+  pageUrl?: string;
+  contactPreference?: string;
+};
+
+async function syncGoogleContact(env: Env, payload: ContactSyncPayload) {
+  if (!canSyncContacts(env)) return;
+  try {
+    await upsertGoogleContact(env, payload);
+  } catch (error) {
+    logWarn("people_sync_failed", { source: payload.source, error: String(error) });
+  }
+}
+
+function canSyncContacts(env: Env) {
+  return Boolean(
+    (env.GOOGLE_CLIENT_ID || "").trim() &&
+      (env.GOOGLE_CLIENT_SECRET || "").trim() &&
+      (env.GOOGLE_REFRESH_TOKEN || "").trim()
+  );
+}
+
+async function upsertGoogleContact(env: Env, payload: ContactSyncPayload) {
+  const normalizedEmail = normalizeEmailAddress(payload.email);
+  if (!normalizedEmail) return;
+  const token = await getAccessToken(env);
+  const searchUrl = new URL("https://people.googleapis.com/v1/people:searchContacts");
+  searchUrl.searchParams.set("query", normalizedEmail);
+  searchUrl.searchParams.set("readMask", "names,emailAddresses,phoneNumbers,userDefined");
+
+  const searchResponse = await fetch(searchUrl.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!searchResponse.ok) {
+    const errorText = await searchResponse.text();
+    throw new Error(`people_search_failed:${searchResponse.status}:${errorText}`);
+  }
+  const searchPayload = (await searchResponse.json()) as {
+    results?: Array<{
+      person?: {
+        resourceName?: string;
+        etag?: string;
+        names?: Array<{ displayName?: string; givenName?: string; familyName?: string }>;
+        emailAddresses?: Array<{ value?: string }>;
+        phoneNumbers?: Array<{ value?: string }>;
+        userDefined?: Array<{ key?: string; value?: string }>;
+      };
+    }>;
+  };
+
+  const person = findContactByEmail(searchPayload.results || [], normalizedEmail);
+  const userDefined = buildUserDefinedFields(person?.userDefined || [], payload);
+
+  if (person?.resourceName) {
+    const updateFields = ["userDefined", "emailAddresses"];
+    const updateBody: {
+      resourceName: string;
+      etag?: string;
+      names?: Array<{ givenName?: string; familyName?: string; displayName?: string }>;
+      emailAddresses?: Array<{ value: string }>;
+      phoneNumbers?: Array<{ value: string }>;
+      userDefined?: Array<{ key?: string; value?: string }>;
+    } = {
+      resourceName: person.resourceName,
+      etag: person.etag,
+      emailAddresses: mergeEmailAddresses(person.emailAddresses || [], normalizedEmail),
+      userDefined,
+    };
+
+    if (payload.name) {
+      updateBody.names = buildNameEntries(payload.name);
+      updateFields.push("names");
+    }
+    if (payload.phone) {
+      updateBody.phoneNumbers = mergePhoneNumbers(person.phoneNumbers || [], payload.phone);
+      updateFields.push("phoneNumbers");
+    }
+
+    const updateUrl = new URL(`https://people.googleapis.com/v1/${person.resourceName}:updateContact`);
+    updateUrl.searchParams.set("updatePersonFields", updateFields.join(","));
+    const updateResponse = await fetch(updateUrl.toString(), {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(updateBody),
+    });
+    if (!updateResponse.ok) {
+      const errorText = await updateResponse.text();
+      throw new Error(`people_update_failed:${updateResponse.status}:${errorText}`);
+    }
+    return;
+  }
+
+  const createBody: {
+    names?: Array<{ givenName?: string; familyName?: string; displayName?: string }>;
+    emailAddresses?: Array<{ value: string }>;
+    phoneNumbers?: Array<{ value: string }>;
+    userDefined?: Array<{ key?: string; value?: string }>;
+  } = {
+    emailAddresses: mergeEmailAddresses([], normalizedEmail),
+    userDefined,
+  };
+  if (payload.name) {
+    createBody.names = buildNameEntries(payload.name);
+  }
+  if (payload.phone) {
+    createBody.phoneNumbers = mergePhoneNumbers([], payload.phone);
+  }
+
+  const createResponse = await fetch("https://people.googleapis.com/v1/people:createContact", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(createBody),
+  });
+  if (!createResponse.ok) {
+    const errorText = await createResponse.text();
+    throw new Error(`people_create_failed:${createResponse.status}:${errorText}`);
+  }
+}
+
+function findContactByEmail(
+  results: Array<{ person?: { emailAddresses?: Array<{ value?: string }> } }>,
+  email: string
+) {
+  const normalizedEmail = normalizeEmailAddress(email);
+  for (const result of results) {
+    const person = result.person;
+    if (!person) continue;
+    const addresses = person.emailAddresses || [];
+    const match = addresses.some((entry) => normalizeEmailAddress(entry.value || "") === normalizedEmail);
+    if (match) return result.person || null;
+  }
+  return results[0]?.person || null;
+}
+
+function buildNameEntries(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return [];
+  const parts = trimmed.split(/\s+/);
+  const givenName = parts[0];
+  const familyName = parts.slice(1).join(" ");
+  return [
+    {
+      givenName,
+      familyName: familyName || undefined,
+      displayName: trimmed,
+    },
+  ];
+}
+
+function mergeEmailAddresses(existing: Array<{ value?: string }>, email: string) {
+  const values = new Set<string>();
+  existing.forEach((entry) => {
+    const normalized = normalizeEmailAddress(entry.value || "");
+    if (normalized) values.add(normalized);
+  });
+  if (email) {
+    values.add(normalizeEmailAddress(email));
+  }
+  return Array.from(values)
+    .filter(Boolean)
+    .map((value) => ({ value }));
+}
+
+function mergePhoneNumbers(existing: Array<{ value?: string }>, phone: string) {
+  const values = new Set<string>();
+  existing.forEach((entry) => {
+    const normalized = (entry.value || "").trim();
+    if (normalized) values.add(normalized);
+  });
+  if (phone) {
+    values.add(phone.trim());
+  }
+  return Array.from(values)
+    .filter(Boolean)
+    .map((value) => ({ value }));
+}
+
+function buildUserDefinedFields(
+  existing: Array<{ key?: string; value?: string }>,
+  payload: ContactSyncPayload
+) {
+  const reservedKeys = new Set([
+    "heerawalla_sources",
+    "heerawalla_last_source",
+    "heerawalla_request_id",
+    "heerawalla_interests",
+    "heerawalla_page",
+    "heerawalla_contact_preference",
+  ]);
+  const preserved: Array<{ key?: string; value?: string }> = [];
+  const reservedMap = new Map<string, string>();
+
+  existing.forEach((entry) => {
+    const key = (entry.key || "").trim();
+    if (!key) return;
+    if (!reservedKeys.has(key)) {
+      preserved.push(entry);
+      return;
+    }
+    reservedMap.set(key, entry.value || "");
+  });
+
+  const sources = new Set<string>();
+  const existingSources = reservedMap.get("heerawalla_sources") || "";
+  existingSources
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .forEach((value) => sources.add(value));
+  if (payload.source) {
+    sources.add(payload.source);
+  }
+  if (sources.size) {
+    reservedMap.set("heerawalla_sources", Array.from(sources).join(", "));
+  }
+  if (payload.source) {
+    reservedMap.set("heerawalla_last_source", payload.source);
+  }
+  if (payload.requestId) {
+    reservedMap.set("heerawalla_request_id", payload.requestId);
+  }
+  if (payload.interests && payload.interests.length) {
+    reservedMap.set("heerawalla_interests", payload.interests.join(", "));
+  }
+  if (payload.pageUrl) {
+    reservedMap.set("heerawalla_page", payload.pageUrl);
+  }
+  if (payload.contactPreference) {
+    reservedMap.set("heerawalla_contact_preference", payload.contactPreference);
+  }
+
+  const reservedEntries = Array.from(reservedMap.entries()).map(([key, value]) => ({ key, value }));
+  return [...reservedEntries, ...preserved];
+}
+
 function requireSecret(value: string | undefined, name: string) {
   const trimmed = (value || "").trim();
   if (!trimmed) {
@@ -2666,8 +3046,8 @@ async function sendConsultationAck(env: Env, payload: ConsultationAckPayload) {
   const subject = reference ? `${CONSULTATION_ACK_SUBJECT} [${reference}]` : CONSULTATION_ACK_SUBJECT;
   await sendEmail(env, {
     to: [payload.email],
-    sender: "Heerawalla <atelier@heerawalla.com>",
-    replyTo: getCustomerReplyTo(),
+    sender: "Heerawalla <no-reply@heerawalla.com>",
+    replyTo: "no-reply@heerawalla.com",
     subject,
     textBody: buildConsultationAckText(payload),
     htmlBody: buildConsultationAckHtml(payload),
@@ -3065,6 +3445,59 @@ async function getRequestOrigin(env: Env, requestId: string) {
     return { email: parsed.email, name: parsed.name || "" };
   } catch {
     return null;
+  }
+}
+
+type SubscriptionRecord = {
+  email: string;
+  name?: string;
+  phone?: string;
+  interests?: string[];
+  source?: string;
+  pageUrl?: string;
+  requestId?: string;
+  createdAt: string;
+};
+
+function buildSubscribeKey(email: string) {
+  const normalized = normalizeEmailAddress(email);
+  return normalized ? `sub:${normalized}` : "";
+}
+
+function buildUnsubscribeKey(email: string) {
+  const normalized = normalizeEmailAddress(email);
+  return normalized ? `unsub:${normalized}` : "";
+}
+
+async function storeSubscription(env: Env, record: SubscriptionRecord) {
+  if (!env.HEERAWALLA_ACKS) return;
+  const key = buildSubscribeKey(record.email);
+  if (!key) return;
+  await env.HEERAWALLA_ACKS.put(key, JSON.stringify(record));
+  const unsubKey = buildUnsubscribeKey(record.email);
+  if (unsubKey) {
+    await env.HEERAWALLA_ACKS.delete(unsubKey);
+  }
+}
+
+async function markUnsubscribed(env: Env, email: string, reason?: string) {
+  if (!env.HEERAWALLA_ACKS) return;
+  const normalized = normalizeEmailAddress(email);
+  if (!normalized) return;
+  const unsubKey = buildUnsubscribeKey(normalized);
+  if (unsubKey) {
+    await env.HEERAWALLA_ACKS.put(
+      unsubKey,
+      JSON.stringify({
+        email: normalized,
+        reason: reason || "",
+        updatedAt: new Date().toISOString(),
+      })
+    );
+  }
+  const subKey = buildSubscribeKey(normalized);
+  if (subKey) {
+    await env.HEERAWALLA_ACKS.delete(subKey);
   }
 }
 
