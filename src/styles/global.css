@@ -107,6 +107,95 @@
     pointer-events: none;
     z-index: 3;
   }
+  .estimate-info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: 1px solid rgba(15, 23, 42, 0.2);
+    border-radius: 999px;
+    background: #ffffff;
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1;
+    text-transform: uppercase;
+    cursor: help;
+    position: relative;
+  }
+  .estimate-tooltip {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 10px);
+    width: min(260px, calc(100vw - 32px));
+    padding: 10px 12px 12px;
+    border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 12px 28px rgba(11, 25, 40, 0.18);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(6px) scale(0.98);
+    transition: opacity 150ms ease, transform 150ms ease;
+    z-index: 10;
+  }
+  .estimate-tooltip::before {
+    content: '';
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 0;
+    height: 2px;
+    background: rgba(176, 140, 90, 0.7);
+    border-radius: 2px;
+  }
+  .estimate-tooltip__section {
+    display: grid;
+    gap: 4px;
+    padding-top: 6px;
+  }
+  .estimate-tooltip__section:first-child {
+    padding-top: 0;
+  }
+  .estimate-tooltip__label {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: #64748b;
+    text-align: left;
+  }
+  .estimate-tooltip__text {
+    font-size: 11px;
+    line-height: 1.4;
+    color: #0f172a;
+    text-align: justify;
+  }
+  .estimate-tooltip__list {
+    display: grid;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+  }
+  .estimate-tooltip__item {
+    position: relative;
+    padding-left: 10px;
+    font-size: 10px;
+    line-height: 1.35;
+    color: #475569;
+    text-align: left;
+  }
+  .estimate-tooltip__item::before {
+    content: '-';
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+  .estimate-info:hover .estimate-tooltip,
+  .estimate-info:focus-visible .estimate-tooltip,
+  .estimate-info:focus-within .estimate-tooltip {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @media (max-width: 1024px) {
@@ -118,6 +207,10 @@
 @media (max-width: 640px) {
   .hero-media__image {
     object-position: 50% 28%;
+  }
+  .estimate-tooltip {
+    right: 0;
+    left: auto;
   }
 }
 

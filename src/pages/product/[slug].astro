@@ -27,21 +27,51 @@ const applyDiscount = (value: number, pct?: number) => {
   const ratio = 1 + (pct ?? 0) / 100;
   return Math.round(value * ratio * 100) / 100;
 };
+const roundTo99 = (value: number) => {
+  if (!Number.isFinite(value)) return value;
+  const lower = Math.floor(value / 100) * 100 + 99;
+  const upper = Math.ceil(value / 100) * 100 + 99;
+  return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
+};
+const parseList = (value?: string) => {
+  if (!value) return [];
+  return value
+    .split('|')
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+const normalizeStoneType = (value: string) =>
+  value
+    .replace(/diamond\(s\)/gi, 'Diamond')
+    .replace(/diamonds?\b/gi, 'Diamond')
+    .replace(/\s+/g, ' ')
+    .trim();
 const baseUsd = product.price_usd_natural;
 const labDiscountPct = product.lab_discount_pct ?? -20;
 const metal14DiscountPct = product.metal_14k_discount_pct ?? -5;
+const platinumPremiumPct = product.metal_platinum_premium ?? 10;
 const labUsd = applyDiscount(baseUsd, labDiscountPct);
-const naturalAvailable = product.natural_available ?? true;
-const labAvailable = product.lab_available ?? true;
+const platinumUsd = applyDiscount(baseUsd, platinumPremiumPct);
+const platinumLabUsd = applyDiscount(labUsd, platinumPremiumPct);
+const baseUsdRounded = roundTo99(baseUsd);
+const labUsdRounded = roundTo99(labUsd);
+const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
+const naturalAvailable = stoneTypes.some((item) => /natural/i.test(item));
+const labAvailable = stoneTypes.some((item) => /lab/i.test(item));
+const naturalStoneLabel =
+  stoneTypes.find((item) => /natural/i.test(item)) || 'Natural Diamond';
+const labStoneLabel =
+  stoneTypes.find((item) => /lab/i.test(item)) || 'Lab Grown Diamond';
 const diamondDefault = labAvailable ? 'lab' : naturalAvailable ? 'natural' : 'lab';
 const defaultDiamondUsd = diamondDefault === 'lab' ? labUsd : baseUsd;
-const defaultUsd = applyDiscount(defaultDiamondUsd, metal14DiscountPct);
-const diamondDefaultLabel = diamondDefault === 'lab' ? 'Lab Grown' : 'Natural';
+const defaultUsd = roundTo99(applyDiscount(defaultDiamondUsd, metal14DiscountPct));
+const diamondDefaultLabel = diamondDefault === 'lab' ? labStoneLabel : naturalStoneLabel;
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const ordersEmail = getConfigValue(siteConfig, 'orders_email', 'orders@heerawalla.com');
 const webmailComposeBase = getConfigValue(siteConfig, 'webmail_compose_url', 'https://mail.google.com/mail/?view=cm&fs=1&to=');
 const metal18Label = (product.metal || '18K Gold').replace(/14K/gi, '18K');
 const metal14Label = metal18Label.replace(/18K/gi, '14K');
+const metalPlatinumLabel = 'Platinum';
 const productUrl = Astro.site ? new URL(withBase(`/product/${product.slug}`), Astro.site).toString() : withBase(`/product/${product.slug}`);
 const designCode = product.design_code || 'Signature';
 const designCodeSlug = designCode.toLowerCase();
@@ -83,14 +113,11 @@ const breadcrumbCrumbs = [
   { label: product.name }
 ];
 const mailtoSubject = `Invoice request: ${product.name}`;
-const diamondLine =
-  naturalAvailable && labAvailable
-    ? 'Diamonds: Natural or Lab Grown'
-    : naturalAvailable
-      ? 'Diamonds: Natural'
-      : 'Diamonds: Lab Grown';
-const naturalPriceLine = naturalAvailable ? `Natural price (USD): ${baseUsd}` : null;
-const labPriceLine = labAvailable ? `Lab price (USD): ${labUsd}` : null;
+const diamondLine = stoneTypes.length
+  ? `Diamonds: ${stoneTypes.join(' or ')}`
+  : 'Diamonds: None';
+const naturalPriceLine = naturalAvailable ? `Natural price (USD): ${baseUsdRounded}` : null;
+const labPriceLine = labAvailable ? `Lab price (USD): ${labUsdRounded}` : null;
 const mailtoBody = `I'm interested in ${product.name}\n\nDesign code: ${designCode}\n${groupLineLabel}: ${groupLabel}\nMetal: ${product.metal}\n${diamondLine}\n${[naturalPriceLine, labPriceLine].filter(Boolean).join('\n')}\nProduct link: ${productUrl}\n\nPlease confirm availability and share a secure invoice link.`;
 const mailtoHref = `mailto:${ordersEmail}?subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(mailtoBody)}`;
 
@@ -99,7 +126,7 @@ const offers = [
     ? [
         {
           '@type': 'Offer',
-          price: baseUsd,
+          price: baseUsdRounded,
           priceCurrency: 'USD',
           availability: 'https://schema.org/InStock'
         }
@@ -109,7 +136,7 @@ const offers = [
     ? [
         {
           '@type': 'Offer',
-          price: labUsd,
+          price: labUsdRounded,
           priceCurrency: 'USD',
           availability: 'https://schema.org/InStock'
         }
@@ -148,6 +175,8 @@ void jsonLdString;
             alt={product.name}
             class="block max-h-[70vh] w-auto max-w-full object-contain"
             loading="lazy"
+            decoding="async"
+            fetchpriority="high"
             data-product-image
             data-product-image-meta={JSON.stringify(imageMeta)}
             data-protected-image
@@ -190,6 +219,7 @@ void jsonLdString;
               class="text-xl font-semibold"
               data-price-usd-base={baseUsd}
               data-lab-discount={labDiscountPct}
+              data-platinum-premium={platinumPremiumPct}
               data-metal-14k-discount={metal14DiscountPct}
               data-metal-default="14k"
               data-diamond-default={diamondDefault}
@@ -204,6 +234,7 @@ void jsonLdString;
                 data-metal-label
                 data-metal-18={metal18Label}
                 data-metal-14={metal14Label}
+                data-metal-platinum={metalPlatinumLabel}
               >
                 {metal14Label}
               </span>
@@ -220,12 +251,18 @@ void jsonLdString;
                   role="tooltip"
                   class="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-60 -translate-x-1/2 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
                 >
-                  For daily wear, 14K offers added durability; for occasions, 18K gives richer color and presence.
+                  For daily wear, 14K offers added durability; 18K brings richer color, and platinum adds a bright, weighty finish.
                 </span>
               </span>
               <span aria-hidden="true">/</span>
               <span class="relative group inline-flex items-center gap-1">
-                <span data-diamond-label>{diamondDefaultLabel}</span>
+                <span
+                  data-diamond-label
+                  data-diamond-natural={naturalStoneLabel}
+                  data-diamond-lab={labStoneLabel}
+                >
+                  {diamondDefaultLabel}
+                </span>
                 <button
                   type="button"
                   class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
@@ -264,22 +301,23 @@ void jsonLdString;
           </div>
           {naturalAvailable && labAvailable ? (
             <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
-              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Diamonds</span>
-              <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="natural">Natural</button>
-              <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="lab">Lab Grown</button>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Stone Type</span>
+              <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="natural">{naturalStoneLabel}</button>
+              <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="lab">{labStoneLabel}</button>
             </div>
-          ) : (
+          ) : naturalAvailable || labAvailable ? (
             <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
-              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Diamonds</span>
+              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Stone Type</span>
               <span class="text-xs uppercase tracking-[0.18em] text-slate-500">
-                {naturalAvailable ? 'Natural' : 'Lab Grown'}
+                {naturalAvailable ? naturalStoneLabel : labStoneLabel}
               </span>
             </div>
-          )}
+          ) : null}
           <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
-            <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Gold</span>
-            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="18k">18K</button>
-            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="14k">14K</button>
+            <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Metal Type</span>
+            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="18k">{metal18Label}</button>
+            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="14k">{metal14Label}</button>
+            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="platinum">{metalPlatinumLabel}</button>
           </div>
         </div>
         <p class="text-sm leading-relaxed text-slate-600 whitespace-pre-line" data-product-description>
@@ -323,7 +361,7 @@ void jsonLdString;
         </form>
         <div class="border-t border-slate-200 pt-4 text-sm text-slate-500 space-y-2">
           <div class="text-xs uppercase tracking-[0.2em] text-slate-500">How checkout works</div>
-          <p>1) You request an invoice and confirm your preferred details.</p>
+          <p>1) You request a quote and confirm your preferred details.</p>
           <p>2) A concierge validates availability, sizing, and pricing.</p>
           <p>3) We email a secure payment link. Your piece is reserved once paid.</p>
         </div>
@@ -388,6 +426,7 @@ void jsonLdString;
       if (!priceEl) return;
       const baseUsd = Number(priceEl.dataset.priceUsdBase || 0);
       const labDiscount = Number(priceEl.dataset.labDiscount || -20);
+      const platinumPremium = Number(priceEl.dataset.platinumPremium || 10);
       const metal14Discount = Number(priceEl.dataset.metal14kDiscount || -5);
       const naturalAvailable = priceEl.dataset.naturalAvailable !== 'false';
       const labAvailable = priceEl.dataset.labAvailable !== 'false';
@@ -399,6 +438,12 @@ void jsonLdString;
       const metalLabel = document.querySelector('[data-metal-label]');
       const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
       const applyDiscount = (value, pct) => Math.round(value * (1 + pct / 100) * 100) / 100;
+      const roundTo99 = (value) => {
+        if (!Number.isFinite(value)) return value;
+        const lower = Math.floor(value / 100) * 100 + 99;
+        const upper = Math.ceil(value / 100) * 100 + 99;
+        return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
+      };
       const priceToggles = Array.from(document.querySelectorAll('[data-price-toggle]'));
       const apply = () => {
         let price = baseUsd;
@@ -408,7 +453,10 @@ void jsonLdString;
         if (metalMode === '14k') {
           price = applyDiscount(price, metal14Discount);
         }
-        priceEl.textContent = formatter.format(price);
+        if (metalMode === 'platinum') {
+          price = applyDiscount(price, platinumPremium);
+        }
+        priceEl.textContent = formatter.format(roundTo99(price));
         priceToggles.forEach((btn) => {
           btn.classList.toggle('bg-ink', btn.dataset.priceToggle === diamondMode);
           btn.classList.toggle('text-white', btn.dataset.priceToggle === diamondMode);
@@ -421,12 +469,18 @@ void jsonLdString;
           const label =
             metalMode === '14k'
               ? metalLabel.getAttribute('data-metal-14')
-              : metalLabel.getAttribute('data-metal-18');
+              : metalMode === 'platinum'
+                ? metalLabel.getAttribute('data-metal-platinum')
+                : metalLabel.getAttribute('data-metal-18');
           if (label) metalLabel.textContent = label;
         }
         const diamondLabel = document.querySelector('[data-diamond-label]');
         if (diamondLabel) {
-          diamondLabel.textContent = diamondMode === 'lab' ? 'Lab Grown' : 'Natural';
+          const label =
+            diamondMode === 'lab'
+              ? diamondLabel.getAttribute('data-diamond-lab')
+              : diamondLabel.getAttribute('data-diamond-natural');
+          if (label) diamondLabel.textContent = label;
         }
       };
       priceToggles.forEach((btn) => {

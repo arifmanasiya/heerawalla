@@ -20,6 +20,7 @@ const siteOrigin = Astro.site?.origin || 'https://heerawalla.com';
 const ogImage = image && image.startsWith('http') ? image : new URL(withBase(image || '/images/hero.png'), siteOrigin).toString();
 const logoImage = new URL(withBase('/images/engraving_mark.svg'), siteOrigin).toString();
 const url = new URL(Astro.url.pathname, siteOrigin).toString();
+const gaMeasurementId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID ?? '';
 const titleCase = (value: string) =>
   value
     .split(/[-_]/g)
@@ -108,6 +109,37 @@ void websiteJson;
     <link rel="shortcut icon" href={withBase('/images/engraving_mark.svg')} />
     <link rel="apple-touch-icon" href={withBase('/images/engraving_mark.svg')} />
     <link rel="mask-icon" href={withBase('/images/engraving_mark.svg')} color="#0B1928" />
+    {gaMeasurementId ? (
+      <>
+        <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}></script>
+        <script is:inline>
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${gaMeasurementId}');
+window.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const el = target.closest('[data-analytics-event]');
+  if (!el) return;
+  const eventName = el.getAttribute('data-analytics-event');
+  if (!eventName) return;
+  const label = el.getAttribute('data-analytics-label') || el.textContent?.trim() || '';
+  const location = el.getAttribute('data-analytics-location') || '';
+  const href = el instanceof HTMLAnchorElement ? el.href : el.getAttribute('href') || '';
+  if (typeof window.gtag === 'function') {
+    window.gtag('event', eventName, {
+      event_category: 'cta',
+      event_label: label,
+      cta_label: label,
+      cta_location: location,
+      link_url: href
+    });
+  }
+});`}
+        </script>
+      </>
+    ) : null}
     <script type="application/ld+json" is:inline>
       {organizationJson}
     </script>

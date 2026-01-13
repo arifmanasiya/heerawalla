@@ -2,7 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
-import { loadInspirations } from '../../lib/inspirations';
+import { loadInspirations, type Inspiration } from '../../lib/inspirations';
 import { withBase } from '../../lib/paths';
 
 const metaTitle = 'Inspirations | Heerawalla';
@@ -17,6 +17,55 @@ const genders = uniqueValues(inspirations.map((item) => item.genders)).sort();
 const styles = uniqueValues(inspirations.map((item) => item.styles)).sort();
 const motifs = uniqueValues(inspirations.map((item) => item.motifs)).sort();
 const metals = uniqueValues(inspirations.map((item) => item.metals)).sort();
+
+const usdFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0
+});
+
+const formatNumber = (value: number) => {
+  if (Number.isInteger(value)) return value.toString();
+  return value.toString();
+};
+const roundTo99 = (value: number) => {
+  if (!Number.isFinite(value)) return value;
+  const lower = Math.floor(value / 100) * 100 + 99;
+  const upper = Math.ceil(value / 100) * 100 + 99;
+  return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
+};
+
+const buildEstimateMeta = (item: Inspiration) => {
+  const price = item.estimatedPriceUsdVvs1Vvs2_18k
+    ? usdFormatter.format(roundTo99(item.estimatedPriceUsdVvs1Vvs2_18k))
+    : '';
+  const sections: Array<{ label: string; text?: string; items?: string[] }> = [];
+  const ariaParts: string[] = [];
+  const carat = item.stoneWeight ? formatNumber(item.stoneWeight) : '';
+  const diamondQualityText = carat
+    ? `${carat}ct TW, IGI-certified, excellent clarity (VVS1 or VVS2), excellent cut, color grade E or F`
+    : 'IGI-certified, excellent clarity (VVS1 or VVS2), excellent cut, color grade E or F';
+  if (item.stoneWeight || item.metalWeight) {
+    sections.push({ label: 'Diamond Quality', text: diamondQualityText });
+    ariaParts.push(`Diamond Quality. ${diamondQualityText}.`);
+    if (item.stoneTypes.length) {
+      sections.push({ label: 'Diamond Options', items: item.stoneTypes });
+      ariaParts.push(`Diamond Options. ${item.stoneTypes.join('; ')}.`);
+    }
+  }
+  if (item.metalWeight) {
+    const weight = formatNumber(item.metalWeight);
+    sections.push({ label: 'Metal Options', items: ['18K Gold', `Approx. metal weight: ${weight}g`] });
+    ariaParts.push(`Metal Options. 18K Gold; Approx. metal weight: ${weight}g.`);
+  }
+  if (price) {
+    const priceText = `Estimate: ${price}`;
+    sections.push({ label: 'Price Options', items: [priceText] });
+    ariaParts.push(`Price Options. ${priceText}.`);
+  }
+  const tooltip = sections.length ? { sections, ariaLabel: ariaParts.join(' ') } : null;
+  return { price, tooltip };
+};
 ---
 
 <BaseLayout title={metaTitle} description={metaDescription}>
@@ -147,43 +196,92 @@ const metals = uniqueValues(inspirations.map((item) => item.metals)).sort();
 
       <div class="space-y-6">
         <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3" data-inspiration-grid>
-          {inspirations.map((item) => (
-            <article
-              class="border border-slate-200 bg-white flex flex-col"
-              data-inspiration-card
-              data-categories={item.categories.join(',')}
-              data-genders={item.genders.join(',')}
-              data-styles={item.styles.join(',')}
-              data-motifs={item.motifs.join(',')}
-              data-metals={item.metals.join(',')}
-            >
-              <a href={withBase(`/inspirations/${item.slug}`)} class="block">
-                <div class="aspect-[3/4] w-full overflow-hidden bg-white">
-                  <img
-                    src={withBase(item.heroImage)}
-                    alt={`${item.title} inspiration`}
-                    class="h-full w-full object-cover"
-                    loading="lazy"
-                  />
+          {inspirations.map((item) => {
+            const estimate = buildEstimateMeta(item);
+            return (
+              <article
+                class="border border-slate-200 bg-white flex flex-col"
+                data-inspiration-card
+                data-categories={item.categories.join(',')}
+                data-genders={item.genders.join(',')}
+                data-styles={item.styles.join(',')}
+                data-motifs={item.motifs.join(',')}
+                data-metals={item.metals.join(',')}
+              >
+                <a href={withBase(`/inspirations/${item.slug}`)} class="block">
+                  <div class="aspect-[3/4] w-full overflow-hidden bg-white">
+                    <img
+                      src={withBase(item.heroImage)}
+                      alt={`${item.title} inspiration`}
+                      loading="lazy"
+                      decoding="async"
+                      fetchpriority="low"
+                      sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                      class="h-full w-full object-cover"
+                    />
+                  </div>
+                </a>
+                <div class="flex-1 p-4 space-y-3">
+                  <div class="space-y-1">
+                    <div class="flex items-start justify-between gap-3">
+                      <h2 class="text-lg font-semibold tracking-tight">{item.title}</h2>
+                      {estimate.price ? (
+                        <span class="flex items-center gap-2">
+                          <span class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap">
+                            {estimate.price}
+                          </span>
+                          {estimate.tooltip ? (
+                            <button
+                              type="button"
+                              class="estimate-info"
+                              aria-label={estimate.tooltip.ariaLabel}
+                            >
+                              i
+                              <span class="estimate-tooltip" role="tooltip">
+                                {estimate.tooltip.sections.map((section) => (
+                                  <span class="estimate-tooltip__section">
+                                    <span class="estimate-tooltip__label">{section.label}</span>
+                                    {section.text ? (
+                                      <span class="estimate-tooltip__text">{section.text}</span>
+                                    ) : null}
+                                    {section.items?.length ? (
+                                      <span class="estimate-tooltip__list">
+                                        {section.items.map((item) => (
+                                          <span class="estimate-tooltip__item">{item}</span>
+                                        ))}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ))}
+                              </span>
+                            </button>
+                          ) : null}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p class="text-sm text-slate-500">{item.shortDesc}</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                    {item.tags.slice(0, 3).map((tag) => (
+                      <span class="border border-slate-200 px-2 py-1">{tag}</span>
+                    ))}
+                  </div>
                 </div>
-              </a>
-              <div class="flex-1 p-4 space-y-3">
-                <div class="space-y-1">
-                  <h2 class="text-lg font-semibold tracking-tight">{item.title}</h2>
-                  <p class="text-sm text-slate-500">{item.shortDesc}</p>
+                <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs uppercase tracking-[0.2em] text-slate-500">
+                  <a href={withBase(`/inspirations/${item.slug}`)} class="hover:text-ink">View</a>
+                  <a
+                    href={withBase(`/inspirations/${item.slug}/bespoke`)}
+                    class="hover:text-ink"
+                    data-analytics-event="cta_click"
+                    data-analytics-label="Request Bespoke"
+                    data-analytics-location="inspiration-grid"
+                  >
+                    Request bespoke
+                  </a>
                 </div>
-                <div class="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                  {item.tags.slice(0, 3).map((tag) => (
-                    <span class="border border-slate-200 px-2 py-1">{tag}</span>
-                  ))}
-                </div>
-              </div>
-              <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs uppercase tracking-[0.2em] text-slate-500">
-                <a href={withBase(`/inspirations/${item.slug}`)} class="hover:text-ink">View</a>
-                <a href={withBase(`/inspirations/${item.slug}/bespoke`)} class="hover:text-ink">Request bespoke</a>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
         <p class="text-sm text-slate-500 hidden" data-inspiration-empty>
           No inspirations match your filters. Clear the filters to start again.

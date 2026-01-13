@@ -67,6 +67,7 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
                   class="hero-media__slide-image"
                   loading={isHero ? 'eager' : 'lazy'}
                   decoding="async"
+                  fetchpriority={isHero ? 'high' : 'low'}
                   aria-hidden={isHero ? undefined : 'true'}
                 />
               </div>
@@ -85,12 +86,18 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
             <a
               class="inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto"
               href={withBase('/mens-jewelry')}
+              data-analytics-event="cta_click"
+              data-analytics-label="Shop Men"
+              data-analytics-location="hero"
             >
               Shop Men
             </a>
             <a
               class="inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto"
               href={withBase('/womens-jewelry')}
+              data-analytics-event="cta_click"
+              data-analytics-label="Shop Women"
+              data-analytics-location="hero"
             >
               Shop Women
             </a>
@@ -244,7 +251,7 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
       :global(.scroll-arrow--dark) {
         position: static;
         transform: none;
-        display: grid;
+        display: none;
         border-color: rgba(11, 25, 40, 0.25);
         color: rgba(11, 25, 40, 0.75);
         background: rgba(255, 255, 255, 0.7);
@@ -259,6 +266,9 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
       }
       @media (min-width: 640px) {
         :global(.scroll-arrow--light) {
+          display: grid;
+        }
+        :global(.scroll-arrow--dark) {
           display: grid;
         }
       }
@@ -381,12 +391,18 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
                 <a
                   class="inline-flex w-full items-center justify-center min-h-[44px] px-5 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto sm:flex-1"
                   href={withBase('/inspirations')}
+                  data-analytics-event="cta_click"
+                  data-analytics-label="Explore Inspirations"
+                  data-analytics-location="customization"
                 >
                   Explore inspirations
                 </a>
                 <a
                   class="inline-flex w-full items-center justify-center min-h-[44px] px-5 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto sm:flex-1"
                   href={withBase('/inspirations/spiral-continuum/bespoke?direct=1')}
+                  data-analytics-event="cta_click"
+                  data-analytics-label="Begin Bespoke Order"
+                  data-analytics-location="customization"
                 >
                   Begin bespoke order
                 </a>
@@ -404,6 +420,9 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
                 src={withBase(primaryInspiration.heroImage)}
                 alt={primaryInspiration.title}
                 loading="lazy"
+                decoding="async"
+                fetchpriority="low"
+                sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                 class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
               />
               <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 via-black/0 to-transparent px-4 py-3 text-xs uppercase tracking-[0.2em] text-white">
@@ -421,6 +440,9 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
                   src={withBase(item.heroImage)}
                   alt={item.title}
                   loading="lazy"
+                  decoding="async"
+                  fetchpriority="low"
+                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                   class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
                 />
                 <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 via-black/0 to-transparent px-4 py-3 text-xs uppercase tracking-[0.2em] text-white">
@@ -467,12 +489,23 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
           <a
             class="inline-flex w-full items-center justify-center min-h-[44px] px-5 py-3 text-sm uppercase tracking-[0.2em] text-ink border border-ink/20 rounded-none hover:border-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto sm:self-end"
             href={withBase('/contact?intent=consultation')}
+            data-analytics-event="cta_click"
+            data-analytics-label="Book a private consultation"
+            data-analytics-location="atelier"
           >
             Book a private consultation
           </a>
         </div>
         <div class="relative aspect-[3/4] overflow-hidden border border-slate-200">
-          <img src={withBase('/images/atelier.png')} alt="Atelier detail" class="h-full w-full object-cover" loading="lazy" />
+          <img
+            src={withBase('/images/atelier.png')}
+            alt="Atelier detail"
+            class="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
+            fetchpriority="low"
+            sizes="(min-width: 1024px) 40vw, (min-width: 640px) 80vw, 100vw"
+          />
           <div class="absolute inset-3 border border-white/70 pointer-events-none"></div>
         </div>
       </div>

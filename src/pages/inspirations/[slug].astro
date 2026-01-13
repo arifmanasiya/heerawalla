@@ -16,6 +16,51 @@ export async function getStaticPaths() {
 const { item } = Astro.props as { item: Inspiration };
 const metaTitle = `${item.title} | Inspirations | Heerawalla`;
 const metaDescription = item.shortDesc;
+
+const usdFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0
+});
+
+const formatNumber = (value: number) => {
+  if (Number.isInteger(value)) return value.toString();
+  return value.toString();
+};
+const roundTo99 = (value: number) => {
+  if (!Number.isFinite(value)) return value;
+  const lower = Math.floor(value / 100) * 100 + 99;
+  const upper = Math.ceil(value / 100) * 100 + 99;
+  return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
+};
+
+const buildEstimateDetails = (inspiration: Inspiration) => {
+  const details: Array<{ label: string; value: string }> = [];
+  if (inspiration.estimatedPriceUsdVvs1Vvs2_18k) {
+    details.push({
+      label: 'Est. price',
+      value: usdFormatter.format(roundTo99(inspiration.estimatedPriceUsdVvs1Vvs2_18k))
+    });
+  }
+  if (inspiration.stoneWeight) {
+    const stoneOptions = inspiration.stoneTypes.length
+      ? ` (${inspiration.stoneTypes.join(' / ')})`
+      : '';
+    details.push({
+      label: 'Stone',
+      value: `${formatNumber(inspiration.stoneWeight)}ct TW${stoneOptions}`
+    });
+  }
+  if (inspiration.metalWeight) {
+    details.push({
+      label: 'Metal',
+      value: `${formatNumber(inspiration.metalWeight)}g 18K`
+    });
+  }
+  return details;
+};
+
+const estimateDetails = buildEstimateDetails(item);
 ---
 
 <BaseLayout title={metaTitle} description={metaDescription}>
@@ -37,16 +82,30 @@ const metaDescription = item.shortDesc;
             <span class="border border-slate-200 px-2 py-1">{tag}</span>
           ))}
         </div>
+        {estimateDetails.length ? (
+          <div class="space-y-2 pt-2">
+            <p class="text-[10px] uppercase tracking-[0.28em] text-slate-400">
+              Estimate
+            </p>
+            <div class="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              {estimateDetails.map((detail) => (
+                <span class="border border-slate-200 px-2 py-1">
+                  {detail.label}: {detail.value}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div class="flex flex-wrap gap-3 pt-2">
           <a
             href={withBase(`/inspirations/${item.slug}/bespoke`)}
             class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 bg-ink text-white text-xs uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            data-analytics-event="cta_click"
+            data-analytics-label="Request Quote"
+            data-analytics-location="inspiration-detail"
           >
             Request Quote
           </a>
-          <span class="text-xs uppercase tracking-[0.18em] text-slate-500 self-center">
-            Email-only bespoke
-          </span>
         </div>
       </div>
       <div class="border border-slate-200 bg-white overflow-hidden">
@@ -55,6 +114,8 @@ const metaDescription = item.shortDesc;
           alt={`${item.title} inspiration`}
           class="w-full h-full object-cover"
           loading="lazy"
+          decoding="async"
+          fetchpriority="high"
         />
       </div>
     </section>
@@ -95,6 +156,9 @@ const metaDescription = item.shortDesc;
       <a
         href={withBase(`/inspirations/${item.slug}/bespoke`)}
         class="text-xs uppercase tracking-[0.2em] text-slate-500 hover:text-ink"
+        data-analytics-event="cta_click"
+        data-analytics-label="Request Bespoke"
+        data-analytics-location="inspiration-detail"
       >
         Request bespoke
       </a>

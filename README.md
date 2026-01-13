@@ -20,16 +20,22 @@ This is an inspirational jewelry catalog for **heerawalla.com**, built with Astr
 - Future-ready integration layer (`src/lib/apiClient.ts`) for orders, checkout, and lead capture.
 
 ## Data shape
-### Products CSVs (required columns)
-Use multiple files, one per subcategory, named `products-*.csv` in `/data` (e.g., `products-men-bands.csv`, `products-women-rings.csv`).
+### Shared catalog CSV format (Products + Inspirations)
+Products and inspirations use the **same header list** so a single sheet template can feed both.
+Leave unused columns blank for a given row type.
 
 Required columns per file:
-`id, name, slug, description, collection, category, metal, price_usd_natural, lab_discount_pct, metal_14k_discount_pct, is_active, is_featured, tags`
+`id, name, slug, description, short_desc, long_desc, hero_image, collection, categories, gender, styles, motifs, metals, stone_types, stone_weight, metal_weight, palette, takeaways, translation_notes, design_code, cut, clarity, color, carat, price_usd_natural, estimated_price_usd_vvs1_vvs2_18k, lab_discount_pct, metal_platinum_premium, metal_14k_discount_pct, is_active, is_featured, tags`
 
+- Products: use `categories` (single path like `women/rings`), `collection`, `design_code`, `metals` (primary metal label), `stone_types` (pipe-separated), stone/metal weights, pricing, and availability fields.
+- Inspirations: use `short_desc`, `long_desc`, `hero_image`, `categories`, `gender`, `styles`, `motifs`, `metals`, `palette`, `takeaways`, and estimate fields.
 - Only rows with `is_active = TRUE` are shown. `is_featured = TRUE` drives the featured section.
-- `category` should match your folder path under `public/images/products`, e.g., `women/rings` or `men/bands`.
+- `categories` should match your folder path under `public/images/products` for product rows, e.g., `women/rings` or `men/bands`.
 - `price_usd_natural` is the 18K/Natural base price.
-- `lab_discount_pct` and `metal_14k_discount_pct` are percentage adjustments (negative values reduce price).
+- `stone_types` controls availability. Leave blank to hide stone options (use `|` to separate). Example: `Natural Diamond | Lab Grown Diamond`.
+- `stone_weight` is total stone weight (ct). `metal_weight` is grams.
+- `lab_discount_pct` and `metal_14k_discount_pct` are percentage adjustments (negative reduces).
+- `metal_platinum_premium` is a percentage premium (default 10).
 
 ### Site Config CSV (required columns)
 `key, value`
@@ -40,8 +46,12 @@ Sample files live in `/data/products.sample.csv`, `/data/products-men-bands.csv`
 Optional keys: `orders_email` (used for product inquiry mailto).
 
 ## CSV data
-- Products: add CSVs named `products-*.csv` in `/data` (one per subcategory). Columns described above.
+- Products: use a single `/data/products-all.csv` (recommended) or split into multiple `products-*.csv` files.
 - Site config: edit `/data/site_config.sample.csv` or provide your own CSV in `/data`.
+- Inspirations: edit `/data/inspirations.csv` for inspirations pages and bespoke prompts.
+
+### Inspirations CSV (required columns)
+See the shared catalog format above. For inspirations, `name` replaces the old `title` column.
 
 ## Local development
 ```bash
@@ -54,6 +64,15 @@ npm run dev
 npm run build
 ```
 Build will fail if required CSV columns are missing or data is invalid.
+
+## CSV source mode (local vs Google Sheets)
+By default, the build reads local CSVs in `/data`. To switch to Google Sheets exports, set:
+- `CSV_SOURCE=remote`
+- `PRODUCTS_CSV_URL` (single CSV) or `PRODUCTS_CSV_URLS` (comma-separated list)
+- `INSPIRATIONS_CSV_URL`
+- `SITE_CONFIG_CSV_URL`
+
+If `CSV_SOURCE` is not `remote`, local CSVs are used even if URLs are set.
 
 ## Deploy (GitHub Pages)
 - Workflow: `.github/workflows/deploy.yml`

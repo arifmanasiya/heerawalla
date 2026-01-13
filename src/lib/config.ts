@@ -1,13 +1,19 @@
 import { parse } from 'csv-parse/sync';
 import path from 'node:path';
-import { fetchCsv } from './csvFetch';
+import { fetchCsv, getCsvSourceMode, getEnv } from './csvFetch';
 import { requiredConfigColumns, siteConfigSchema, type SiteConfig } from './schema';
 
 const SAMPLE_CONFIG = path.resolve('data/site_config.sample.csv');
 
 export async function loadSiteConfig(): Promise<SiteConfig> {
-  const url = process.env.SITE_CONFIG_CSV_URL;
-  const csv = await fetchCsv(url || SAMPLE_CONFIG, SAMPLE_CONFIG);
+  const mode = getCsvSourceMode();
+  const url = (getEnv('SITE_CONFIG_CSV_URL') || '').trim();
+  if (mode === 'remote' && !url) {
+    throw new Error('SITE_CONFIG_CSV_URL is required when CSV_SOURCE=remote.');
+  }
+  const source = mode === 'remote' ? url : SAMPLE_CONFIG;
+  const fallback = SAMPLE_CONFIG;
+  const csv = await fetchCsv(source, fallback);
   const records = parse(csv, {
     columns: true,
     skip_empty_lines: true,

@@ -1,6 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import path from 'node:path';
-import { fetchCsv } from './csvFetch';
+import { fetchCsv, getCsvSourceMode, getEnv } from './csvFetch';
+import { sharedCatalogColumns } from './catalogColumns';
 
 export type InspirationPaletteItem = {
   label: string;
@@ -14,6 +15,10 @@ export type Inspiration = {
   heroImage: string;
   shortDesc: string;
   longDesc: string;
+  estimatedPriceUsdVvs1Vvs2_18k?: number;
+  stoneTypes: string[];
+  stoneWeight?: number;
+  metalWeight?: number;
   tags: string[];
   categories: string[];
   genders: string[];
@@ -30,23 +35,7 @@ export const INSPIRATION_DISCLAIMER =
 
 const DATA_FILE = path.resolve('data/inspirations.csv');
 
-const requiredColumns = [
-  'id',
-  'title',
-  'slug',
-  'hero_image',
-  'short_desc',
-  'long_desc',
-  'tags',
-  'categories',
-  'gender',
-  'styles',
-  'motifs',
-  'metals',
-  'palette',
-  'takeaways',
-  'translation_notes'
-] as const;
+const requiredColumns = sharedCatalogColumns;
 
 const parseList = (value?: string) => {
   if (!value) return [];
@@ -65,8 +54,32 @@ const parsePalette = (value?: string): InspirationPaletteItem[] => {
   });
 };
 
+const parseNumber = (value?: string): number | undefined => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const normalizeStoneType = (value: string) =>
+  value
+    .replace(/diamond\(s\)/gi, 'Diamond')
+    .replace(/diamonds?\b/gi, 'Diamond')
+    .replace(/\s+/g, ' ')
+    .trim();
+const parseStoneTypes = (value?: string) =>
+  parseList(value).map(normalizeStoneType).filter(Boolean);
+
 export async function loadInspirations(): Promise<Inspiration[]> {
-  const csv = await fetchCsv(DATA_FILE, DATA_FILE);
+  const mode = getCsvSourceMode();
+  const url = (getEnv('INSPIRATIONS_CSV_URL') || '').trim();
+  if (mode === 'remote' && !url) {
+    throw new Error('INSPIRATIONS_CSV_URL is required when CSV_SOURCE=remote.');
+  }
+  const source = mode === 'remote' ? url : DATA_FILE;
+  const fallback = DATA_FILE;
+  const csv = await fetchCsv(source, fallback);
   const records = parse(csv, {
     columns: true,
     skip_empty_lines: true,
@@ -84,11 +97,15 @@ export async function loadInspirations(): Promise<Inspiration[]> {
 
   return records.map((row) => ({
     id: row.id,
-    title: row.title,
+    title: row.name,
     slug: row.slug,
     heroImage: row.hero_image,
     shortDesc: row.short_desc,
     longDesc: row.long_desc,
+    estimatedPriceUsdVvs1Vvs2_18k: parseNumber(row.estimated_price_usd_vvs1_vvs2_18k),
+    stoneTypes: parseStoneTypes(row.stone_types),
+    stoneWeight: parseNumber(row.stone_weight),
+    metalWeight: parseNumber(row.metal_weight),
     tags: parseList(row.tags),
     categories: parseList(row.categories),
     genders: parseList(row.gender),

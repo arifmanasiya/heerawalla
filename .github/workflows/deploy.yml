@@ -30,7 +30,10 @@ jobs:
       - name: Build
         env:
           PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.PUBLIC_TURNSTILE_SITE_KEY }}
+          CSV_SOURCE: ${{ vars.CSV_SOURCE || 'local' }}
           PRODUCTS_CSV_URL: ${{ vars.PRODUCTS_CSV_URL }}
+          PRODUCTS_CSV_URLS: ${{ vars.PRODUCTS_CSV_URLS }}
+          INSPIRATIONS_CSV_URL: ${{ vars.INSPIRATIONS_CSV_URL }}
           SITE_CONFIG_CSV_URL: ${{ vars.SITE_CONFIG_CSV_URL }}
           BASE_PATH: ${{ vars.BASE_PATH }}
           SITE: ${{ vars.SITE }}

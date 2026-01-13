@@ -1,7 +1,7 @@
 import { parse } from 'csv-parse/sync';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fetchCsv } from './csvFetch';
+import { fetchCsv, getCsvSourceMode, getEnv, parseCsvSources } from './csvFetch';
 import { productSchema, requiredProductColumns, type Product, type ProductInput } from './schema';
 import { getMediaForProduct, type MediaCollection } from './media';
 
@@ -34,15 +34,33 @@ function toOptionalBoolean(value: string | undefined): boolean | undefined {
   return ['true', '1', 'yes', 'y'].includes(trimmed.toLowerCase());
 }
 
-async function readProductCSVs(): Promise<string[]> {
+function toOptionalFirstListItem(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const first = value.split('|')[0];
+  const trimmed = first.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+async function readLocalProductCSVs(): Promise<string[]> {
   const entries = await fs.readdir(DATA_DIR);
   const matches = entries.filter((file) => file.startsWith('products-') && file.endsWith('.csv'));
   if (matches.length === 0) return [SAMPLE_PRODUCTS];
   return matches.map((f) => path.join(DATA_DIR, f));
 }
 
-async function loadCsvFile(filePath: string): Promise<Product[]> {
-  const csv = await fetchCsv(filePath, filePath);
+async function getLocalProductFallback(): Promise<string> {
+  const preferred = path.resolve('data/products-all.csv');
+  try {
+    await fs.access(preferred);
+    return preferred;
+  } catch {
+    const files = await readLocalProductCSVs();
+    return files[0];
+  }
+}
+
+async function loadCsvFile(source: string, fallbackFile?: string): Promise<Product[]> {
+  const csv = await fetchCsv(source, fallbackFile);
   const records = parse(csv, {
     columns: true,
     skip_empty_lines: true,
@@ -55,7 +73,7 @@ async function loadCsvFile(filePath: string): Promise<Product[]> {
   const cols = Object.keys(records[0]);
   for (const col of requiredProductColumns) {
     if (!cols.includes(col)) {
-      throw new Error(`Products CSV missing required column: ${col} in ${filePath}`);
+      throw new Error(`Products CSV missing required column: ${col} in ${source}`);
     }
   }
 
@@ -67,18 +85,20 @@ async function loadCsvFile(filePath: string): Promise<Product[]> {
         slug: row.slug,
         description: row.description,
         collection: row.collection,
-        category: row.category,
+        category: toOptionalFirstListItem(row.categories) || row.categories || row.category,
         design_code: row.design_code,
-        metal: row.metal,
+        metal: toOptionalFirstListItem(row.metals) || row.metals || row.metal,
+        stone_types: toOptionalString(row.stone_types),
+        stone_weight: toOptionalNumber(row.stone_weight),
+        metal_weight: toOptionalNumber(row.metal_weight),
         cut: toOptionalString(row.cut),
         clarity: toOptionalString(row.clarity),
         color: toOptionalString(row.color),
         carat: row.carat ? Number(row.carat) : undefined,
         price_usd_natural: Number(row.price_usd_natural),
         lab_discount_pct: toOptionalNumber(row.lab_discount_pct),
+        metal_platinum_premium: toOptionalNumber(row.metal_platinum_premium),
         metal_14k_discount_pct: toOptionalNumber(row.metal_14k_discount_pct),
-        natural_available: toOptionalBoolean(row.natural_available),
-        lab_available: toOptionalBoolean(row.lab_available),
         is_active: toBoolean(row.is_active),
         is_featured: toBoolean(row.is_featured),
         tags: row.tags
@@ -91,9 +111,26 @@ async function loadCsvFile(filePath: string): Promise<Product[]> {
 }
 
 export async function loadProducts(): Promise<Product[]> {
-  const files = await readProductCSVs();
-  const results = await Promise.all(files.map((f) => loadCsvFile(f)));
+  const sources = await readProductSources();
+  const results = await Promise.all(
+    sources.map((entry) => loadCsvFile(entry.source, entry.fallback))
+  );
   return results.flat();
+}
+
+async function readProductSources(): Promise<Array<{ source: string; fallback?: string }>> {
+  const mode = getCsvSourceMode();
+  if (mode === 'remote') {
+    const urls = parseCsvSources(getEnv('PRODUCTS_CSV_URLS') || getEnv('PRODUCTS_CSV_URL'));
+    if (!urls.length) {
+      throw new Error('PRODUCTS_CSV_URL or PRODUCTS_CSV_URLS is required when CSV_SOURCE=remote.');
+    }
+    const fallback = urls.length === 1 ? await getLocalProductFallback() : undefined;
+    return urls.map((source) => ({ source, fallback }));
+  }
+
+  const files = await readLocalProductCSVs();
+  return files.map((source) => ({ source, fallback: source }));
 }
 
 export async function loadProductBySlug(slug: string): Promise<Product | undefined> {
