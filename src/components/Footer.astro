@@ -133,7 +133,7 @@ const joinInterests = [
       if (submitButton) submitButton.setAttribute('disabled', 'true');
       setStatus('Submitting...');
       try {
-        const response = await fetch(`${apiBase.replace(/\\/$/, '')}/subscribe`, {
+        const response = await fetch(`${apiBase.replace(/\/$/, '')}/subscribe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
