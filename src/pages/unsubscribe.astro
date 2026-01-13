@@ -98,7 +98,7 @@ const atelierApiBase = getConfigValue(
       if (submitButton) submitButton.setAttribute('disabled', 'true');
       setStatus('Updating...');
       try {
-        const response = await fetch(`${apiBase.replace(/\\/$/, '')}/unsubscribe`, {
+        const response = await fetch(`${apiBase.replace(/\/$/, '')}/unsubscribe`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
