@@ -116,7 +116,8 @@ void websiteJson;
           {`window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
-gtag('config', '${gaMeasurementId}');
+const isDebug = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+gtag('config', '${gaMeasurementId}', isDebug ? { debug_mode: true } : undefined);
 window.addEventListener('click', (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
