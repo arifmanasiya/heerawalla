@@ -5,14 +5,22 @@ import Footer from '../components/Footer.astro';
 import { loadSiteConfig, getConfigValue } from '../lib/config';
 
 const config = await loadSiteConfig();
-const contactEmail = getConfigValue(config, 'contact_email', 'support@heerawalla.com');
-const webmailComposeBase = getConfigValue(config, 'webmail_compose_url', 'https://mail.google.com/mail/?view=cm&fs=1&to=');
 const consultationBookingLink = getConfigValue(
   config,
   'consultation_booking_link',
   'https://calendar.app.google/sJE4L6jMtc98ASF76'
 );
-const mailtoHref = `mailto:${contactEmail}`;
+const calendarApiBase = getConfigValue(
+  config,
+  'calendar_api_base',
+  'https://herawalla-email-atelier.arifmanasiya.workers.dev/calendar'
+);
+const atelierApiBase = getConfigValue(
+  config,
+  'atelier_api_base',
+  calendarApiBase.replace(/\/calendar\/?$/, '')
+);
+const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'free');
 ---
 
 <BaseLayout title="Contact | Heerawalla" description="Reach Heerawalla client care for bespoke projects or purchase inquiries.">
@@ -31,13 +39,7 @@ const mailtoHref = `mailto:${contactEmail}`;
       </p>
     </div>
 
-    <form
-      class="card p-6 space-y-4"
-      action={mailtoHref}
-      method="post"
-      enctype="text/plain"
-      data-contact-form
-    >
+    <form class="card p-6 space-y-4" action="#" method="post" data-contact-form>
       <div class="grid gap-4 md:grid-cols-2">
         <label class="text-sm space-y-1">
           <span class="text-slate-600">Name</span>
@@ -47,64 +49,104 @@ const mailtoHref = `mailto:${contactEmail}`;
           <span class="text-slate-600">Email</span>
           <input required type="email" name="email" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
         </label>
+        <label class="text-sm space-y-1">
+          <span class="text-slate-600">Phone</span>
+          <input
+            type="tel"
+            name="phone"
+            inputmode="tel"
+            placeholder="+1 312 555 0198"
+            class="w-full rounded-lg border border-slate-200 px-3 py-2"
+            data-phone-input
+          />
+        </label>
+        <div class="text-sm space-y-1">
+          <span class="text-slate-600">Consultation preference</span>
+          <div class="flex flex-col gap-2 text-sm text-slate-600">
+            <label class="flex items-center gap-2">
+              <input
+                type="radio"
+                class="h-4 w-4"
+                name="contact_preference"
+                value="meet"
+                data-contact-preference
+                checked
+              />
+              Video conference bridge (Google Meet)
+            </label>
+            <label class="flex items-center gap-2">
+              <input
+                type="radio"
+                class="h-4 w-4"
+                name="contact_preference"
+                value="phone"
+                data-contact-preference
+              />
+              Phone call
+            </label>
+          </div>
+        </div>
       </div>
       <label class="text-sm space-y-1">
         <span class="text-slate-600">Message</span>
         <textarea required name="message" rows="5" class="w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
       </label>
-      <div class="border border-slate-200 p-2" data-consultation-block data-booking-link={consultationBookingLink}>
-        <iframe
-          src={consultationBookingLink}
-          title="Heerawalla consultation booking"
-          width="100%"
-          height="640"
-          frameborder="0"
-          style="border:0"
-          loading="lazy"
-        ></iframe>
+      <div
+        class="grid gap-3 lg:grid-cols-[1.4fr_1fr]"
+        data-consultation-block
+        data-booking-link={consultationBookingLink}
+        data-calendar-api={calendarApiBase}
+        data-atelier-api={atelierApiBase}
+      >
+        <div class="border border-slate-200 p-4">
+          <div class="flex items-center justify-between text-sm text-slate-600">
+            <button type="button" class="px-2 py-1 hover:text-ink" data-cal-prev>Prev</button>
+            <span class="text-xs uppercase tracking-[0.2em] text-slate-500" data-cal-label></span>
+            <button type="button" class="px-2 py-1 hover:text-ink" data-cal-next>Next</button>
+          </div>
+          <div class="mt-4 grid grid-cols-7 gap-1 text-[10px] uppercase tracking-[0.2em] text-slate-500">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+          <div class="mt-2 grid grid-cols-7 gap-1" data-cal-grid></div>
+          <p class="mt-3 text-xs text-slate-500">
+            30-minute slots, Mon-Fri, 10:00am-12:00pm and 3:00pm-5:00pm CST. Bookings open 24 hours ahead.
+          </p>
+        </div>
+        <div class="border border-slate-200 p-4">
+          <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Available times (CST)</div>
+          <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3" data-time-grid></div>
+          <p
+            class="mt-3 text-xs text-slate-500"
+            data-consultation-fee
+            data-fee-mode={consultationFeeMode}
+            data-free-copy="Your first consultation is complimentary. We confirm details by email and reserve the slot for you."
+            data-fee-copy="Consultations are confirmed with a $50 booking fee. We send a secure payment link to your request email, and the fee is fully credited toward your final invoice with an order."
+          >
+            Your first consultation is complimentary. We confirm details by email and reserve the slot for you.
+          </p>
+        </div>
       </div>
-      <input type="hidden" name="consultation" data-consultation-hidden />
+      <p class="text-sm text-slate-500 hidden" data-calendar-status></p>
+      <div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 p-4" data-confirm-modal>
+        <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Existing appointment</p>
+          <h2 class="mt-2 text-lg font-semibold text-slate-900">Replace your current booking?</h2>
+          <p class="mt-3 text-sm text-slate-600" data-confirm-message></p>
+          <div class="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button type="button" class="btn btn-ghost" data-confirm-keep>Keep current</button>
+            <button type="button" class="btn btn-primary" data-confirm-cancel>
+              Cancel existing & book new
+            </button>
+          </div>
+        </div>
+      </div>
       <div class="flex gap-3">
-        <div
-          class="relative"
-          data-mail-picker
-          data-email={contactEmail}
-          data-gmail-base={webmailComposeBase}
-          data-mail-source="form"
-          data-consultation-cta
-        >
-          <button type="submit" class="btn btn-primary" data-mail-trigger>
-            Request consultation
-          </button>
-          <div
-            class="absolute left-0 top-full z-20 mt-2 w-48 border border-slate-200 bg-white shadow-md hidden"
-            data-mail-menu
-            role="menu"
-          >
-            <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="gmail" role="menuitem">Gmail</button>
-            <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="outlook" role="menuitem">Outlook</button>
-            <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="mailto" role="menuitem">Mail app</button>
-          </div>
-        </div>
-        <div
-          class="relative"
-          data-mail-picker
-          data-email={contactEmail}
-          data-gmail-base={webmailComposeBase}
-          data-subject="Heerawalla inquiry"
-          data-body=""
-        >
-          <a class="btn btn-ghost" href={mailtoHref} data-mail-trigger>Email directly</a>
-          <div
-            class="absolute left-0 top-full z-20 mt-2 w-48 border border-slate-200 bg-white shadow-md hidden"
-            data-mail-menu
-            role="menu"
-          >
-            <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="gmail" role="menuitem">Gmail</button>
-            <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="outlook" role="menuitem">Outlook</button>
-            <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="mailto" role="menuitem">Mail app</button>
-          </div>
-        </div>
+        <button type="submit" class="btn btn-primary" data-calendar-submit data-consultation-cta disabled>
+          Book consultation
+        </button>
+        <button type="submit" class="btn btn-ghost" data-contact-submit disabled>
+          Send
+        </button>
       </div>
       <p class="text-sm text-slate-500" data-contact-response-note>
         Prefer a complimentary email request? We reply to all messages within 24 to 48 hours.
@@ -114,34 +156,649 @@ const mailtoHref = `mailto:${contactEmail}`;
   <Footer />
 
   <script is:inline>
-    (() => {
+    (async () => {
       const block = document.querySelector('[data-consultation-block]');
-      const hidden = document.querySelector('[data-consultation-hidden]');
-      if (!block || !hidden) return;
+      const grid = document.querySelector('[data-cal-grid]');
+      const label = document.querySelector('[data-cal-label]');
+      const prevBtn = document.querySelector('[data-cal-prev]');
+      const nextBtn = document.querySelector('[data-cal-next]');
+      const timeGrid = document.querySelector('[data-time-grid]');
+      const status = document.querySelector('[data-calendar-status]');
+      const form = document.querySelector('[data-contact-form]');
+      const confirmModal = document.querySelector('[data-confirm-modal]');
+      const confirmMessage = document.querySelector('[data-confirm-message]');
+      const confirmCancel = document.querySelector('[data-confirm-cancel]');
+      const confirmKeep = document.querySelector('[data-confirm-keep]');
+      if (!block || !grid || !label || !prevBtn || !nextBtn || !timeGrid || !form) return;
       const params = new URLSearchParams(window.location.search);
       const isConsult = params.get('intent') === 'consultation';
       const consultCta = document.querySelector('[data-consultation-cta]');
       const responseNote = document.querySelector('[data-contact-response-note]');
       const intro = document.querySelector('[data-contact-intro]');
-      const bookingLink = block.getAttribute('data-booking-link') || '';
+      const calendarApiBase = block.getAttribute('data-calendar-api') || '';
+      const atelierApiBase = block.getAttribute('data-atelier-api') || calendarApiBase.replace(/\/calendar\/?$/, '');
+      const submitButton = form.querySelector('[data-calendar-submit]');
+      const contactButton = form.querySelector('[data-contact-submit]');
+      const nameInput = form.querySelector('[name="name"]');
+      const emailInput = form.querySelector('[name="email"]');
+      const messageInput = form.querySelector('[name="message"]');
+      const phoneInput = form.querySelector('[data-phone-input]');
+      const contactPreferenceInputs = form.querySelectorAll('[data-contact-preference]');
+      const feeNote = block.querySelector('[data-consultation-fee]');
       if (!isConsult) {
         block.classList.add('hidden');
-        hidden.value = '';
+        if (submitButton) submitButton.classList.add('hidden');
+        if (contactButton) contactButton.classList.remove('hidden');
         if (consultCta) consultCta.classList.add('hidden');
         if (responseNote) responseNote.classList.remove('hidden');
         if (intro) {
           const text = intro.getAttribute('data-default-text');
           if (text) intro.textContent = text;
         }
-        return;
+      } else {
+        block.classList.remove('hidden');
+        if (submitButton) submitButton.classList.remove('hidden');
+        if (contactButton) contactButton.classList.add('hidden');
+        if (consultCta) consultCta.classList.remove('hidden');
+        if (responseNote) responseNote.classList.add('hidden');
+        if (intro) {
+          const text = intro.getAttribute('data-consult-text');
+          if (text) intro.textContent = text;
+        }
       }
-      block.classList.remove('hidden');
-      hidden.value = bookingLink ? `Booking link: ${bookingLink}` : '';
-      if (consultCta) consultCta.classList.remove('hidden');
-      if (responseNote) responseNote.classList.add('hidden');
-      if (intro) {
-        const text = intro.getAttribute('data-consult-text');
-        if (text) intro.textContent = text;
+      const applyFeeCopy = () => {
+        if (!feeNote) return;
+        const modeRaw = feeNote.getAttribute('data-fee-mode') || 'free';
+        const mode = modeRaw.trim().toLowerCase();
+        const freeCopy = feeNote.getAttribute('data-free-copy') || '';
+        const feeCopy = feeNote.getAttribute('data-fee-copy') || '';
+        let selected = mode === 'fee' ? 'fee' : 'free';
+        if (mode === 'ab') {
+          try {
+            const stored = localStorage.getItem('hw_fee_variant');
+            if (stored === 'free' || stored === 'fee') {
+              selected = stored;
+            } else {
+              selected = Math.random() < 0.5 ? 'free' : 'fee';
+              localStorage.setItem('hw_fee_variant', selected);
+            }
+          } catch {
+            selected = Math.random() < 0.5 ? 'free' : 'fee';
+          }
+        }
+        feeNote.textContent = selected === 'fee' ? feeCopy : freeCopy;
+      };
+      const tz = 'America/Chicago';
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const monthFormatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, month: 'long', year: 'numeric' });
+      const dayFormatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, day: '2-digit' });
+      const partsFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        weekday: 'short',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const timeFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      const formatExistingBooking = (existing) => {
+        if (!existing || !existing.start || !existing.end) return '';
+        const start = new Date(existing.start);
+        const end = new Date(existing.end);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
+        const zone = existing.timeZone || tz;
+        const dateFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone,
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        const timeFormatterLocal = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone,
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+        const zoneParts = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone,
+          timeZoneName: 'short'
+        }).formatToParts(start);
+        const zoneName = zoneParts.find((part) => part.type === 'timeZoneName')?.value || zone;
+        return `${dateFormatter.format(start)} at ${timeFormatterLocal.format(start)} - ${timeFormatterLocal.format(end)} ${zoneName}`;
+      };
+      const zonedTimeToUtc = (year, month, day, hour, minute) => {
+        const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+        const local = new Date(
+          utcGuess.toLocaleString('en-US', {
+            timeZone: tz
+          })
+        );
+        const offset = utcGuess.getTime() - local.getTime();
+        return new Date(utcGuess.getTime() + offset);
+      };
+      const formatSelectedSlot = () => {
+        if (!selectedDateKey || !selectedTimeValue) return '';
+        const [year, month, day] = selectedDateKey.split('-').map(Number);
+        const [hour, minute] = selectedTimeValue.split(':').map(Number);
+        if (!year || !month || !day || Number.isNaN(hour) || Number.isNaN(minute)) return '';
+        const start = zonedTimeToUtc(year, month, day, hour, minute);
+        const end = new Date(start.getTime() + 30 * 60 * 1000);
+        return formatExistingBooking({
+          start: start.toISOString(),
+          end: end.toISOString(),
+          timeZone: tz
+        });
+      };
+      const requestReplaceConfirmation = (message) =>
+        new Promise((resolve) => {
+          if (!confirmModal || !confirmMessage || !confirmCancel || !confirmKeep) {
+            resolve(window.confirm(message));
+            return;
+          }
+          confirmMessage.textContent = message;
+          confirmModal.classList.remove('hidden');
+          confirmModal.classList.add('flex');
+          const cleanup = (result) => {
+            confirmModal.classList.add('hidden');
+            confirmModal.classList.remove('flex');
+            confirmCancel.removeEventListener('click', onCancel);
+            confirmKeep.removeEventListener('click', onKeep);
+            confirmModal.removeEventListener('click', onBackdrop);
+            document.removeEventListener('keydown', onKey);
+            resolve(result);
+          };
+          const onCancel = () => cleanup(true);
+          const onKeep = () => cleanup(false);
+          const onBackdrop = (event) => {
+            if (event.target === confirmModal) cleanup(false);
+          };
+          const onKey = (event) => {
+            if (event.key === 'Escape') cleanup(false);
+          };
+          confirmCancel.addEventListener('click', onCancel);
+          confirmKeep.addEventListener('click', onKeep);
+          confirmModal.addEventListener('click', onBackdrop);
+          document.addEventListener('keydown', onKey);
+          if (confirmCancel instanceof HTMLButtonElement) {
+            confirmCancel.focus();
+          }
+        });
+
+      const getCstParts = (date) => {
+        const parts = partsFormatter.formatToParts(date);
+        const get = (type) => parts.find((p) => p.type === type)?.value;
+        return {
+          weekday: get('weekday'),
+          year: get('year'),
+          month: get('month'),
+          day: get('day')
+        };
+      };
+
+      const pad = (value) => String(value).padStart(2, '0');
+      const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const minMs = Date.now() + DAY_MS;
+      const minParts = getCstParts(new Date(minMs));
+      const minKey = `${minParts.year}-${minParts.month}-${minParts.day}`;
+
+      const makeDate = (year, month, day) => new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+      const dateKey = (parts) => `${parts.year}-${parts.month}-${parts.day}`;
+      const isWeekday = (weekday) => weekday !== 'Sat' && weekday !== 'Sun';
+
+      let viewYear = Number(minParts.year);
+      let viewMonth = Number(minParts.month);
+      let selectedDateKey = '';
+      let selectedTimeValue = '';
+      let bookingComplete = false;
+      let availabilityByDate = {};
+      let activeMonthKey = '';
+
+      const isNameValid = (value) => value.trim().length >= 2;
+      const isEmailValid = (value) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
+      const isMessageValid = (value) => value.trim().length >= 5;
+      const normalizePhone = (value) => value.replace(/\D/g, '');
+      const isPhoneValid = (value) => normalizePhone(value).length >= 7;
+      const getContactPreference = () => {
+        let selected = 'meet';
+        contactPreferenceInputs.forEach((input) => {
+          if (input instanceof HTMLInputElement && input.checked) {
+            selected = input.value || 'meet';
+          }
+        });
+        return selected;
+      };
+      const applyPhoneValidity = () => {
+        const preference = getContactPreference();
+        const wantsPhone = preference === 'phone';
+        if (!(phoneInput instanceof HTMLInputElement)) {
+          return { phoneValue: '', wantsPhone, phoneOk: true, preference };
+        }
+        const phoneValue = String(phoneInput.value || '').trim();
+        const phoneOk = !wantsPhone || isPhoneValid(phoneValue);
+        phoneInput.required = wantsPhone;
+        phoneInput.setCustomValidity(wantsPhone && !phoneOk ? 'Please enter a valid phone number.' : '');
+        return { phoneValue, wantsPhone, phoneOk, preference };
+      };
+      const updateButtons = () => {
+        const nameValue = String(nameInput?.value || '');
+        const emailValue = String(emailInput?.value || '');
+        const messageValue = String(messageInput?.value || '');
+        const { phoneOk } = applyPhoneValidity();
+        const isBaseValid =
+          isNameValid(nameValue) && isEmailValid(emailValue) && isMessageValid(messageValue);
+        if (submitButton instanceof HTMLButtonElement) {
+          submitButton.disabled = bookingComplete || !isBaseValid || !phoneOk || !selectedDateKey || !selectedTimeValue;
+        }
+        if (contactButton instanceof HTMLButtonElement) {
+          contactButton.disabled = !isBaseValid || !phoneOk;
+        }
+      };
+
+      const setStatus = (text, tone = 'default') => {
+        if (!status) return;
+        status.textContent = text;
+        status.classList.remove('hidden', 'text-rose-600', 'text-emerald-600', 'text-slate-500');
+        if (!text) {
+          status.classList.add('hidden');
+          return;
+        }
+        if (tone === 'error') {
+          status.classList.add('text-rose-600');
+        } else if (tone === 'success') {
+          status.classList.add('text-emerald-600');
+        } else {
+          status.classList.add('text-slate-500');
+        }
+      };
+
+      const loadAvailability = async () => {
+        const monthKey = `${viewYear}-${pad(viewMonth)}`;
+        if (monthKey === activeMonthKey) return;
+        activeMonthKey = monthKey;
+        if (!calendarApiBase) {
+          availabilityByDate = {};
+          setStatus('Calendar service not configured.', 'error');
+          return;
+        }
+        setStatus('Loading availability...');
+        try {
+          const response = await fetch(`${calendarApiBase}/availability?month=${monthKey}`);
+          if (!response.ok) {
+            throw new Error('availability_failed');
+          }
+          const payload = await response.json();
+          availabilityByDate = payload && typeof payload === 'object' ? payload.days || {} : {};
+          setStatus('');
+        } catch {
+          availabilityByDate = {};
+          setStatus('Unable to load availability right now.', 'error');
+        }
+      };
+
+      const buildSlotTimes = () => {
+        const slots = [];
+        const windows = [
+          { startHour: 10, startMinute: 0, endHour: 12, endMinute: 0 },
+          { startHour: 15, startMinute: 0, endHour: 17, endMinute: 0 }
+        ];
+        windows.forEach((window) => {
+          const startMinutes = window.startHour * 60 + window.startMinute;
+          const endMinutes = window.endHour * 60 + window.endMinute;
+          for (let minutes = startMinutes; minutes + 30 <= endMinutes; minutes += 30) {
+            const hour = Math.floor(minutes / 60);
+            const minute = minutes % 60;
+            slots.push(`${pad(hour)}:${pad(minute)}`);
+          }
+        });
+        return slots;
+      };
+
+      const renderTimes = (parts) => {
+        timeGrid.innerHTML = '';
+        selectedTimeValue = '';
+        const allSlots = buildSlotTimes();
+        const key = parts ? dateKey(parts) : '';
+        const availableTimes = new Set(key ? availabilityByDate[key] || [] : []);
+        allSlots.forEach((value) => {
+          const [hour, minute] = value.split(':').map(Number);
+          const temp = new Date();
+          temp.setHours(hour, minute, 0, 0);
+          const labelText = timeFormatter.format(temp);
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = labelText;
+          const isAvailable = !bookingComplete && Boolean(key) && availableTimes.has(value);
+          button.className = isAvailable
+            ? 'w-full rounded-none border border-slate-200 px-2 py-2 text-xs text-slate-600 hover:text-ink'
+            : 'w-full rounded-none border border-slate-200 px-2 py-2 text-xs text-slate-300 cursor-not-allowed';
+          if (!isAvailable) {
+            button.disabled = true;
+          } else {
+          if (value === selectedTimeValue) {
+            button.setAttribute('data-selected', 'true');
+            button.classList.add('ring-1', 'ring-ink');
+          }
+          button.addEventListener('click', () => {
+            if (bookingComplete) return;
+            selectedTimeValue = value;
+            timeGrid.querySelectorAll('[data-selected=true]').forEach((el) => el.removeAttribute('data-selected'));
+            timeGrid.querySelectorAll('button').forEach((el) => el.classList.remove('ring-1', 'ring-ink'));
+            button.setAttribute('data-selected', 'true');
+            button.classList.add('ring-1', 'ring-ink');
+              updateButtons();
+            });
+          }
+          timeGrid.appendChild(button);
+        });
+        updateButtons();
+      };
+
+      const renderCalendar = () => {
+        grid.innerHTML = '';
+        const firstDay = makeDate(viewYear, viewMonth, 1);
+        const firstParts = getCstParts(firstDay);
+        const firstIndex = weekdayOrder.indexOf(firstParts.weekday);
+        const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+        label.textContent = monthFormatter.format(firstDay);
+
+        for (let i = 0; i < firstIndex; i += 1) {
+          const empty = document.createElement('span');
+          empty.className = 'h-9';
+          grid.appendChild(empty);
+        }
+
+        for (let day = 1; day <= daysInMonth; day += 1) {
+          const date = makeDate(viewYear, viewMonth, day);
+          const parts = getCstParts(date);
+          const key = dateKey(parts);
+          const selectable = !bookingComplete && isWeekday(parts.weekday) && key >= minKey;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = dayFormatter.format(date);
+          button.className = selectable
+            ? 'h-9 w-full rounded-none border border-slate-200 text-xs text-slate-600 hover:text-ink'
+            : 'h-9 w-full rounded-none border border-slate-200 text-xs text-slate-300 cursor-not-allowed';
+          if (!selectable) {
+            button.disabled = true;
+          } else {
+            if (key === selectedDateKey) {
+              button.classList.add('ring-1', 'ring-ink');
+            }
+            button.addEventListener('click', () => {
+              if (bookingComplete) return;
+              selectedDateKey = key;
+              grid.querySelectorAll('[data-selected=true]').forEach((el) => el.removeAttribute('data-selected'));
+              button.setAttribute('data-selected', 'true');
+              grid.querySelectorAll('button').forEach((el) => el.classList.remove('ring-1', 'ring-ink'));
+              button.classList.add('ring-1', 'ring-ink');
+              renderTimes(parts);
+            });
+          }
+          grid.appendChild(button);
+        }
+      };
+
+      prevBtn.addEventListener('click', async () => {
+        let nextMonth = viewMonth - 1;
+        let nextYear = viewYear;
+        if (nextMonth < 1) {
+          nextMonth = 12;
+          nextYear -= 1;
+        }
+        const targetKey = `${nextYear}-${pad(nextMonth)}-01`;
+        if (targetKey < minKey) return;
+        viewMonth = nextMonth;
+        viewYear = nextYear;
+        selectedDateKey = '';
+        selectedTimeValue = '';
+        await loadAvailability();
+        renderCalendar();
+        renderTimes(null);
+        updateButtons();
+      });
+
+      nextBtn.addEventListener('click', async () => {
+        let nextMonth = viewMonth + 1;
+        let nextYear = viewYear;
+        if (nextMonth > 12) {
+          nextMonth = 1;
+          nextYear += 1;
+        }
+        viewMonth = nextMonth;
+        viewYear = nextYear;
+        selectedDateKey = '';
+        selectedTimeValue = '';
+        await loadAvailability();
+        renderCalendar();
+        renderTimes(null);
+        updateButtons();
+      });
+
+      form.addEventListener('input', () => {
+        updateButtons();
+      });
+
+      form.addEventListener('change', () => {
+        updateButtons();
+      });
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const { phoneValue, wantsPhone, phoneOk, preference } = applyPhoneValidity();
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          return;
+        }
+        if (!phoneOk) {
+          form.reportValidity();
+          return;
+        }
+
+        const name = String(form.querySelector('[name="name"]')?.value || '').trim();
+        const email = String(form.querySelector('[name="email"]')?.value || '').trim();
+        const message = String(form.querySelector('[name="message"]')?.value || '').trim();
+
+        if (isConsult) {
+          if (!selectedDateKey || !selectedTimeValue) {
+            setStatus('Select a consultation date and time.', 'error');
+            return;
+          }
+          if (!calendarApiBase) {
+            setStatus('Calendar service is unavailable. Use the live calendar link.', 'error');
+            return;
+          }
+          if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Booking...';
+          }
+          setStatus('Booking your consultation...');
+
+          try {
+            const bookingPayload = {
+              name,
+              email,
+              message,
+              date: selectedDateKey,
+              time: selectedTimeValue,
+              phone: phoneValue,
+              phonePreferred: wantsPhone,
+              contactPreference: preference
+            };
+            const attemptBooking = async (replaceExisting) => {
+              const response = await fetch(`${calendarApiBase}/book`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ...bookingPayload,
+                  replaceExisting: Boolean(replaceExisting)
+                })
+              });
+              const payload = await response.json().catch(() => ({}));
+              if (!response.ok) {
+                const errorCode = payload?.error || '';
+                if (errorCode === 'existing_booking') {
+                  const slotText = formatExistingBooking(payload?.existing);
+                  const baseText = slotText
+                    ? `You already have a concierge appointment scheduled for ${slotText}.`
+                    : 'You already have a concierge appointment scheduled.';
+                  if (!replaceExisting) {
+                    const questionText = `${baseText} Would you like to cancel your existing appointment(s) and book this new time instead?`;
+                    setStatus(questionText);
+                    const confirmReplace = await requestReplaceConfirmation(questionText);
+                    if (confirmReplace) {
+                      setStatus('Canceling your existing appointment and booking this time...');
+                      return attemptBooking(true);
+                    }
+                    setStatus(
+                      `${baseText} If you want a new time, cancel the existing appointment and book again at Heerawalla.com.`,
+                      'error'
+                    );
+                  } else {
+                    setStatus(
+                      `${baseText} We could not cancel your existing appointment(s). Please cancel them and book a new time at Heerawalla.com.`,
+                      'error'
+                    );
+                  }
+                  if (submitButton instanceof HTMLButtonElement) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Book consultation';
+                  }
+                  updateButtons();
+                  return;
+                }
+                if (errorCode === 'cancel_failed') {
+                  setStatus(
+                    'We could not cancel your existing appointment(s). Please cancel them and book a new time at Heerawalla.com.',
+                    'error'
+                  );
+                  if (submitButton instanceof HTMLButtonElement) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Book consultation';
+                  }
+                  updateButtons();
+                  return;
+                }
+                const messageText = String(errorCode).includes('slot_unavailable')
+                  ? 'That slot was just booked. Please choose another time.'
+                  : errorCode === 'invalid_phone'
+                  ? 'Please provide a valid phone number.'
+                  : 'Booking failed. Try again or use the live calendar link.';
+                setStatus(messageText, 'error');
+                if (submitButton instanceof HTMLButtonElement) {
+                  submitButton.disabled = false;
+                  submitButton.textContent = 'Book consultation';
+                }
+                updateButtons();
+                return;
+              }
+              const slotText = formatSelectedSlot();
+              const successText = slotText
+                ? `Booked a concierge appointment for ${slotText}. Check your email for a calendar invite.`
+                : 'Booked your concierge appointment. Check your email for a calendar invite.';
+              setStatus(successText, 'success');
+              if (submitButton instanceof HTMLButtonElement) {
+                submitButton.textContent = 'Book consultation';
+              }
+              bookingComplete = true;
+              timeGrid.querySelectorAll('button').forEach((button) => {
+                if (button instanceof HTMLButtonElement) {
+                  button.disabled = true;
+                  button.classList.add('cursor-not-allowed', 'text-slate-300');
+                }
+              });
+              grid.querySelectorAll('button').forEach((button) => {
+                if (button instanceof HTMLButtonElement) {
+                  button.disabled = true;
+                  button.classList.add('cursor-not-allowed', 'text-slate-300');
+                }
+              });
+              updateButtons();
+            };
+            await attemptBooking(false);
+          } catch {
+            setStatus('Booking failed. Try again or use the live calendar link.', 'error');
+            if (submitButton instanceof HTMLButtonElement) {
+              submitButton.disabled = false;
+              submitButton.textContent = 'Book consultation';
+            }
+            updateButtons();
+          }
+          return;
+        }
+
+        if (!atelierApiBase) {
+          setStatus('Message service is unavailable. Please try again later.', 'error');
+          return;
+        }
+        if (contactButton instanceof HTMLButtonElement) {
+          contactButton.disabled = true;
+          contactButton.textContent = 'Sending...';
+        }
+        setStatus('Sending your message...');
+
+        const subject = name ? `Heerawalla inquiry from ${name}` : 'Heerawalla inquiry';
+        try {
+          const response = await fetch(`${atelierApiBase}/contact-submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name,
+              email,
+              message,
+              subject,
+              phone: phoneValue,
+              phonePreferred: wantsPhone,
+              contactPreference: preference
+            })
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            const errorCode = payload?.error || '';
+            const messageText =
+              errorCode === 'invalid_phone'
+                ? 'Please provide a valid phone number.'
+                : errorCode === 'invalid_email' || errorCode === 'invalid_email_domain'
+                ? 'Please provide a valid email address.'
+                : 'Message failed to send. Please try again.';
+            setStatus(messageText, 'error');
+            if (contactButton instanceof HTMLButtonElement) {
+              contactButton.disabled = false;
+              contactButton.textContent = 'Send';
+            }
+            updateButtons();
+            return;
+          }
+          setStatus('Message sent. We will reply within 1-2 business days.', 'success');
+          if (contactButton instanceof HTMLButtonElement) {
+            contactButton.textContent = 'Sent';
+          }
+        } catch {
+          setStatus('Message failed to send. Please try again.', 'error');
+          if (contactButton instanceof HTMLButtonElement) {
+            contactButton.disabled = false;
+            contactButton.textContent = 'Send';
+          }
+          updateButtons();
+        }
+      });
+
+      if (isConsult) {
+        await loadAvailability();
+        renderCalendar();
+        renderTimes(null);
+      } else {
+        renderTimes(null);
+      }
+      applyFeeCopy();
+      updateButtons();
+
+      if (isConsult) {
+        prevBtn.focus();
       }
     })();
   </script>

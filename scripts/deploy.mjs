@@ -44,6 +44,13 @@ if (!repoInfo) {
 }
 
 const { owner, repo } = repoInfo;
+await waitForAllWorkflows({
+  owner,
+  repo,
+  token,
+  headSha,
+  branch,
+});
 await waitForWorkflow({
   owner,
   repo,
@@ -128,6 +135,69 @@ async function waitForWorkflow({ owner, repo, token, headSha, branch, workflowFi
   throw new Error(`Timed out waiting for workflow. Last run: ${runUrl || "unknown"}`);
 }
 
+async function waitForAllWorkflows({ owner, repo, token, headSha, branch }) {
+  const timeoutMs = 20 * 60 * 1000;
+  const pollIntervalMs = 10000;
+  const deadline = Date.now() + timeoutMs;
+  let lastSnapshot = "";
+  let stableCount = 0;
+  let lastRunSummary = "";
+
+  while (Date.now() < deadline) {
+    const runs = await listWorkflowRuns({
+      owner,
+      repo,
+      token,
+      headSha,
+      branch,
+    });
+
+    if (!runs.length) {
+      await sleep(pollIntervalMs);
+      continue;
+    }
+
+    const incomplete = runs.filter((run) => run.status !== "completed");
+    if (incomplete.length) {
+      lastRunSummary = summarizeRuns(runs);
+      stableCount = 0;
+      await sleep(pollIntervalMs);
+      continue;
+    }
+
+    const failed = runs.filter((run) => !isAllowedConclusion(run.conclusion));
+    if (failed.length) {
+      const details = failed
+        .map((run) => `${run.name || run.path || "workflow"}: ${run.conclusion} (${run.html_url})`)
+        .join("\n");
+      throw new Error(`Workflow failures detected:\n${details}`);
+    }
+
+    const snapshot = runs
+      .map((run) => `${run.id}:${run.conclusion}`)
+      .sort()
+      .join("|");
+    if (snapshot === lastSnapshot) {
+      stableCount += 1;
+    } else {
+      stableCount = 0;
+      lastSnapshot = snapshot;
+    }
+
+    if (stableCount >= 1) {
+      console.log("All workflow runs succeeded.");
+      return;
+    }
+
+    lastRunSummary = summarizeRuns(runs);
+    await sleep(pollIntervalMs);
+  }
+
+  throw new Error(
+    `Timed out waiting for workflow runs to complete.${lastRunSummary ? `\n${lastRunSummary}` : ""}`
+  );
+}
+
 async function findWorkflowRun({ owner, repo, token, headSha, branch, workflowFile }) {
   const apiUrl = new URL(
     `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowFile}/runs`
@@ -150,6 +220,39 @@ async function findWorkflowRun({ owner, repo, token, headSha, branch, workflowFi
   const payload = await response.json();
   const runs = Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
   return runs.find((run) => run.head_sha === headSha) || null;
+}
+
+async function listWorkflowRuns({ owner, repo, token, headSha, branch }) {
+  const apiUrl = new URL(`https://api.github.com/repos/${owner}/${repo}/actions/runs`);
+  apiUrl.searchParams.set("head_sha", headSha);
+  apiUrl.searchParams.set("branch", branch);
+  apiUrl.searchParams.set("event", "push");
+  apiUrl.searchParams.set("per_page", "100");
+
+  const response = await fetch(apiUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "heerawalla-deploy-script",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error ${response.status}: ${response.statusText}`);
+  }
+
+  const payload = await response.json();
+  return Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
+}
+
+function summarizeRuns(runs) {
+  return runs
+    .map((run) => `${run.name || run.path || "workflow"}: ${run.status}/${run.conclusion || "pending"}`)
+    .join("\n");
+}
+
+function isAllowedConclusion(conclusion) {
+  return conclusion === "success" || conclusion === "skipped";
 }
 
 function resolveVerifyUrl({ owner, repo }) {
