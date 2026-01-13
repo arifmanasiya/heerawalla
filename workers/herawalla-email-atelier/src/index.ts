@@ -17,6 +17,8 @@ export interface Env {
   ATELIER_SENDERS?: string;
   REPLY_TO_ADDRESS?: string;
   TURNSTILE_SECRET?: string;
+  CONTACT_LABEL_SUBSCRIBED?: string;
+  CONTACT_LABEL_UNSUBSCRIBED?: string;
 }
 
 const ACK_SUBJECT_PREFIX = "Heerawalla - Your request has been received";
@@ -157,6 +159,8 @@ const CONTACT_ACK_HTML = `<!DOCTYPE html>
 
 const SUBSCRIBE_ACK_SUBJECT = "Heerawalla - You're on the list";
 const UNSUBSCRIBE_URL = "https://www.heerawalla.com/unsubscribe";
+const DEFAULT_CONTACT_LABEL_SUBSCRIBED = "Heerawalla Subscribed";
+const DEFAULT_CONTACT_LABEL_UNSUBSCRIBED = "Heerawalla Unsubscribed";
 const SUBSCRIBE_ACK_TEXT = [
   "Thank you for joining Heerawalla.",
   "",
@@ -459,6 +463,7 @@ export default {
             source: "concierge",
             requestId,
             contactPreference: contactPreference || (phonePreferred ? "phone" : ""),
+            subscriptionStatus: "subscribed",
           });
 
           return new Response(JSON.stringify({ ok: true, booking }), {
@@ -672,6 +677,7 @@ export default {
             source: sourceLabel,
             requestId,
             pageUrl,
+            subscriptionStatus: "subscribed",
           });
         } catch (error) {
           logError("subscribe_send_failed", { requestId, email: maskEmail(senderEmail) });
@@ -743,6 +749,11 @@ export default {
         }
 
         await markUnsubscribed(env, senderEmail, reason);
+        await syncGoogleContact(env, {
+          email: senderEmail,
+          source: "unsubscribe",
+          subscriptionStatus: "unsubscribed",
+        });
 
         return new Response(JSON.stringify({ ok: true }), {
           status: 200,
@@ -916,6 +927,7 @@ export default {
             source: "contact",
             requestId,
             contactPreference: phonePreferred ? "phone" : "",
+            subscriptionStatus: "subscribed",
           });
         } catch (error) {
           logError("contact_submit_send_failed", { requestId, email: maskEmail(senderEmail) });
@@ -1143,6 +1155,7 @@ export default {
             name: senderName,
             source: "bespoke",
             requestId: normalizedRequestId,
+            subscriptionStatus: "subscribed",
           });
         } catch (error) {
           logError("submit_send_failed", { requestId, email: maskEmail(senderEmail) });
@@ -2162,6 +2175,7 @@ type ContactSyncPayload = {
   requestId?: string;
   pageUrl?: string;
   contactPreference?: string;
+  subscriptionStatus?: "subscribed" | "unsubscribed";
 };
 
 async function syncGoogleContact(env: Env, payload: ContactSyncPayload) {
@@ -2208,10 +2222,14 @@ async function upsertGoogleContact(env: Env, payload: ContactSyncPayload) {
       };
     }>;
   };
-
-  const person = findContactByEmail(searchPayload.results || [], normalizedEmail);
+  const matches = findContactMatches(searchPayload.results || [], normalizedEmail);
+  const person = selectPrimaryContact(matches);
+  if (person?.resourceName && matches.length > 1) {
+    await mergeDuplicateContacts(token, person.resourceName, matches);
+  }
   const userDefined = buildUserDefinedFields(person?.userDefined || [], payload);
 
+  let personResourceName = "";
   if (person?.resourceName) {
     const updateFields = ["userDefined", "emailAddresses"];
     const updateBody: {
@@ -2251,52 +2269,145 @@ async function upsertGoogleContact(env: Env, payload: ContactSyncPayload) {
       const errorText = await updateResponse.text();
       throw new Error(`people_update_failed:${updateResponse.status}:${errorText}`);
     }
-    return;
+    personResourceName = person.resourceName;
+  } else {
+    const createBody: {
+      names?: Array<{ givenName?: string; familyName?: string; displayName?: string }>;
+      emailAddresses?: Array<{ value: string }>;
+      phoneNumbers?: Array<{ value: string }>;
+      userDefined?: Array<{ key?: string; value?: string }>;
+    } = {
+      emailAddresses: mergeEmailAddresses([], normalizedEmail),
+      userDefined,
+    };
+    if (payload.name) {
+      createBody.names = buildNameEntries(payload.name);
+    }
+    if (payload.phone) {
+      createBody.phoneNumbers = mergePhoneNumbers([], payload.phone);
+    }
+
+    const createResponse = await fetch("https://people.googleapis.com/v1/people:createContact", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(createBody),
+    });
+    if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      throw new Error(`people_create_failed:${createResponse.status}:${errorText}`);
+    }
+    const created = (await createResponse.json()) as { resourceName?: string };
+    personResourceName = created.resourceName || "";
   }
 
-  const createBody: {
-    names?: Array<{ givenName?: string; familyName?: string; displayName?: string }>;
-    emailAddresses?: Array<{ value: string }>;
-    phoneNumbers?: Array<{ value: string }>;
-    userDefined?: Array<{ key?: string; value?: string }>;
-  } = {
-    emailAddresses: mergeEmailAddresses([], normalizedEmail),
-    userDefined,
-  };
-  if (payload.name) {
-    createBody.names = buildNameEntries(payload.name);
-  }
-  if (payload.phone) {
-    createBody.phoneNumbers = mergePhoneNumbers([], payload.phone);
-  }
-
-  const createResponse = await fetch("https://people.googleapis.com/v1/people:createContact", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(createBody),
-  });
-  if (!createResponse.ok) {
-    const errorText = await createResponse.text();
-    throw new Error(`people_create_failed:${createResponse.status}:${errorText}`);
+  if (personResourceName && payload.subscriptionStatus) {
+    await updateContactGroupMembership(env, token, personResourceName, payload.subscriptionStatus);
   }
 }
 
-function findContactByEmail(
-  results: Array<{ person?: { emailAddresses?: Array<{ value?: string }> } }>,
+function findContactMatches(
+  results: Array<{
+    person?: {
+      resourceName?: string;
+      etag?: string;
+      names?: Array<{ displayName?: string; givenName?: string; familyName?: string }>;
+      emailAddresses?: Array<{ value?: string }>;
+      phoneNumbers?: Array<{ value?: string }>;
+      userDefined?: Array<{ key?: string; value?: string }>;
+    };
+  }>,
   email: string
 ) {
   const normalizedEmail = normalizeEmailAddress(email);
-  for (const result of results) {
+  const matches: Array<{
+    resourceName?: string;
+    etag?: string;
+    names?: Array<{ displayName?: string; givenName?: string; familyName?: string }>;
+    emailAddresses?: Array<{ value?: string }>;
+    phoneNumbers?: Array<{ value?: string }>;
+    userDefined?: Array<{ key?: string; value?: string }>;
+  }> = [];
+  results.forEach((result) => {
     const person = result.person;
-    if (!person) continue;
+    if (!person) return;
     const addresses = person.emailAddresses || [];
-    const match = addresses.some((entry) => normalizeEmailAddress(entry.value || "") === normalizedEmail);
-    if (match) return result.person || null;
+    const hasMatch = addresses.some((entry) => normalizeEmailAddress(entry.value || "") === normalizedEmail);
+    if (hasMatch) {
+      matches.push(person);
+    }
+  });
+  return matches;
+}
+
+function selectPrimaryContact(
+  matches: Array<{
+    resourceName?: string;
+    etag?: string;
+    names?: Array<{ displayName?: string; givenName?: string; familyName?: string }>;
+    emailAddresses?: Array<{ value?: string }>;
+    phoneNumbers?: Array<{ value?: string }>;
+    userDefined?: Array<{ key?: string; value?: string }>;
+  }>
+) {
+  if (!matches.length) return null;
+  return matches.reduce((best, current) => {
+    if (!best) return current;
+    return scoreContact(current) > scoreContact(best) ? current : best;
+  }, matches[0]);
+}
+
+function scoreContact(contact: {
+  names?: Array<{ displayName?: string; givenName?: string; familyName?: string }>;
+  emailAddresses?: Array<{ value?: string }>;
+  phoneNumbers?: Array<{ value?: string }>;
+  userDefined?: Array<{ key?: string; value?: string }>;
+}) {
+  const nameScore = contact.names?.length || 0;
+  const emailScore = contact.emailAddresses?.length || 0;
+  const phoneScore = contact.phoneNumbers?.length || 0;
+  const userDefinedScore = contact.userDefined?.length || 0;
+  return nameScore + emailScore + phoneScore + userDefinedScore;
+}
+
+async function mergeDuplicateContacts(
+  token: string,
+  primaryResourceName: string,
+  matches: Array<{ resourceName?: string }>
+) {
+  const uniqueOthers = Array.from(
+    new Set(
+      matches
+        .map((match) => match.resourceName || "")
+        .filter((resourceName) => resourceName && resourceName !== primaryResourceName)
+    )
+  );
+
+  for (const otherResourceName of uniqueOthers) {
+    try {
+      await mergeContacts(token, primaryResourceName, otherResourceName);
+    } catch (error) {
+      logWarn("people_merge_failed", { primaryResourceName, otherResourceName, error: String(error) });
+    }
   }
-  return results[0]?.person || null;
+}
+
+async function mergeContacts(token: string, primaryResourceName: string, otherResourceName: string) {
+  const url = new URL("https://people.googleapis.com/v1/people:mergeContacts");
+  url.searchParams.set("resourceName", primaryResourceName);
+  url.searchParams.set("otherResourceName", otherResourceName);
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`people_merge_failed:${response.status}:${errorText}`);
+  }
 }
 
 function buildNameEntries(name: string) {
@@ -2354,12 +2465,20 @@ function buildUserDefinedFields(
     "heerawalla_page",
     "heerawalla_contact_preference",
   ]);
+  const deprecatedKeys = new Set([
+    "heerawalla_subscription_status",
+    "heerawalla_unsubscribe_reason",
+    "heerawalla_unsubscribed_at",
+  ]);
   const preserved: Array<{ key?: string; value?: string }> = [];
   const reservedMap = new Map<string, string>();
 
   existing.forEach((entry) => {
     const key = (entry.key || "").trim();
     if (!key) return;
+    if (deprecatedKeys.has(key)) {
+      return;
+    }
     if (!reservedKeys.has(key)) {
       preserved.push(entry);
       return;
@@ -2398,6 +2517,142 @@ function buildUserDefinedFields(
 
   const reservedEntries = Array.from(reservedMap.entries()).map(([key, value]) => ({ key, value }));
   return [...reservedEntries, ...preserved];
+}
+
+const CONTACT_GROUP_CACHE_SUBSCRIBED = "contact_group:subscribed";
+const CONTACT_GROUP_CACHE_UNSUBSCRIBED = "contact_group:unsubscribed";
+
+function getContactLabel(env: Env, status: "subscribed" | "unsubscribed") {
+  if (status === "subscribed") {
+    return (env.CONTACT_LABEL_SUBSCRIBED || "").trim() || DEFAULT_CONTACT_LABEL_SUBSCRIBED;
+  }
+  return (env.CONTACT_LABEL_UNSUBSCRIBED || "").trim() || DEFAULT_CONTACT_LABEL_UNSUBSCRIBED;
+}
+
+async function updateContactGroupMembership(
+  env: Env,
+  token: string,
+  personResourceName: string,
+  status: "subscribed" | "unsubscribed"
+) {
+  const subscribedLabel = getContactLabel(env, "subscribed");
+  const unsubscribedLabel = getContactLabel(env, "unsubscribed");
+  const subscribedGroup = await ensureContactGroup(env, token, subscribedLabel, CONTACT_GROUP_CACHE_SUBSCRIBED);
+  const unsubscribedGroup = await ensureContactGroup(
+    env,
+    token,
+    unsubscribedLabel,
+    CONTACT_GROUP_CACHE_UNSUBSCRIBED
+  );
+
+  const tasks: Array<Promise<void>> = [];
+  if (subscribedGroup) {
+    const add = status === "subscribed" ? [personResourceName] : [];
+    const remove = status === "unsubscribed" ? [personResourceName] : [];
+    tasks.push(modifyContactGroupMembers(token, subscribedGroup, add, remove));
+  }
+  if (unsubscribedGroup) {
+    const add = status === "unsubscribed" ? [personResourceName] : [];
+    const remove = status === "subscribed" ? [personResourceName] : [];
+    tasks.push(modifyContactGroupMembers(token, unsubscribedGroup, add, remove));
+  }
+
+  await Promise.all(tasks);
+}
+
+async function ensureContactGroup(env: Env, token: string, labelName: string, cacheKey: string) {
+  if (!labelName) return "";
+  if (env.HEERAWALLA_ACKS) {
+    const cached = await env.HEERAWALLA_ACKS.get(cacheKey);
+    if (cached) return cached;
+  }
+
+  const groups = await listContactGroups(token);
+  const existing = groups.find((group) => group.name === labelName);
+  if (existing?.resourceName) {
+    if (env.HEERAWALLA_ACKS) {
+      await env.HEERAWALLA_ACKS.put(cacheKey, existing.resourceName);
+    }
+    return existing.resourceName;
+  }
+
+  const created = await createContactGroup(token, labelName);
+  if (created.resourceName && env.HEERAWALLA_ACKS) {
+    await env.HEERAWALLA_ACKS.put(cacheKey, created.resourceName);
+  }
+  return created.resourceName || "";
+}
+
+async function listContactGroups(token: string) {
+  const groups: Array<{ resourceName?: string; name?: string; groupType?: string }> = [];
+  let pageToken = "";
+  do {
+    const url = new URL("https://people.googleapis.com/v1/contactGroups");
+    url.searchParams.set("pageSize", "200");
+    url.searchParams.set("groupFields", "name,groupType");
+    if (pageToken) {
+      url.searchParams.set("pageToken", pageToken);
+    }
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`people_group_list_failed:${response.status}:${errorText}`);
+    }
+    const payload = (await response.json()) as {
+      contactGroups?: Array<{ resourceName?: string; name?: string; groupType?: string }>;
+      nextPageToken?: string;
+    };
+    if (payload.contactGroups?.length) {
+      groups.push(...payload.contactGroups);
+    }
+    pageToken = payload.nextPageToken || "";
+  } while (pageToken);
+  return groups;
+}
+
+async function createContactGroup(token: string, name: string) {
+  const response = await fetch("https://people.googleapis.com/v1/contactGroups", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ contactGroup: { name } }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`people_group_create_failed:${response.status}:${errorText}`);
+  }
+  return (await response.json()) as { resourceName?: string; name?: string };
+}
+
+async function modifyContactGroupMembers(
+  token: string,
+  groupResourceName: string,
+  add: string[],
+  remove: string[]
+) {
+  if (!groupResourceName || (!add.length && !remove.length)) return;
+  const response = await fetch(
+    `https://people.googleapis.com/v1/${groupResourceName}/members:modify`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        resourceNamesToAdd: add,
+        resourceNamesToRemove: remove,
+      }),
+    }
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`people_group_modify_failed:${response.status}:${errorText}`);
+  }
 }
 
 function requireSecret(value: string | undefined, name: string) {
