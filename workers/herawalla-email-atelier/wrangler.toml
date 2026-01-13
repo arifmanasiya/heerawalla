@@ -24,12 +24,13 @@ REPLY_TO_ADDRESS = "relay-reply@heerawalla.com"
 SEND_ACK = "true"
 SEND_REJECT = "false"
 SEND_SUBMIT = "true"
+SUBSCRIBE_TO = "noreply.heerawalla@gmail.com"
 
 # Secrets are configured via `wrangler secret put` or in the Cloudflare dashboard.
 
 [[send_email]]
 name = "SEND_EMAIL"
-allowed_sender_addresses = ["atelier@heerawalla.com"]
+allowed_sender_addresses = ["atelier@heerawalla.com", "no-reply@heerawalla.com"]
 
 [[kv_namespaces]]
 binding = "HEERAWALLA_ACKS"

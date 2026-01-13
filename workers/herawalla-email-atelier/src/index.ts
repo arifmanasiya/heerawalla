@@ -12,6 +12,7 @@ export interface Env {
   SEND_ACK?: string | boolean;
   SEND_REJECT?: string | boolean;
   SEND_SUBMIT?: string | boolean;
+  SUBSCRIBE_TO?: string;
   RESEND_API_KEY?: string;
   ATELIER_SENDERS?: string;
   REPLY_TO_ADDRESS?: string;
@@ -151,6 +152,62 @@ const CONTACT_ACK_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+const SUBSCRIBE_ACK_SUBJECT = "Heerawalla - You're on the list";
+const SUBSCRIBE_ACK_TEXT = [
+  "Thank you for joining Heerawalla.",
+  "",
+  "You're on the list for new drops, atelier updates, and bespoke highlights.",
+  "",
+  "If you'd like to refine your interests, reply to this email.",
+  "",
+  "Warm regards,",
+  "Heerawalla",
+  "www.heerawalla.com",
+].join("\n");
+
+const SUBSCRIBE_ACK_HTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#f6f5f2;color:#0f172a;font-family:-apple-system, Segoe UI, Helvetica, Arial, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;">
+          <tr>
+            <td style="padding:36px 40px 28px 40px;">
+              <div style="margin:0 0 16px 0;">
+                <img src="https://www.heerawalla.com/images/engraving_mark.svg" width="36" height="36" alt="Heerawalla" style="display:block;">
+              </div>
+              <div style="font-size:12px;letter-spacing:0.32em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">
+                Heerawalla
+              </div>
+              <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.4;font-weight:600;color:#0f172a;">
+                You're on the list
+              </h1>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;">
+                Thank you for joining Heerawalla. You're on the list for new drops, atelier updates, and bespoke highlights.
+              </p>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.7;color:#334155;">
+                If you'd like to refine your interests, reply to this email.
+              </p>
+              <div style="height:1px;background:#e5e7eb;margin:0 0 18px 0;"></div>
+              <p style="margin:0 0 6px 0;font-size:14px;color:#0f172a;">Warm regards,</p>
+              <p style="margin:0 0 10px 0;font-size:14px;font-weight:600;color:#0f172a;">Heerawalla</p>
+              <p style="margin:0;font-size:12px;color:#64748b;">
+                <a href="https://www.heerawalla.com" style="color:#64748b;text-decoration:underline;">www.heerawalla.com</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
 const CONSULTATION_ACK_SUBJECT = "Heerawalla - Consultation confirmed";
 const REQUEST_ID_PREFIX = "HW-REQ:";
 const REQUEST_ID_LABEL = "Heerawalla Request ID:";
@@ -161,6 +218,7 @@ const BESPOKE_DIRECT_URL = "https://www.heerawalla.com/bespoke";
 const SUBMIT_PATH = "/submit";
 const SUBMIT_STATUS_PATH = "/submit-status";
 const CONTACT_SUBMIT_PATH = "/contact-submit";
+const SUBSCRIBE_PATH = "/subscribe";
 const REQUEST_ORIGIN_TTL = 60 * 60 * 24 * 180;
 const REQUEST_SUMMARY_TTL = 60 * 60 * 24 * 180;
 const REQUEST_SUMMARY_MAX_LINES = 60;
@@ -415,6 +473,176 @@ export default {
             headers: buildCorsHeaders(allowedOrigin, true),
           });
         }
+      }
+    }
+
+    if (url.pathname === SUBSCRIBE_PATH) {
+      logInfo("subscribe_received", { origin, method: request.method });
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+
+      if (request.method !== "POST") {
+        logWarn("subscribe_invalid_method", { method: request.method });
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+
+      if (!allowedOrigin) {
+        logWarn("subscribe_forbidden_origin", { origin });
+        return new Response("Forbidden", { status: 403 });
+      }
+
+      try {
+        const payload = await safeJson(request);
+        if (!isRecord(payload)) {
+          logWarn("subscribe_invalid_payload", { origin });
+          return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        const senderEmail = getString(payload.email);
+        const name = getString(payload.name);
+        const phone = getString(payload.phone);
+        const interests = getStringArray(payload.interests || payload.interest || payload.designInterests);
+        const source = getString(payload.source);
+        const pageUrl = getString(payload.pageUrl);
+        const requestId = generateRequestId();
+
+        if (!senderEmail) {
+          logWarn("subscribe_missing_fields", { requestId });
+          return new Response(JSON.stringify({ ok: false, error: "missing_fields" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        if (!isValidEmail(senderEmail)) {
+          logWarn("subscribe_invalid_email", { requestId, email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "invalid_email" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        if (phone && !isValidPhone(phone)) {
+          logWarn("subscribe_invalid_phone", { requestId, email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "invalid_phone" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        if (!interests.length) {
+          logWarn("subscribe_missing_interests", { requestId, email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "missing_interests" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        const senderDomain = senderEmail.split("@")[1] || "";
+        const domainOk = await hasValidEmailDomain(senderDomain);
+        if (!domainOk) {
+          logWarn("subscribe_invalid_domain", { requestId, email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "invalid_email_domain" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        const shouldSendSubmit = isEnabled(env.SEND_SUBMIT, true);
+        if (!shouldSendSubmit) {
+          logWarn("subscribe_send_disabled", { requestId, email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "send_disabled" }), {
+            status: 503,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        if (env.HEERAWALLA_ACKS) {
+          const rateIp = request.headers.get("CF-Connecting-IP") || "unknown";
+          const bucket = new Date();
+          const hourKey = `${bucket.getUTCFullYear()}${String(bucket.getUTCMonth() + 1).padStart(2, "0")}${String(
+            bucket.getUTCDate()
+          ).padStart(2, "0")}${String(bucket.getUTCHours()).padStart(2, "0")}`;
+          const rateKey = `subscribe:rl:${rateIp}:${hourKey}`;
+          const currentCount = Number(await env.HEERAWALLA_ACKS.get(rateKey)) || 0;
+          if (currentCount >= MAX_SUBMISSIONS_PER_HOUR) {
+            logWarn("subscribe_rate_limited", { requestId, email: maskEmail(senderEmail) });
+            return new Response(JSON.stringify({ ok: false, error: "rate_limited" }), {
+              status: 429,
+              headers: buildCorsHeaders(allowedOrigin, true),
+            });
+          }
+          await env.HEERAWALLA_ACKS.put(rateKey, String(currentCount + 1), { expirationTtl: 60 * 60 });
+        }
+
+        const subject = name
+          ? `Heerawalla join request from ${name}`
+          : "Heerawalla join request";
+        const bodyLines = [
+          name ? `Name: ${name}` : "",
+          `Email: ${senderEmail}`,
+          phone ? `Phone: ${phone}` : "",
+          interests.length ? `Interests: ${interests.join(", ")}` : "",
+          source ? `Source: ${source}` : "",
+          pageUrl ? `Page: ${pageUrl}` : "",
+        ].filter(Boolean);
+        const body = bodyLines.join("\n");
+
+        const forwardTo = (env.SUBSCRIBE_TO || "noreply.heerawalla@gmail.com").trim();
+        const replyTo = name ? `${name} <${senderEmail}>` : senderEmail;
+        try {
+          await sendEmail(env, {
+            to: [forwardTo || "noreply.heerawalla@gmail.com"],
+            sender: "Heerawalla <atelier@heerawalla.com>",
+            replyTo,
+            subject,
+            textBody: body,
+            htmlBody: buildForwardHtml({
+              subject,
+              body,
+              senderEmail,
+              senderName: name,
+              requestId,
+            }),
+          });
+
+          if (isEnabled(env.SEND_ACK, true)) {
+            await sendEmail(env, {
+              to: [senderEmail],
+              sender: "Heerawalla <no-reply@heerawalla.com>",
+              replyTo: "no-reply@heerawalla.com",
+              subject: SUBSCRIBE_ACK_SUBJECT,
+              textBody: SUBSCRIBE_ACK_TEXT,
+              htmlBody: SUBSCRIBE_ACK_HTML,
+              headers: autoReplyHeaders(),
+            });
+          }
+        } catch (error) {
+          logError("subscribe_send_failed", { requestId, email: maskEmail(senderEmail) });
+          throw error;
+        }
+
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      } catch (error) {
+        const message = String(error);
+        logError("subscribe_error", { message });
+        return new Response(JSON.stringify({ ok: false, error: "send_failed", detail: message }), {
+          status: 500,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
       }
     }
 
@@ -1422,6 +1650,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function getString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function getStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => getString(entry)).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(/[|,]/g)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return [];
 }
 
 function getBoolean(value: unknown) {

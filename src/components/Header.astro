@@ -2,8 +2,8 @@
 import { withBase } from '../lib/paths';
 ---
 
-<header class="w-full">
-  <div class="max-w-7xl mx-auto px-6 pt-6 pb-2 flex items-center justify-between gap-6">
+<header class="w-full sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200/60">
+  <div class="w-full px-6 pt-6 pb-2 flex items-center justify-between gap-6">
     <a href={withBase('/')} class="text-left">
       <span class="wordmark text-[15px] sm:text-[16px]">Heerawalla</span>
     </a>
@@ -13,7 +13,7 @@ import { withBase } from '../lib/paths';
     </nav>
   </div>
   <nav
-    class="md:hidden max-w-7xl mx-auto px-6 pb-3 flex items-center gap-6 text-[10px] uppercase tracking-[0.28em] text-slate-500"
+    class="md:hidden w-full px-6 pb-3 flex items-center gap-6 text-[10px] uppercase tracking-[0.28em] text-slate-500"
     aria-label="Primary"
   >
     <a href={withBase('/inspirations')} class="hover:text-ink">Inspirations</a>

@@ -3,11 +3,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import { loadProductsWithMedia, type ProductWithMedia } from '../lib/products';
+import { loadInspirations, type Inspiration } from '../lib/inspirations';
 import { loadSiteConfig, getConfigValue } from '../lib/config';
 import { withBase } from '../lib/paths';
 
 const products: ProductWithMedia[] = await loadProductsWithMedia();
 const featured = products.filter((p) => p.is_featured);
+const inspirations: Inspiration[] = await loadInspirations();
+const inspirationHighlights = inspirations.slice(0, 3);
+const primaryInspiration = inspirationHighlights[0];
+const secondaryInspirations = inspirationHighlights.slice(1);
 const config = await loadSiteConfig();
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const applyDiscount = (value: number, pct?: number) => {
@@ -38,94 +43,99 @@ const editionLabel = (category?: string, fallback?: string) => {
 };
 const heroImage = withBase('/images/hero.png');
 const fallbackImage = withBase('/images/products/placeholder.svg');
+const heroSlides = [
+  heroImage,
+  ...featured.map((product) => product.media.images[0]?.url).filter(Boolean),
+].filter((value, index, self) => self.indexOf(value) === index);
+const heroSlideDurationMs = 8000;
+const heroSlideFadeMs = 2400;
+const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
 ---
 
 <BaseLayout title={metaTitle} description={metaDescription}>
   <Header />
 
   <main class="space-y-20">
-    <section class="max-w-7xl mx-auto px-6 pt-4 lg:pt-8">
-      <div class="grid gap-12 lg:gap-16 lg:grid-cols-[1.2fr_1.6fr] items-end relative">
-        <div class="space-y-7 order-2 lg:order-1">
-          <p class="text-[11px] uppercase tracking-[0.38em] text-slate-500">MAISON HEERAWALLA</p>
-          <h1 class="font-display text-5xl sm:text-6xl leading-[0.98] tracking-[0.02em] text-ink">Heerawalla Revolution</h1>
-          <!-- CMS swap: Variant B subheadline -->
-          <!-- The world revolves around her&mdash;crafted for every way she moves through it. -->
-          <!-- CMS swap: Variant C subheadline -->
-          <!-- The world revolves around her. -->
-          <p class="text-lg text-slate-600 max-w-xl">The world revolves around you&mdash;subtle, elegant, or bold.</p>
-          <!-- CMS swap: Variant B supporting line -->
-          <!-- Discover three signatures of the same power: Axis (anchored), Continuum (fluid), Eclipse (magnetic). -->
-          <!-- CMS swap: Variant C supporting line -->
-          <!-- Axis. Continuum. Eclipse. -->
-          <p class="text-sm text-slate-600 max-w-lg">Axis, Continuum, and Eclipse are three design codes&mdash;each expressed through the Women's and Men's Editions.</p>
-          <div class="space-y-3">
-            <div class="grid gap-3 sm:grid-cols-2">
-              <a
-                class="inline-flex items-center justify-center min-h-[44px] px-6 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                href={withBase('/mens-jewelry')}
+    <section class="w-full pt-2 lg:pt-6">
+      <div class="hero-media hero-media--campaign hero-media--full w-full h-[95vh] max-h-[95vh] min-h-[320px]">
+        <div
+          class="hero-media__slides"
+          data-hero-slides
+          data-slide-duration={heroSlideDurationMs}
+          data-fade-duration={heroSlideFadeMs}
+          style={`--slide-duration: ${heroSlideDurationMs}ms; --fade-duration: ${heroSlideFadeMs}ms; --pan-duration: ${heroSlidePanMs}ms;`}
+        >
+          {heroSlides.map((src, index) => {
+            const isHero = index === 0;
+            const classes = `hero-media__slide${isHero ? ' is-hero' : ''}${isHero ? ' is-active' : ''}`;
+            return (
+              <div
+                class={classes}
+                style={`background-image: url('${src}');`}
               >
-                Shop Men
-              </a>
-              <a
-                class="inline-flex items-center justify-center min-h-[44px] px-6 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                href={withBase('/womens-jewelry')}
-              >
-                Shop Women
-              </a>
-            </div>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <a
-                class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 text-sm uppercase tracking-[0.2em] text-ink border border-ink/20 rounded-none hover:border-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                href={withBase('/inspirations')}
-              >
-                Explore inspirations
-              </a>
-              <a
-                class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 text-sm uppercase tracking-[0.2em] text-ink border border-ink/20 rounded-none hover:border-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                href={withBase('/inspirations/spiral-continuum/bespoke?direct=1')}
-              >
-                Begin bespoke order
-              </a>
-            </div>
-            <div class="grid sm:grid-cols-2">
-              <a
-                class="inline-flex w-full items-center justify-center min-h-[44px] px-5 py-3 text-sm uppercase tracking-[0.2em] text-ink border border-ink/20 rounded-none hover:border-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:col-span-2"
-                href={withBase('/contact?intent=consultation')}
-              >
-                Book a private consultation
-              </a>
-            </div>
+                <img
+                  src={src}
+                  alt={
+                    isHero
+                      ? 'Heerawalla Revolution jewelry composition with sculpted gold forms and luminous diamonds.'
+                      : ''
+                  }
+                  class="hero-media__slide-image"
+                  loading={isHero ? 'eager' : 'lazy'}
+                  decoding="async"
+                  aria-hidden={isHero ? undefined : 'true'}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <div class="hero-media__copy">
+          <p class="text-[11px] uppercase tracking-[0.38em] text-white/80">Heirloom Jewelry</p>
+          <h1 class="font-display text-4xl sm:text-5xl lg:text-6xl leading-[0.98] tracking-[0.02em] text-white">
+            Crafted to Endure
+          </h1>
+          <p class="text-sm sm:text-base text-white/80 max-w-md">
+            The world revolves around you&mdash;subtle, elegant, or bold.
+          </p>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <a
+              class="inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto"
+              href={withBase('/mens-jewelry')}
+            >
+              Shop Men
+            </a>
+            <a
+              class="inline-flex w-full items-center justify-center min-h-[44px] px-6 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto"
+              href={withBase('/womens-jewelry')}
+            >
+              Shop Women
+            </a>
           </div>
         </div>
-        <div class="hero-media hero-media--campaign w-full h-[360px] sm:h-[420px] md:h-[480px] lg:h-[620px] max-h-[70vh] order-1 lg:order-2">
-          <img
-            src={heroImage}
-            alt="Heerawalla Revolution jewelry composition with sculpted gold forms and luminous diamonds."
-            class="hero-media__image"
-            loading="lazy"
-          />
-          <svg
-            viewBox="0 0 100 100"
-            class="hero-media__seal"
-            aria-hidden="true"
-          >
-            <path fill="currentColor" fill-rule="evenodd" d="
-              M50 11
-              A39 39 0 1 1 50 89
-              A39 39 0 1 1 50 11
-              Z
-              M50 17
-              A33 33 0 1 0 50 83
-              A33 33 0 1 0 50 17
-              Z
-            "/>
-            <rect x="47.25" y="6" width="5.5" height="88" rx="1.5" fill="currentColor"/>
-          </svg>
-        </div>
+        <a class="scroll-arrow scroll-arrow--light" href="#customization-atelier" aria-label="Scroll to customization and atelier"></a>
+        <svg
+          viewBox="0 0 100 100"
+          class="hero-media__seal"
+          aria-hidden="true"
+        >
+          <path fill="currentColor" fill-rule="evenodd" d="
+            M50 11
+            A39 39 0 1 1 50 89
+            A39 39 0 1 1 50 11
+            Z
+            M50 17
+            A33 33 0 1 0 50 83
+            A33 33 0 1 0 50 17
+            Z
+          "/>
+          <rect x="47.25" y="6" width="5.5" height="88" rx="1.5" fill="currentColor"/>
+        </svg>
       </div>
     </section>
     <style>
+      :global(html) {
+        scroll-behavior: smooth;
+      }
       :global(.hero-media--campaign) {
         position: relative;
         overflow: hidden;
@@ -133,25 +143,61 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
         border-radius: 2px;
         box-shadow: inset 0 0 0 1px rgba(11, 25, 40, 0.1);
       }
+      :global(.hero-media__slides) {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+      }
+      :global(.hero-media--full) {
+        border-radius: 0;
+        box-shadow: none;
+      }
       :global(.hero-media--campaign)::before {
         content: '';
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, rgba(11, 25, 40, 0) 55%, rgba(11, 25, 40, 0.12) 100%);
+        background:
+          linear-gradient(180deg, rgba(11, 25, 40, 0.1) 0%, rgba(11, 25, 40, 0) 35%),
+          linear-gradient(180deg, rgba(11, 25, 40, 0) 55%, rgba(11, 25, 40, 0.12) 100%);
         pointer-events: none;
         z-index: 2;
       }
       :global(.hero-media--campaign)::after {
         content: none;
       }
-      :global(.hero-media--campaign .hero-media__image) {
+      :global(.hero-media--campaign .hero-media__slide) {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
-        object-fit: cover;
-        object-position: 50% 30%;
+        opacity: 0;
+        transition: opacity var(--fade-duration, 1400ms) ease-in-out;
         z-index: 0;
+        background-size: cover;
+        background-position: 50% 35%;
+        background-repeat: no-repeat;
+      }
+      :global(.hero-media--campaign .hero-media__slide::before) {
+        content: '';
+        position: absolute;
+        inset: -6%;
+        background-image: inherit;
+        background-size: cover;
+        background-position: 50% 35%;
+        filter: blur(24px) saturate(1.08);
+        transform: scale(1.05);
+        opacity: 0.5;
+      }
+      :global(.hero-media--campaign .hero-media__slide-image) {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        object-position: 50% 50%;
+      }
+      :global(.hero-media--campaign .hero-media__slide.is-active) {
+        opacity: 1;
       }
       :global(.hero-media--campaign .hero-media__seal) {
         position: absolute;
@@ -164,94 +210,267 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
         pointer-events: none;
         z-index: 3;
       }
-      @media (min-width: 1024px) {
-        :global(.hero-media--campaign .hero-media__image) {
-          object-fit: cover;
-          object-position: 50% 38%;
-        }
+      :global(.hero-media--campaign .hero-media__copy) {
+        position: absolute;
+        left: 6%;
+        bottom: 8%;
+        z-index: 3;
+        display: grid;
+        gap: 10px;
+        text-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
       }
-      @media (max-width: 1024px) {
-        :global(.hero-media--campaign .hero-media__image) {
-          object-position: 50% 32%;
+      :global(.scroll-arrow) {
+        position: absolute;
+        left: 50%;
+        bottom: 4%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 36px;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        display: none;
+        place-items: center;
+        color: inherit;
+        background: transparent;
+        backdrop-filter: blur(6px);
+        text-decoration: none;
+        z-index: 3;
+      }
+      :global(.scroll-arrow)::after {
+        content: '';
+        width: 9px;
+        height: 9px;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: translateY(-1px) rotate(45deg);
+      }
+      :global(.scroll-arrow--light) {
+        border-color: rgba(255, 255, 255, 0.55);
+        color: #ffffff;
+        background: rgba(11, 25, 40, 0.25);
+      }
+      :global(.scroll-arrow--light:hover) {
+        border-color: rgba(255, 255, 255, 0.8);
+        background: rgba(11, 25, 40, 0.35);
+      }
+      :global(.scroll-arrow--light:focus-visible) {
+        outline: 2px solid #ffffff;
+        outline-offset: 3px;
+      }
+      :global(.scroll-arrow--dark) {
+        position: static;
+        transform: none;
+        display: grid;
+        border-color: rgba(11, 25, 40, 0.25);
+        color: rgba(11, 25, 40, 0.75);
+        background: rgba(255, 255, 255, 0.7);
+      }
+      :global(.scroll-arrow--dark:hover) {
+        border-color: rgba(11, 25, 40, 0.4);
+        color: rgba(11, 25, 40, 0.9);
+      }
+      :global(.scroll-arrow--dark:focus-visible) {
+        outline: 2px solid rgba(11, 25, 40, 0.6);
+        outline-offset: 3px;
+      }
+      @media (min-width: 640px) {
+        :global(.scroll-arrow--light) {
+          display: grid;
         }
       }
       @media (max-width: 640px) {
-        :global(.hero-media--campaign .hero-media__image) {
-          object-position: 50% 28%;
+        :global(.hero-media__slides) {
+          --fade-duration: 2400ms;
+        }
+        :global(.hero-media--campaign .hero-media__copy) {
+          left: 5%;
+          right: 5%;
+          bottom: 6%;
+        }
+        :global(.hero-media--campaign .hero-media__slide) {
+          background-image: none !important;
+          background-color: #ffffff;
+        }
+        :global(.hero-media--campaign .hero-media__slide::before) {
+          content: none;
+        }
+        :global(.hero-media--campaign .hero-media__slide-image) {
+          object-fit: cover;
+          object-position: 50% 50%;
+        }
+        :global(.hero-media--campaign .hero-media__slide.is-active .hero-media__slide-image) {
+          object-position: 0% 50%;
+          animation: hero-pan var(--pan-duration, 6000ms) ease-in-out 1 both;
+          animation-delay: 250ms;
+        }
+        :global(.hero-media--campaign .hero-media__slide.is-exiting .hero-media__slide-image) {
+          object-position: 100% 50%;
+          animation: none;
+        }
+        :global(.hero-media--campaign .hero-media__slide.is-hero.is-active .hero-media__slide-image) {
+          object-position: 15% 50%;
+          animation-name: hero-pan-soft;
+        }
+        :global(.hero-media--campaign .hero-media__slide.is-hero.is-exiting .hero-media__slide-image) {
+          object-position: 85% 50%;
+        }
+        @keyframes hero-pan {
+          0% {
+            object-position: 0% 50%;
+          }
+          100% {
+            object-position: 100% 50%;
+          }
+        }
+        @keyframes hero-pan-soft {
+          0% {
+            object-position: 15% 50%;
+          }
+          100% {
+            object-position: 85% 50%;
+          }
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :global(.hero-media--campaign .hero-media__slide) {
+          transition: none;
+        }
+        :global(.hero-media--campaign .hero-media__slide-image) {
+          animation: none;
         }
       }
     </style>
-    <section class="max-w-7xl mx-auto px-6 pt-6 lg:pt-10 space-y-8">
-      <div class="flex flex-col gap-10">
-        {featured.map((product) => {
-          const image = product.media.images[0]?.url || fallbackImage;
-          const heroDescription = product.media.images[0]?.description || product.description;
-          const designCode = normalizeDesignCode(product.design_code);
-          const labAvailable = product.lab_available ?? true;
-          const baseDiamondUsd = labAvailable
-            ? applyDiscount(product.price_usd_natural, product.lab_discount_pct)
-            : product.price_usd_natural;
-          const startingUsd = applyDiscount(
-            baseDiamondUsd,
-            product.metal_14k_discount_pct
-          );
-          const label = editionLabel(product.category, product.collection);
-          return (
+    <script is:inline>
+      (() => {
+        const container = document.querySelector('[data-hero-slides]');
+        if (!container) return;
+        const slides = Array.from(container.querySelectorAll('.hero-media__slide'));
+        if (slides.length < 2) return;
+        const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const mobileView = window.matchMedia('(max-width: 640px)');
+        if (prefersReduced.matches) return;
+        const slideDuration = Number(container.dataset.slideDuration) || 7000;
+        const fadeDuration = Number(container.dataset.fadeDuration) || 2000;
+        let index = 0;
+        window.setInterval(() => {
+          const current = slides[index];
+          index = (index + 1) % slides.length;
+          const next = slides[index];
+          current.classList.add('is-exiting');
+          current.classList.remove('is-active');
+          next.classList.add('is-active');
+          window.setTimeout(() => {
+            current.classList.remove('is-exiting');
+          }, fadeDuration);
+        }, slideDuration);
+      })();
+    </script>
+    <section id="customization-atelier" class="max-w-6xl mx-auto px-6 pt-6 lg:pt-10 min-h-[95vh] flex flex-col">
+      <div class="flex-1 flex items-center">
+        <div class="grid w-full gap-10 lg:grid-cols-[1.05fr_1.2fr] items-start">
+        <!-- CMS swap: Variant B subheadline -->
+        <!-- The world revolves around her&mdash;crafted for every way she moves through it. -->
+        <!-- CMS swap: Variant C subheadline -->
+        <!-- The world revolves around her. -->
+        <!-- CMS swap: Variant B supporting line -->
+        <!-- Discover three signatures of the same power: Axis (anchored), Continuum (fluid), Eclipse (magnetic). -->
+        <!-- CMS swap: Variant C supporting line -->
+        <!-- Axis. Continuum. Eclipse. -->
+        <div class="flex h-full flex-col">
+          <p class="text-[11px] uppercase tracking-[0.3em] text-slate-400">Customization</p>
+          <div class="flex-1 flex items-center justify-center">
+            <img
+              src={withBase('/images/engraving_mark.svg')}
+              alt=""
+              aria-hidden="true"
+              class="w-32 sm:w-36 opacity-15"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+          <div class="space-y-4">
+            <h2 class="font-display text-3xl sm:text-4xl tracking-tight text-ink">Begin with inspiration, finish with a signature.</h2>
+            <p class="text-sm text-slate-600 max-w-lg">
+              Explore design directions curated by the atelier, then shape them into a personal commission.
+            </p>
+            <div class="flex flex-col gap-3">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+                <a
+                  class="inline-flex w-full items-center justify-center min-h-[44px] px-5 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto sm:flex-1"
+                  href={withBase('/inspirations')}
+                >
+                  Explore inspirations
+                </a>
+                <a
+                  class="inline-flex w-full items-center justify-center min-h-[44px] px-5 py-3 bg-ink text-white text-sm uppercase tracking-[0.2em] rounded-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto sm:flex-1"
+                  href={withBase('/inspirations/spiral-continuum/bespoke?direct=1')}
+                >
+                  Begin bespoke order
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2 sm:items-stretch">
+          {primaryInspiration && (
             <a
-              href={withBase(`/product/${product.slug}`)}
-              class="group flex flex-col gap-4"
-              data-product-card
-              data-design-card
-              data-design-code={designCode}
-              data-design-code-label={product.design_code}
-              data-collection={product.collection}
-              data-category={product.category}
-              data-metal={product.metal}
-              data-price={product.price_usd_natural}
+              href={withBase(`/inspirations/${primaryInspiration.slug}`)}
+              class="group relative overflow-hidden border border-slate-200 bg-white aspect-[3/4] sm:aspect-[2/3] sm:h-full"
             >
-              <div class="border border-slate-200 bg-white">
-                <img
-                  src={image}
-                  alt={product.name}
-                  loading="lazy"
-                  class="w-full h-auto object-contain transition duration-300 group-hover:scale-[1.02]"
-                />
+              <img
+                src={withBase(primaryInspiration.heroImage)}
+                alt={primaryInspiration.title}
+                loading="lazy"
+                class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+              />
+              <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 via-black/0 to-transparent px-4 py-3 text-xs uppercase tracking-[0.2em] text-white">
+                {primaryInspiration.title}
               </div>
-              <div class="flex items-start justify-between gap-4">
-                <div>
-                  <div class="text-[10px] uppercase tracking-[0.24em] text-slate-500">{label}</div>
-                  <div class="text-lg font-semibold tracking-tight">{product.name}</div>
-                </div>
-                <span class="text-[10px] uppercase tracking-[0.24em] text-slate-400">Gold | Diamonds</span>
-              </div>
-              <p class="text-sm text-slate-500 line-clamp-2">{heroDescription}</p>
-              <span class="text-sm font-semibold">Starting {usdFormatter.format(startingUsd)}</span>
             </a>
-          );
-        })}
-      </div>
-      <div class="flex flex-col sm:flex-row sm:items-center sm:gap-6 gap-2 text-xs uppercase tracking-[0.3em] text-slate-500">
-        <span class="text-[11px] tracking-[0.24em] text-slate-400">Looking for a custom direction?</span>
-        <div class="flex items-center gap-4">
-          <a href={withBase('/inspirations')} class="hover:text-ink">Explore inspirations</a>
-          <a href={withBase('/inspirations/spiral-continuum/bespoke?direct=1')} class="hover:text-ink">Request bespoke</a>
+          )}
+          <div class="flex flex-col gap-3 sm:h-full">
+            {secondaryInspirations.map((item) => (
+              <a
+                href={withBase(`/inspirations/${item.slug}`)}
+                class="group relative overflow-hidden border border-slate-200 bg-white aspect-[3/4] sm:aspect-auto sm:flex-1"
+              >
+                <img
+                  src={withBase(item.heroImage)}
+                  alt={item.title}
+                  loading="lazy"
+                  class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                />
+                <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 via-black/0 to-transparent px-4 py-3 text-xs uppercase tracking-[0.2em] text-white">
+                  {item.title}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
         </div>
       </div>
+      <div class="flex items-center justify-center pb-6">
+        <a class="scroll-arrow scroll-arrow--dark" href="#atelier" aria-label="Scroll to the atelier section"></a>
+      </div>
     </section>
-
-    <section class="container">
-      <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-center border-t border-slate-200 pt-10">
-        <div class="space-y-6">
-          <p class="text-xs uppercase tracking-[0.28em] text-slate-500">The Atelier</p>
-          <h2 class="font-display text-3xl sm:text-4xl tracking-tight">Jewels for personal rituals and generational keeping.</h2>
+    <section class="container scroll-mt-24" id="atelier">
+      <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-start pt-10">
+        <div class="space-y-6 flex flex-col">
+          <p class="text-[11px] uppercase tracking-[0.3em] text-slate-400">The Atelier</p>
+          <p class="text-xs tracking-[0.12em] text-slate-500">Why bespoke endures</p>
+          <h2 class="font-display text-3xl sm:text-4xl tracking-tight">Heirloom jewelry, verified by design and by diamond.</h2>
           <p class="text-sm text-slate-600">
-            Every piece is crafted with deliberate restraint: refined proportions, luminous stones, and a finish that
-            rewards a closer look.
+            Every piece is built for a lifetime of wear, and every stone is authenticated three ways: IGI certification,
+            laser inscription, and a Heerawalla certificate signed by our in-house diamond grader.
           </p>
           <div class="grid gap-4 text-sm text-slate-600">
             <div class="flex items-center justify-between border-b border-slate-200 pb-3">
-              <span>Ethical sourcing</span>
-              <span class="text-slate-500">Conflict-free stones</span>
+              <span>Diamond integrity</span>
+              <span class="text-slate-500">IGI-certified with laser-engraved IDs</span>
+            </div>
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+              <span>Heerawalla verification</span>
+              <span class="text-slate-500">In-house grading and signature certificate</span>
             </div>
             <div class="flex items-center justify-between border-b border-slate-200 pb-3">
               <span>Metalsmithing</span>
@@ -262,6 +481,12 @@ const fallbackImage = withBase('/images/products/placeholder.svg');
               <span class="text-slate-500">One-time accidental repair within 3 years</span>
             </div>
           </div>
+          <a
+            class="inline-flex w-full items-center justify-center min-h-[44px] px-5 py-3 text-sm uppercase tracking-[0.2em] text-ink border border-ink/20 rounded-none hover:border-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto sm:self-end"
+            href={withBase('/contact?intent=consultation')}
+          >
+            Book a private consultation
+          </a>
         </div>
         <div class="relative aspect-[3/4] overflow-hidden border border-slate-200">
           <img src={withBase('/images/atelier.png')} alt="Atelier detail" class="h-full w-full object-cover" loading="lazy" />

@@ -1,2 +1,2 @@
 id,name,slug,description,collection,category,metal,price_usd_natural,lab_discount_pct,metal_14k_discount_pct,natural_available,lab_available,design_code,is_active,is_featured,tags,cut,clarity,color,carat
-hw-001,Signature ·Legacy,legacy-band,"""Signature” positions it as the definitive men’s ring.",Signature,men/bands,18k Yellow / White Gold,3500,-20,-5,TRUE,TRUE,Signature,TRUE,FALSE,band,Ideal,VVS1 - VVS2,E,1
+hw-001,Signature - Legacy,legacy-band,"Signature positions it as the definitive men's ring.",Signature,men/bands,18k Yellow / White Gold,3500,-20,-5,TRUE,TRUE,Signature,TRUE,FALSE,band,Ideal,VVS1 - VVS2,E,1
