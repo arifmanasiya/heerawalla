@@ -19,6 +19,7 @@ export interface Env {
 }
 
 const ACK_SUBJECT_PREFIX = "Heerawalla - Your request has been received";
+const CONTACT_ACK_SUBJECT = "Heerawalla - Thanks for your message";
 const EMAIL_TEXT = [
   "Thank you for contacting Heerawalla.",
   "",
@@ -85,6 +86,64 @@ const EMAIL_HTML = `<!DOCTYPE html>
         </p>
         <p style="margin:6px 0 0 0;font-size:11px;color:#94a3b8;">
           Privacy: We do not store your data beyond this email thread. This exchange remains private and direct.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+const CONTACT_ACK_TEXT = [
+  "Thank you for reaching out to Heerawalla.",
+  "",
+  "We have received your message and will respond within 1-2 business days.",
+  "",
+  "If you need to add details, simply reply to this email.",
+  "",
+  "Warm regards,",
+  "Heerawalla",
+  "www.heerawalla.com",
+].join("\n");
+
+const CONTACT_ACK_HTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#f6f5f2;color:#0f172a;font-family:-apple-system, Segoe UI, Helvetica, Arial, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;">
+          <tr>
+            <td style="padding:36px 40px 28px 40px;">
+              <div style="margin:0 0 16px 0;">
+                <img src="https://www.heerawalla.com/images/engraving_mark.svg" width="36" height="36" alt="Heerawalla" style="display:block;">
+              </div>
+              <div style="font-size:12px;letter-spacing:0.32em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">
+                Heerawalla
+              </div>
+              <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.4;font-weight:600;color:#0f172a;">
+                Thanks for your message
+              </h1>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;">
+                We have received your message and will respond within 1-2 business days.
+              </p>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.7;color:#334155;">
+                If you need to add details, simply reply to this email.
+              </p>
+              <div style="height:1px;background:#e5e7eb;margin:0 0 18px 0;"></div>
+              <p style="margin:0 0 6px 0;font-size:14px;color:#0f172a;">Warm regards,</p>
+              <p style="margin:0 0 10px 0;font-size:14px;font-weight:600;color:#0f172a;">Heerawalla</p>
+              <p style="margin:0;font-size:12px;color:#64748b;">
+                <a href="https://www.heerawalla.com" style="color:#64748b;text-decoration:underline;">www.heerawalla.com</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:14px 0 0 0;font-size:11px;color:#94a3b8;">
+          You are receiving this message in response to your inquiry.
         </p>
       </td>
     </tr>
@@ -503,9 +562,9 @@ export default {
               to: [senderEmail],
               sender: "Heerawalla <atelier@heerawalla.com>",
               replyTo: getCustomerReplyTo(),
-              subject: buildAckSubject(requestId),
-              textBody: EMAIL_TEXT,
-              htmlBody: EMAIL_HTML,
+              subject: CONTACT_ACK_SUBJECT,
+              textBody: CONTACT_ACK_TEXT,
+              htmlBody: CONTACT_ACK_HTML,
               headers: autoReplyHeaders(),
             });
           }

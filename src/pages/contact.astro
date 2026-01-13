@@ -60,7 +60,7 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
             data-phone-input
           />
         </label>
-        <div class="text-sm space-y-1">
+        <div class="text-sm space-y-1 hidden" data-consultation-only>
           <span class="text-slate-600">Consultation preference</span>
           <div class="flex flex-col gap-2 text-sm text-slate-600">
             <label class="flex items-center gap-2">
@@ -92,7 +92,7 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
         <textarea required name="message" rows="5" class="w-full rounded-lg border border-slate-200 px-3 py-2"></textarea>
       </label>
       <div
-        class="grid gap-3 lg:grid-cols-[1.4fr_1fr]"
+        class="grid gap-3 lg:grid-cols-[1.4fr_1fr] hidden"
         data-consultation-block
         data-booking-link={consultationBookingLink}
         data-calendar-api={calendarApiBase}
@@ -184,6 +184,7 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
       const messageInput = form.querySelector('[name="message"]');
       const phoneInput = form.querySelector('[data-phone-input]');
       const contactPreferenceInputs = form.querySelectorAll('[data-contact-preference]');
+      const consultOnlyFields = form.querySelectorAll('[data-consultation-only]');
       const feeNote = block.querySelector('[data-consultation-fee]');
       if (!isConsult) {
         block.classList.add('hidden');
@@ -191,6 +192,7 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
         if (contactButton) contactButton.classList.remove('hidden');
         if (consultCta) consultCta.classList.add('hidden');
         if (responseNote) responseNote.classList.remove('hidden');
+        consultOnlyFields.forEach((field) => field.classList.add('hidden'));
         if (intro) {
           const text = intro.getAttribute('data-default-text');
           if (text) intro.textContent = text;
@@ -201,6 +203,7 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
         if (contactButton) contactButton.classList.add('hidden');
         if (consultCta) consultCta.classList.remove('hidden');
         if (responseNote) responseNote.classList.add('hidden');
+        consultOnlyFields.forEach((field) => field.classList.remove('hidden'));
         if (intro) {
           const text = intro.getAttribute('data-consult-text');
           if (text) intro.textContent = text;
