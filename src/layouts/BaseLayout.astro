@@ -112,32 +112,32 @@ void websiteJson;
     {gaMeasurementId ? (
       <>
         <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}></script>
-        <script is:inline>
-          {`window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-const isDebug = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-gtag('config', '${gaMeasurementId}', isDebug ? { debug_mode: true } : undefined);
-window.addEventListener('click', (event) => {
-  const target = event.target;
-  if (!(target instanceof Element)) return;
-  const el = target.closest('[data-analytics-event]');
-  if (!el) return;
-  const eventName = el.getAttribute('data-analytics-event');
-  if (!eventName) return;
-  const label = el.getAttribute('data-analytics-label') || el.textContent?.trim() || '';
-  const location = el.getAttribute('data-analytics-location') || '';
-  const href = el instanceof HTMLAnchorElement ? el.href : el.getAttribute('href') || '';
-  if (typeof window.gtag === 'function') {
-    window.gtag('event', eventName, {
-      event_category: 'cta',
-      event_label: label,
-      cta_label: label,
-      cta_location: location,
-      link_url: href
-    });
-  }
-});`}
+        <script is:inline define:vars={{ gaMeasurementId }}>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          const isDebug = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+          gtag('config', gaMeasurementId, isDebug ? { debug_mode: true } : undefined);
+          window.addEventListener('click', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const el = target.closest('[data-analytics-event]');
+            if (!el) return;
+            const eventName = el.getAttribute('data-analytics-event');
+            if (!eventName) return;
+            const label = el.getAttribute('data-analytics-label') || el.textContent?.trim() || '';
+            const location = el.getAttribute('data-analytics-location') || '';
+            const href = el instanceof HTMLAnchorElement ? el.href : el.getAttribute('href') || '';
+            if (typeof window.gtag === 'function') {
+              window.gtag('event', eventName, {
+                event_category: 'cta',
+                event_label: label,
+                cta_label: label,
+                cta_location: location,
+                link_url: href
+              });
+            }
+          });
         </script>
       </>
     ) : null}
