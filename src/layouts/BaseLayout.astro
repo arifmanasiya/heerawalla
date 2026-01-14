@@ -125,7 +125,8 @@ void websiteJson;
           }
           gtag('js', new Date());
           const isDebug = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-          gtag('config', gaMeasurementId, isDebug ? { debug_mode: true } : undefined);
+          const config = isDebug ? { debug_mode: true } : {};
+          gtag('config', gaMeasurementId, config);
           window.addEventListener('click', (event) => {
             const target = event.target;
             if (!(target instanceof Element)) return;
@@ -161,7 +162,48 @@ void websiteJson;
     </script>
   </head>
   <body class="min-h-screen bg-white text-ink">
+    <div
+      id="legacy-browser-banner"
+      role="alert"
+      style="display:none"
+      class="w-full bg-ink text-white text-xs uppercase tracking-[0.2em] px-6 py-3 text-center"
+    >
+      Your browser is out of date. For the best experience, please update your browser.
+      <a
+        href="https://browser-update.org/update.html"
+        class="underline underline-offset-2"
+        target="_blank"
+        rel="noreferrer"
+      >Update browser</a>
+    </div>
     <slot />
+
+    <script is:inline>
+      (function () {
+        var ua = navigator.userAgent;
+        var isOld = false;
+        var chromeMatch = ua.match(/Chrome\/(\d+)/);
+        if (chromeMatch && !/Edg\//.test(ua)) {
+          isOld = parseInt(chromeMatch[1], 10) < 90;
+        }
+        var edgeMatch = ua.match(/Edg\/(\d+)/);
+        if (edgeMatch) {
+          isOld = parseInt(edgeMatch[1], 10) < 90;
+        }
+        var firefoxMatch = ua.match(/Firefox\/(\d+)/);
+        if (firefoxMatch) {
+          isOld = parseInt(firefoxMatch[1], 10) < 90;
+        }
+        var safariMatch = ua.match(/Version\/(\d+).+Safari/);
+        if (safariMatch && !/Chrome|Chromium|Edg/.test(ua)) {
+          isOld = parseInt(safariMatch[1], 10) < 14;
+        }
+        if (!isOld) return;
+        var banner = document.getElementById('legacy-browser-banner');
+        if (!banner) return;
+        banner.style.display = 'block';
+      })();
+    </script>
 
     <script is:inline>
       (() => {
