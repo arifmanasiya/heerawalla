@@ -14,6 +14,8 @@ export async function getStaticPaths() {
 }
 
 const { item } = Astro.props as { item: Inspiration };
+const catalogUrl = import.meta.env.PUBLIC_CATALOG_API_URL || '';
+const catalogMode = (import.meta.env.PUBLIC_CATALOG_MODE || 'hybrid').toLowerCase();
 const metaTitle = `${item.title} | Inspirations | Heerawalla`;
 const metaDescription = item.shortDesc;
 
@@ -61,6 +63,7 @@ const buildEstimateDetails = (inspiration: Inspiration) => {
 };
 
 const estimateDetails = buildEstimateDetails(item);
+const inspirationSlug = item.slug;
 ---
 
 <BaseLayout title={metaTitle} description={metaDescription}>
@@ -82,20 +85,21 @@ const estimateDetails = buildEstimateDetails(item);
             <span class="border border-slate-200 px-2 py-1">{tag}</span>
           ))}
         </div>
-        {estimateDetails.length ? (
-          <div class="space-y-2 pt-2">
-            <p class="text-[10px] uppercase tracking-[0.28em] text-slate-400">
-              Estimate
-            </p>
-            <div class="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
-              {estimateDetails.map((detail) => (
-                <span class="border border-slate-200 px-2 py-1">
-                  {detail.label}: {detail.value}
-                </span>
-              ))}
-            </div>
+        <div class={`space-y-2 pt-2${estimateDetails.length ? '' : ' hidden'}`} data-estimate-wrapper>
+          <p class="text-[10px] uppercase tracking-[0.28em] text-slate-400">
+            Estimate
+          </p>
+          <div
+            class="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500"
+            data-estimate-list
+          >
+            {estimateDetails.map((detail) => (
+              <span class="border border-slate-200 px-2 py-1">
+                {detail.label}: {detail.value}
+              </span>
+            ))}
           </div>
-        ) : null}
+        </div>
         <div class="flex flex-wrap gap-3 pt-2">
           <a
             href={withBase(`/inspirations/${item.slug}/bespoke`)}
@@ -166,4 +170,96 @@ const estimateDetails = buildEstimateDetails(item);
   </main>
 
   <Footer />
+
+  <script is:inline define:vars={{ catalogUrl, catalogMode, inspirationSlug }}>
+    (() => {
+      const catalogUrl = String(catalogUrl || '');
+      const catalogMode = String(catalogMode || '').toLowerCase();
+      const inspirationSlug = String(inspirationSlug || '');
+      if (!catalogUrl || catalogMode === 'ssr' || !inspirationSlug) return;
+
+      const wrapper = document.querySelector('[data-estimate-wrapper]');
+      const listEl = document.querySelector('[data-estimate-list]');
+      if (!wrapper || !listEl) return;
+
+      const usdFormatter = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0
+      });
+
+      const formatNumber = (value) => {
+        if (!Number.isFinite(value)) return '';
+        if (Number.isInteger(value)) return value.toString();
+        return value.toString();
+      };
+
+      const roundTo99 = (value) => {
+        if (!Number.isFinite(value)) return value;
+        const lower = Math.floor(value / 100) * 100 + 99;
+        const upper = Math.ceil(value / 100) * 100 + 99;
+        return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
+      };
+
+      const buildDetails = (item) => {
+        const details = [];
+        const price = Number(item.estimatedPriceUsdVvs1Vvs2_18k || 0);
+        if (price) {
+          details.push({
+            label: 'Est. price',
+            value: usdFormatter.format(roundTo99(price))
+          });
+        }
+        if (item.stoneWeight) {
+          const stoneOptions = item.stoneTypes && item.stoneTypes.length
+            ? ` (${item.stoneTypes.join(' / ')})`
+            : '';
+          details.push({
+            label: 'Stone',
+            value: `${formatNumber(Number(item.stoneWeight))}ct TW${stoneOptions}`
+          });
+        }
+        if (item.metalWeight) {
+          details.push({
+            label: 'Metal',
+            value: `${formatNumber(Number(item.metalWeight))}g 18K`
+          });
+        }
+        return details;
+      };
+
+      const renderDetails = (details) => {
+        if (!details.length) {
+          wrapper.classList.add('hidden');
+          listEl.innerHTML = '';
+          return;
+        }
+        wrapper.classList.remove('hidden');
+        listEl.innerHTML = details
+          .map(
+            (detail) =>
+              `<span class="border border-slate-200 px-2 py-1">${detail.label}: ${detail.value}</span>`
+          )
+          .join('');
+      };
+
+      const fetchCatalog = async () => {
+        const joiner = catalogUrl.includes('?') ? '&' : '?';
+        const url = `${catalogUrl}${joiner}include=inspirations`;
+        try {
+          const response = await fetch(url, { cache: 'no-store' });
+          if (!response.ok) return;
+          const data = await response.json();
+          if (!data || !Array.isArray(data.inspirations)) return;
+          const match = data.inspirations.find((entry) => entry && entry.slug === inspirationSlug);
+          if (!match) return;
+          renderDetails(buildDetails(match));
+        } catch {
+          // Ignore catalog errors; fall back to SSR data.
+        }
+      };
+
+      fetchCatalog();
+    })();
+  </script>
 </BaseLayout>

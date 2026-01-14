@@ -19,6 +19,16 @@ export interface Env {
   TURNSTILE_SECRET?: string;
   CONTACT_LABEL_SUBSCRIBED?: string;
   CONTACT_LABEL_UNSUBSCRIBED?: string;
+  CATALOG_SHEET_ID?: string;
+  CATALOG_PRODUCTS_GID?: string;
+  CATALOG_INSPIRATIONS_GID?: string;
+  CATALOG_SITE_CONFIG_GID?: string;
+  CATALOG_PRODUCTS_URL?: string;
+  CATALOG_INSPIRATIONS_URL?: string;
+  CATALOG_SITE_CONFIG_URL?: string;
+  PRODUCTS_CSV_URL?: string;
+  INSPIRATIONS_CSV_URL?: string;
+  SITE_CONFIG_CSV_URL?: string;
 }
 
 const ACK_SUBJECT_PREFIX = "Heerawalla - Your request has been received";
@@ -250,6 +260,8 @@ const CALENDAR_WINDOWS = [
   { startHour: 10, startMinute: 0, endHour: 12, endMinute: 0 },
   { startHour: 15, startMinute: 0, endHour: 17, endMinute: 0 },
 ] as const;
+const CATALOG_PATH = "/catalog";
+const CATALOG_CACHE_SECONDS = 600;
 const HOLIDAY_CALENDAR_ID = "en.usa#holiday@group.v.calendar.google.com";
 const ALLOWED_ORIGINS = [
   "https://www.heerawalla.com",
@@ -334,6 +346,50 @@ export default {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "";
     const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : "";
+
+    if (url.pathname === CATALOG_PATH) {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: buildCatalogHeaders(),
+        });
+      }
+
+      if (request.method !== "GET") {
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: buildCatalogHeaders(),
+        });
+      }
+
+      const cacheKey = new Request(url.toString(), { method: "GET" });
+      const cache = caches.default;
+      const cached = await cache.match(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
+      try {
+        const payload = await loadCatalogPayload(env, url.searchParams);
+        const response = new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: buildCatalogHeaders(),
+        });
+        response.headers.set(
+          "Cache-Control",
+          `public, max-age=${CATALOG_CACHE_SECONDS}, s-maxage=${CATALOG_CACHE_SECONDS}`
+        );
+        await cache.put(cacheKey, response.clone());
+        return response;
+      } catch (error) {
+        const message = String(error);
+        logError("catalog_error", { message });
+        return new Response(JSON.stringify({ ok: false, error: "catalog_failed" }), {
+          status: 500,
+          headers: buildCatalogHeaders(),
+        });
+      }
+    }
 
     if (url.pathname.startsWith("/calendar")) {
       if (request.method === "OPTIONS") {
@@ -1780,6 +1836,333 @@ function buildCorsHeaders(origin: string, json = false) {
     headers["Content-Type"] = "application/json";
   }
   return headers;
+}
+
+function buildCatalogHeaders() {
+  return {
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Origin": "*",
+    "Content-Type": "application/json",
+  };
+}
+
+const CATALOG_COLUMNS = [
+  "id",
+  "name",
+  "slug",
+  "description",
+  "short_desc",
+  "long_desc",
+  "hero_image",
+  "collection",
+  "categories",
+  "gender",
+  "styles",
+  "motifs",
+  "metals",
+  "stone_types",
+  "stone_weight",
+  "metal_weight",
+  "palette",
+  "takeaways",
+  "translation_notes",
+  "design_code",
+  "cut",
+  "clarity",
+  "color",
+  "carat",
+  "price_usd_natural",
+  "estimated_price_usd_vvs1_vvs2_18k",
+  "lab_discount_pct",
+  "metal_platinum_premium",
+  "metal_14k_discount_pct",
+  "is_active",
+  "is_featured",
+  "tags",
+] as const;
+
+function parseCsvRecords(csv: string, source: string) {
+  const rows = parseCsv(csv);
+  if (!rows.length) return [];
+  const headers = rows[0].map((cell) => cell.trim());
+  for (const col of CATALOG_COLUMNS) {
+    if (!headers.includes(col)) {
+      throw new Error(`Catalog CSV missing required column: ${col} in ${source}`);
+    }
+  }
+  return rows
+    .slice(1)
+    .filter((row) => row.some((cell) => String(cell || "").trim()))
+    .map((row) => {
+      const record: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        record[header] = (row[index] || "").trim();
+      });
+      return record;
+    });
+}
+
+function parseConfigRecords(csv: string, source: string) {
+  const rows = parseCsv(csv);
+  if (!rows.length) return [];
+  const headers = rows[0].map((cell) => cell.trim());
+  if (!headers.includes("key") || !headers.includes("value")) {
+    throw new Error(`Site config CSV missing key/value columns in ${source}`);
+  }
+  return rows
+    .slice(1)
+    .filter((row) => row.some((cell) => String(cell || "").trim()))
+    .map((row) => {
+      const record: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        record[header] = (row[index] || "").trim();
+      });
+      return record;
+    });
+}
+
+function parseCsv(input: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (input[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+      continue;
+    }
+
+    if (char === ",") {
+      row.push(field);
+      field = "";
+      continue;
+    }
+
+    if (char === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      continue;
+    }
+
+    if (char === "\r") {
+      continue;
+    }
+
+    field += char;
+  }
+
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
+function parseList(value: string | undefined) {
+  if (!value) return [];
+  return value
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseNumber(value: string | undefined) {
+  if (value === undefined || value === null) return undefined;
+  const trimmed = value.toString().trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseBoolean(value: string | undefined) {
+  if (!value) return false;
+  return ["true", "1", "yes", "y"].includes(value.trim().toLowerCase());
+}
+
+function normalizeStoneType(value: string) {
+  return value
+    .replace(/diamond\(s\)/gi, "Diamond")
+    .replace(/diamonds?\b/gi, "Diamond")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseStoneTypes(value: string | undefined) {
+  return parseList(value).map(normalizeStoneType).filter(Boolean);
+}
+
+function parsePalette(value: string | undefined) {
+  return parseList(value).map((entry) => {
+    const [rawType, ...rest] = entry.split(":");
+    const type = rawType === "stone" ? "stone" : "metal";
+    const label = rest.length ? rest.join(":").trim() : rawType.trim();
+    return { type, label };
+  });
+}
+
+function buildSheetsCsvUrl(sheetId: string, gid: string) {
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+}
+
+function getCatalogUrl(env: Env, kind: "products" | "inspirations" | "site_config") {
+  const direct =
+    kind === "products"
+      ? env.CATALOG_PRODUCTS_URL || env.PRODUCTS_CSV_URL
+      : kind === "inspirations"
+      ? env.CATALOG_INSPIRATIONS_URL || env.INSPIRATIONS_CSV_URL
+      : env.CATALOG_SITE_CONFIG_URL || env.SITE_CONFIG_CSV_URL;
+  if (direct) return direct;
+  const sheetId = env.CATALOG_SHEET_ID;
+  const gid =
+    kind === "products"
+      ? env.CATALOG_PRODUCTS_GID
+      : kind === "inspirations"
+      ? env.CATALOG_INSPIRATIONS_GID
+      : env.CATALOG_SITE_CONFIG_GID;
+  if (sheetId && gid) {
+    return buildSheetsCsvUrl(sheetId, gid);
+  }
+  return "";
+}
+
+async function loadCatalogPayload(env: Env, params: URLSearchParams) {
+  const includeParam = (params.get("include") || "").trim();
+  const includeAll = !includeParam;
+  const include = new Set(
+    includeAll
+      ? ["products", "inspirations", "site_config"]
+      : includeParam
+          .split(",")
+          .map((entry) => entry.trim().toLowerCase())
+          .filter(Boolean)
+  );
+
+  const payload: Record<string, unknown> = {
+    ok: true,
+    generatedAt: new Date().toISOString(),
+  };
+
+  if (include.has("products")) {
+    const source = getCatalogUrl(env, "products");
+    if (!source) {
+      throw new Error("catalog_products_source_missing");
+    }
+    const csv = await fetchText(source);
+    const records = parseCsvRecords(csv, source);
+    const products = records
+      .map((row) => {
+        const categories = parseList(row.categories);
+        const metals = parseList(row.metals);
+        return {
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+          description: row.description,
+          short_desc: row.short_desc,
+          long_desc: row.long_desc,
+          hero_image: row.hero_image,
+          collection: row.collection,
+          category: categories[0] || row.categories || row.category || "",
+          design_code: row.design_code,
+          metal: metals[0] || row.metals || row.metal || "",
+          stone_types: row.stone_types || "",
+          stone_weight: parseNumber(row.stone_weight),
+          metal_weight: parseNumber(row.metal_weight),
+          cut: row.cut,
+          clarity: row.clarity,
+          color: row.color,
+          carat: parseNumber(row.carat),
+          price_usd_natural: parseNumber(row.price_usd_natural),
+          estimated_price_usd_vvs1_vvs2_18k: parseNumber(
+            row.estimated_price_usd_vvs1_vvs2_18k
+          ),
+          lab_discount_pct: parseNumber(row.lab_discount_pct),
+          metal_platinum_premium: parseNumber(row.metal_platinum_premium),
+          metal_14k_discount_pct: parseNumber(row.metal_14k_discount_pct),
+          is_active: parseBoolean(row.is_active),
+          is_featured: parseBoolean(row.is_featured),
+          tags: row.tags,
+        };
+      })
+      .filter((item) => item.is_active);
+    payload.products = products;
+  }
+
+  if (include.has("inspirations")) {
+    const source = getCatalogUrl(env, "inspirations");
+    if (!source) {
+      throw new Error("catalog_inspirations_source_missing");
+    }
+    const csv = await fetchText(source);
+    const records = parseCsvRecords(csv, source);
+    payload.inspirations = records.map((row) => ({
+      id: row.id,
+      title: row.name,
+      slug: row.slug,
+      heroImage: row.hero_image,
+      shortDesc: row.short_desc,
+      longDesc: row.long_desc,
+      estimatedPriceUsdVvs1Vvs2_18k: parseNumber(row.estimated_price_usd_vvs1_vvs2_18k),
+      stoneTypes: parseStoneTypes(row.stone_types),
+      stoneWeight: parseNumber(row.stone_weight),
+      metalWeight: parseNumber(row.metal_weight),
+      tags: parseList(row.tags),
+      categories: parseList(row.categories),
+      genders: parseList(row.gender),
+      styles: parseList(row.styles),
+      motifs: parseList(row.motifs),
+      metals: parseList(row.metals),
+      palette: parsePalette(row.palette),
+      takeaways: parseList(row.takeaways),
+      translationNotes: parseList(row.translation_notes),
+      designCode: row.design_code,
+    }));
+  }
+
+  if (include.has("site_config")) {
+    const source = getCatalogUrl(env, "site_config");
+    if (!source) {
+      throw new Error("catalog_site_config_source_missing");
+    }
+    const csv = await fetchText(source);
+    const records = parseConfigRecords(csv, source);
+    const config: Record<string, string> = {};
+    records.forEach((row) => {
+      if (row.key) {
+        config[row.key] = row.value || "";
+      }
+    });
+    payload.siteConfig = config;
+  }
+
+  return payload;
+}
+
+async function fetchText(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`catalog_fetch_failed:${response.status}`);
+  }
+  return await response.text();
 }
 
 async function safeJson(request: Request) {

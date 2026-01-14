@@ -74,6 +74,13 @@ By default, the build reads local CSVs in `/data`. To switch to Google Sheets ex
 
 If `CSV_SOURCE` is not `remote`, local CSVs are used even if URLs are set.
 
+## Runtime catalog endpoint (optional)
+If you want product/inspiration grids to refresh on page load without rebuilding, set:
+- `PUBLIC_CATALOG_API_URL` (e.g., `https://<worker>.workers.dev/catalog`)
+- `PUBLIC_CATALOG_MODE=hybrid` (set `ssr` to disable runtime refresh)
+
+When set, list pages and detail pages refresh catalog-driven pricing on page load. Set `PUBLIC_CATALOG_MODE=ssr` to disable runtime refresh everywhere.
+
 ## Deploy (GitHub Pages)
 - Workflow: `.github/workflows/deploy.yml`
 - Push to `main`; GitHub Actions builds (`npm run build`) then deploys `dist` to Pages.

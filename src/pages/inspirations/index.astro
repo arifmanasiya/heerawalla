@@ -9,6 +9,9 @@ const metaTitle = 'Inspirations | Heerawalla';
 const metaDescription =
   'A curated set of inspirations that guide bespoke commissions within Heerawalla language.';
 const inspirations = await loadInspirations();
+const catalogUrl = import.meta.env.PUBLIC_CATALOG_API_URL || '';
+const catalogMode = (import.meta.env.PUBLIC_CATALOG_MODE || 'hybrid').toLowerCase();
+const basePath = import.meta.env.BASE_URL || '/';
 
 const uniqueValues = (items: string[][]) =>
   Array.from(new Set(items.flat().map((value) => value.trim()).filter(Boolean)));
@@ -293,16 +296,84 @@ const buildEstimateMeta = (item: Inspiration) => {
   <Footer />
 </BaseLayout>
 
-<script is:inline>
+<script is:inline define:vars={{ catalogUrl, catalogMode, basePath }}>
   (() => {
+    const catalogUrl = String(catalogUrl || '');
+    const catalogMode = String(catalogMode || '').toLowerCase();
+    const basePath = String(basePath || '/');
     const grid = document.querySelector('[data-inspiration-grid]');
-    const cards = Array.from(document.querySelectorAll('[data-inspiration-card]'));
     const empty = document.querySelector('[data-inspiration-empty]');
     const selects = Array.from(document.querySelectorAll('[data-filter]'));
     const clear = document.querySelector('[data-filter-clear]');
     const filterToggle = document.querySelector('[data-filter-toggle]');
     const filterPanel = document.querySelector('[data-filter-panel]');
-    if (!grid || !cards.length || selects.length === 0) return;
+    if (!grid || selects.length === 0) return;
+
+    const withBase = (path) => {
+      const base = basePath || '/';
+      const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+      const cleaned = path.replace(/^\/+/, '');
+      return `${normalizedBase}${cleaned}`;
+    };
+
+    const escapeHtml = (value) =>
+      String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const formatNumber = (value) => {
+      if (!Number.isFinite(value)) return '';
+      if (Number.isInteger(value)) return value.toString();
+      return value.toString();
+    };
+
+    const roundTo99 = (value) => {
+      if (!Number.isFinite(value)) return value;
+      const lower = Math.floor(value / 100) * 100 + 99;
+      const upper = Math.ceil(value / 100) * 100 + 99;
+      return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
+    };
+
+    const usdFormatter = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    });
+
+    const buildEstimateMeta = (item) => {
+      const price = item.estimatedPriceUsdVvs1Vvs2_18k
+        ? usdFormatter.format(roundTo99(item.estimatedPriceUsdVvs1Vvs2_18k))
+        : '';
+      const sections = [];
+      const ariaParts = [];
+      const carat = item.stoneWeight ? formatNumber(item.stoneWeight) : '';
+      const diamondQualityText = carat
+        ? `${carat}ct TW, IGI-certified, excellent clarity (VVS1 or VVS2), excellent cut, color grade E or F`
+        : 'IGI-certified, excellent clarity (VVS1 or VVS2), excellent cut, color grade E or F';
+      if (item.stoneWeight || item.metalWeight) {
+        sections.push({ label: 'Diamond Quality', text: diamondQualityText });
+        ariaParts.push(`Diamond Quality. ${diamondQualityText}.`);
+        if (item.stoneTypes && item.stoneTypes.length) {
+          sections.push({ label: 'Diamond Options', items: item.stoneTypes });
+          ariaParts.push(`Diamond Options. ${item.stoneTypes.join('; ')}.`);
+        }
+      }
+      if (item.metalWeight) {
+        const weight = formatNumber(item.metalWeight);
+        sections.push({ label: 'Metal Options', items: ['18K Gold', `Approx. metal weight: ${weight}g`] });
+        ariaParts.push(`Metal Options. 18K Gold; Approx. metal weight: ${weight}g.`);
+      }
+      if (price) {
+        const priceText = `Estimate: ${price}`;
+        sections.push({ label: 'Price Options', items: [priceText] });
+        ariaParts.push(`Price Options. ${priceText}.`);
+      }
+      const tooltip = sections.length ? { sections, ariaLabel: ariaParts.join(' ') } : null;
+      return { price, tooltip };
+    };
 
     const getValues = () => {
       const values = {};
@@ -320,6 +391,7 @@ const buildEstimateMeta = (item: Inspiration) => {
     const apply = () => {
       const filters = getValues();
       let visible = 0;
+      const cards = Array.from(document.querySelectorAll('[data-inspiration-card]'));
       cards.forEach((card) => {
         const categories = (card.getAttribute('data-categories') || '').toLowerCase().split(',');
         const genders = (card.getAttribute('data-genders') || '').toLowerCase().split(',');
@@ -363,5 +435,163 @@ const buildEstimateMeta = (item: Inspiration) => {
     }
 
     apply();
+
+    const setOptions = (select, values) => {
+      const current = select.value;
+      select.innerHTML = '<option value=\"\">All</option>';
+      values.forEach((value) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+      if (current && values.includes(current)) {
+        select.value = current;
+      } else {
+        select.value = '';
+      }
+    };
+
+    const renderInspirations = (items) => {
+      const cardsHtml = items
+        .map((item) => {
+          const estimate = buildEstimateMeta(item);
+          const tooltipHtml = estimate.tooltip
+            ? `<button type="button" class="estimate-info" aria-label="${escapeHtml(
+                estimate.tooltip.ariaLabel
+              )}">i<span class="estimate-tooltip" role="tooltip">${estimate.tooltip.sections
+                .map(
+                  (section) =>
+                    `<span class="estimate-tooltip__section"><span class="estimate-tooltip__label">${escapeHtml(
+                      section.label
+                    )}</span>${
+                      section.text
+                        ? `<span class="estimate-tooltip__text">${escapeHtml(section.text)}</span>`
+                        : ''
+                    }${
+                      section.items && section.items.length
+                        ? `<span class="estimate-tooltip__list">${section.items
+                            .map(
+                              (entry) =>
+                                `<span class="estimate-tooltip__item">${escapeHtml(entry)}</span>`
+                            )
+                            .join('')}</span>`
+                        : ''
+                    }</span>`
+                )
+                .join('')}</span></button>`
+            : '';
+          const heroImage = item.heroImage ? withBase(item.heroImage) : withBase('/images/products/placeholder.svg');
+          const title = escapeHtml(item.title || '');
+          const shortDesc = escapeHtml(item.shortDesc || '');
+          const tags = (item.tags || []).slice(0, 3);
+          const categories = (item.categories || []).join(',');
+          const genders = (item.genders || []).join(',');
+          const styles = (item.styles || []).join(',');
+          const motifs = (item.motifs || []).join(',');
+          const metals = (item.metals || []).join(',');
+          const link = withBase(`/inspirations/${item.slug}`);
+          const bespokeLink = withBase(`/inspirations/${item.slug}/bespoke`);
+          return `
+            <article
+              class="border border-slate-200 bg-white flex flex-col"
+              data-inspiration-card
+              data-categories="${escapeHtml(categories)}"
+              data-genders="${escapeHtml(genders)}"
+              data-styles="${escapeHtml(styles)}"
+              data-motifs="${escapeHtml(motifs)}"
+              data-metals="${escapeHtml(metals)}"
+            >
+              <a href="${escapeHtml(link)}" class="block">
+                <div class="aspect-[3/4] w-full overflow-hidden bg-white">
+                  <img
+                    src="${escapeHtml(heroImage)}"
+                    alt="${title} inspiration"
+                    loading="lazy"
+                    decoding="async"
+                    fetchpriority="low"
+                    sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+                    class="h-full w-full object-cover"
+                  />
+                </div>
+              </a>
+              <div class="flex-1 p-4 space-y-3">
+                <div class="space-y-1">
+                  <div class="flex items-start justify-between gap-3">
+                    <h2 class="text-lg font-semibold tracking-tight">${title}</h2>
+                    ${
+                      estimate.price
+                        ? `<span class="flex items-center gap-2">
+                          <span class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap">
+                            ${escapeHtml(estimate.price)}
+                          </span>
+                          ${tooltipHtml}
+                        </span>`
+                        : ''
+                    }
+                  </div>
+                  <p class="text-sm text-slate-500">${shortDesc}</p>
+                </div>
+                <div class="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                  ${tags.map((tag) => `<span class="border border-slate-200 px-2 py-1">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+              </div>
+              <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs uppercase tracking-[0.2em] text-slate-500">
+                <a href="${escapeHtml(link)}" class="hover:text-ink">View</a>
+                <a
+                  href="${escapeHtml(bespokeLink)}"
+                  class="hover:text-ink"
+                  data-analytics-event="cta_click"
+                  data-analytics-label="Request Bespoke"
+                  data-analytics-location="inspiration-grid"
+                >
+                  Request bespoke
+                </a>
+              </div>
+            </article>
+          `;
+        })
+        .join('');
+
+      grid.innerHTML = cardsHtml;
+      apply();
+    };
+
+    const refreshFilters = (items) => {
+      const uniqueValues = (values) =>
+        Array.from(new Set(values.flat().map((value) => String(value).trim()).filter(Boolean))).sort();
+      const categories = uniqueValues(items.map((item) => item.categories || []));
+      const genders = uniqueValues(items.map((item) => item.genders || []));
+      const styles = uniqueValues(items.map((item) => item.styles || []));
+      const motifs = uniqueValues(items.map((item) => item.motifs || []));
+      const metals = uniqueValues(items.map((item) => item.metals || []));
+
+      selects.forEach((select) => {
+        const key = select.getAttribute('data-filter');
+        if (key === 'category') setOptions(select, categories);
+        if (key === 'gender') setOptions(select, genders);
+        if (key === 'style') setOptions(select, styles);
+        if (key === 'motif') setOptions(select, motifs);
+        if (key === 'metal') setOptions(select, metals);
+      });
+    };
+
+    const fetchCatalog = async () => {
+      if (!catalogUrl || catalogMode === 'ssr') return;
+      const joiner = catalogUrl.includes('?') ? '&' : '?';
+      const url = `${catalogUrl}${joiner}include=inspirations`;
+      try {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data || !Array.isArray(data.inspirations)) return;
+        refreshFilters(data.inspirations);
+        renderInspirations(data.inspirations);
+      } catch {
+        // Ignore catalog errors; fall back to static content.
+      }
+    };
+
+    fetchCatalog();
   })();
 </script>

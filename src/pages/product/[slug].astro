@@ -5,7 +5,6 @@ import Footer from '../../components/Footer.astro';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import { loadProductsWithMedia, type ProductWithMedia } from '../../lib/products';
 import { withBase } from '../../lib/paths';
-import { loadSiteConfig, getConfigValue } from '../../lib/config';
 
 export async function getStaticPaths() {
   const products = await loadProductsWithMedia();
@@ -16,7 +15,8 @@ export async function getStaticPaths() {
 }
 
 const { product } = Astro.props as { product: ProductWithMedia };
-const siteConfig = await loadSiteConfig();
+const catalogUrl = import.meta.env.PUBLIC_CATALOG_API_URL || '';
+const catalogMode = (import.meta.env.PUBLIC_CATALOG_MODE || 'hybrid').toLowerCase();
 const primaryMedia = product.media.images[0]?.url || product.media.videos[0]?.url;
 const rawImage = primaryMedia;
 const fallback = withBase('/images/products/placeholder.svg');
@@ -67,12 +67,9 @@ const defaultDiamondUsd = diamondDefault === 'lab' ? labUsd : baseUsd;
 const defaultUsd = roundTo99(applyDiscount(defaultDiamondUsd, metal14DiscountPct));
 const diamondDefaultLabel = diamondDefault === 'lab' ? labStoneLabel : naturalStoneLabel;
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-const ordersEmail = getConfigValue(siteConfig, 'orders_email', 'orders@heerawalla.com');
-const webmailComposeBase = getConfigValue(siteConfig, 'webmail_compose_url', 'https://mail.google.com/mail/?view=cm&fs=1&to=');
 const metal18Label = (product.metal || '18K Gold').replace(/14K/gi, '18K');
 const metal14Label = metal18Label.replace(/18K/gi, '14K');
 const metalPlatinumLabel = 'Platinum';
-const productUrl = Astro.site ? new URL(withBase(`/product/${product.slug}`), Astro.site).toString() : withBase(`/product/${product.slug}`);
 const designCode = product.design_code || 'Signature';
 const designCodeSlug = designCode.toLowerCase();
 const isDesignCode = ['axis', 'continuum', 'eclipse'].includes(designCodeSlug);
@@ -112,14 +109,8 @@ const breadcrumbCrumbs = [
   ...(editionHref ? [{ label: editionLabel, href: editionHref }] : []),
   { label: product.name }
 ];
-const mailtoSubject = `Invoice request: ${product.name}`;
-const diamondLine = stoneTypes.length
-  ? `Diamonds: ${stoneTypes.join(' or ')}`
-  : 'Diamonds: None';
-const naturalPriceLine = naturalAvailable ? `Natural price (USD): ${baseUsdRounded}` : null;
-const labPriceLine = labAvailable ? `Lab price (USD): ${labUsdRounded}` : null;
-const mailtoBody = `I'm interested in ${product.name}\n\nDesign code: ${designCode}\n${groupLineLabel}: ${groupLabel}\nMetal: ${product.metal}\n${diamondLine}\n${[naturalPriceLine, labPriceLine].filter(Boolean).join('\n')}\nProduct link: ${productUrl}\n\nPlease confirm availability and share a secure invoice link.`;
-const mailtoHref = `mailto:${ordersEmail}?subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(mailtoBody)}`;
+const bespokeHref = withBase(`/bespoke/${product.slug}`);
+const productSlug = product.slug;
 
 const offers = [
   ...(naturalAvailable
@@ -205,13 +196,12 @@ void jsonLdString;
       </div>
       <div class="space-y-6">
         <div>
-          <p class="text-xs uppercase tracking-[0.18em] text-slate-500">{groupLabel}</p>
           <h1 class="text-3xl font-semibold tracking-tight">{product.name}</h1>
         </div>
         <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
           <a href={designCodeHref} class="hover:text-ink">{designCode}</a>
-          {editionHref ? <span aria-hidden="true">/</span> : null}
-          {editionHref ? <a href={editionHref} class="hover:text-ink">{editionLabel}</a> : null}
+          {groupLabel ? <span aria-hidden="true">|</span> : null}
+          {groupLabel ? <span>{groupLabel}</span> : null}
         </div>
         <div class="space-y-2">
           <div class="flex items-center gap-4">
@@ -254,7 +244,6 @@ void jsonLdString;
                   For daily wear, 14K offers added durability; 18K brings richer color, and platinum adds a bright, weighty finish.
                 </span>
               </span>
-              <span aria-hidden="true">/</span>
               <span class="relative group inline-flex items-center gap-1">
                 <span
                   data-diamond-label
@@ -324,41 +313,19 @@ void jsonLdString;
           {product.description}
         </p>
 
-        <form class="space-y-3" data-inquiry-form>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label class="text-sm space-y-1">
-              <span class="text-slate-600">Your name</span>
-              <input required name="name" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
-            </label>
-            <label class="text-sm space-y-1">
-              <span class="text-slate-600">Email (optional)</span>
-              <input type="email" name="email" class="w-full rounded-lg border border-slate-200 px-3 py-2" />
-            </label>
-          </div>
+        <div class="space-y-3">
           <div class="flex flex-wrap gap-3">
-            <div
-              class="relative"
-              data-mail-picker
-              data-mail-source="form"
-              data-email={ordersEmail}
-              data-subject={mailtoSubject}
-              data-body={mailtoBody}
-              data-gmail-base={webmailComposeBase}
+            <a
+              class="btn btn-primary"
+              href={bespokeHref}
+              data-bespoke-link
+              data-bespoke-base={bespokeHref}
             >
-              <a class="btn btn-primary" href={mailtoHref} data-mail-trigger>Request final quote</a>
-              <div
-                class="absolute left-0 top-full z-20 mt-2 w-48 border border-slate-200 bg-white shadow-md hidden"
-                data-mail-menu
-                role="menu"
-              >
-                <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="gmail" role="menuitem">Gmail</button>
-                <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="outlook" role="menuitem">Outlook</button>
-                <button type="button" class="w-full px-3 py-2 text-left text-xs uppercase tracking-[0.2em] text-slate-600 hover:text-ink" data-mail-provider="mailto" role="menuitem">Mail app</button>
-              </div>
-            </div>
+              Request final quote
+            </a>
             <a class="btn btn-ghost" href={withBase('/contact?intent=consultation')}>Book a consultation</a>
           </div>
-        </form>
+        </div>
         <div class="border-t border-slate-200 pt-4 text-sm text-slate-500 space-y-2">
           <div class="text-xs uppercase tracking-[0.2em] text-slate-500">How checkout works</div>
           <p>1) You request a quote and confirm your preferred details.</p>
@@ -424,18 +391,21 @@ void jsonLdString;
     (() => {
       const priceEl = document.getElementById('price-display');
       if (!priceEl) return;
-      const baseUsd = Number(priceEl.dataset.priceUsdBase || 0);
-      const labDiscount = Number(priceEl.dataset.labDiscount || -20);
-      const platinumPremium = Number(priceEl.dataset.platinumPremium || 10);
-      const metal14Discount = Number(priceEl.dataset.metal14kDiscount || -5);
-      const naturalAvailable = priceEl.dataset.naturalAvailable !== 'false';
-      const labAvailable = priceEl.dataset.labAvailable !== 'false';
-      let diamondMode =
-        priceEl.dataset.diamondDefault || (labAvailable ? 'lab' : 'natural');
-      if (diamondMode === 'lab' && !labAvailable) diamondMode = 'natural';
-      if (diamondMode === 'natural' && !naturalAvailable) diamondMode = 'lab';
-      let metalMode = priceEl.dataset.metalDefault || '14k';
+      const readState = () => ({
+        baseUsd: Number(priceEl.dataset.priceUsdBase || 0),
+        labDiscount: Number(priceEl.dataset.labDiscount || -20),
+        platinumPremium: Number(priceEl.dataset.platinumPremium || 10),
+        metal14Discount: Number(priceEl.dataset.metal14kDiscount || -5),
+        naturalAvailable: priceEl.dataset.naturalAvailable !== 'false',
+        labAvailable: priceEl.dataset.labAvailable !== 'false',
+        diamondDefault: priceEl.dataset.diamondDefault || '',
+        metalDefault: priceEl.dataset.metalDefault || ''
+      });
+      let diamondMode = 'natural';
+      let metalMode = '14k';
       const metalLabel = document.querySelector('[data-metal-label]');
+      const bespokeLink = document.querySelector('[data-bespoke-link]');
+      const bespokeBase = bespokeLink ? (bespokeLink.getAttribute('data-bespoke-base') || bespokeLink.getAttribute('href') || '') : '';
       const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
       const applyDiscount = (value, pct) => Math.round(value * (1 + pct / 100) * 100) / 100;
       const roundTo99 = (value) => {
@@ -445,23 +415,48 @@ void jsonLdString;
         return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
       };
       const priceToggles = Array.from(document.querySelectorAll('[data-price-toggle]'));
-      const apply = () => {
-        let price = baseUsd;
+      const metalToggles = Array.from(document.querySelectorAll('[data-metal-toggle]'));
+      const setToggleAvailability = (state) => {
+        priceToggles.forEach((btn) => {
+          const mode = btn.dataset.priceToggle || 'natural';
+          const isAvailable = mode === 'lab' ? state.labAvailable : state.naturalAvailable;
+          if (!isAvailable) {
+            btn.setAttribute('disabled', 'true');
+            btn.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+          } else {
+            btn.removeAttribute('disabled');
+            btn.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+          }
+        });
+      };
+      const syncModes = (state, refreshDefaults) => {
+        if (refreshDefaults) {
+          diamondMode = state.diamondDefault || (state.labAvailable ? 'lab' : 'natural');
+          metalMode = state.metalDefault || metalMode || '14k';
+        }
+        if (diamondMode === 'lab' && !state.labAvailable) diamondMode = 'natural';
+        if (diamondMode === 'natural' && !state.naturalAvailable) diamondMode = state.labAvailable ? 'lab' : 'natural';
+      };
+      const apply = (refreshDefaults) => {
+        const state = readState();
+        setToggleAvailability(state);
+        syncModes(state, refreshDefaults);
+        let price = state.baseUsd;
         if (diamondMode === 'lab') {
-          price = applyDiscount(price, labDiscount);
+          price = applyDiscount(price, state.labDiscount);
         }
         if (metalMode === '14k') {
-          price = applyDiscount(price, metal14Discount);
+          price = applyDiscount(price, state.metal14Discount);
         }
         if (metalMode === 'platinum') {
-          price = applyDiscount(price, platinumPremium);
+          price = applyDiscount(price, state.platinumPremium);
         }
         priceEl.textContent = formatter.format(roundTo99(price));
         priceToggles.forEach((btn) => {
           btn.classList.toggle('bg-ink', btn.dataset.priceToggle === diamondMode);
           btn.classList.toggle('text-white', btn.dataset.priceToggle === diamondMode);
         });
-        document.querySelectorAll('[data-metal-toggle]').forEach((btn) => {
+        metalToggles.forEach((btn) => {
           btn.classList.toggle('bg-ink', btn.dataset.metalToggle === metalMode);
           btn.classList.toggle('text-white', btn.dataset.metalToggle === metalMode);
         });
@@ -482,27 +477,147 @@ void jsonLdString;
               : diamondLabel.getAttribute('data-diamond-natural');
           if (label) diamondLabel.textContent = label;
         }
+        if (bespokeLink && bespokeBase) {
+          const params = new URLSearchParams();
+          params.set('metal', metalMode);
+          params.set('stone', diamondMode);
+          params.set('source', 'product');
+          bespokeLink.setAttribute('href', `${bespokeBase}?${params.toString()}`);
+        }
       };
       priceToggles.forEach((btn) => {
         const mode = btn.dataset.priceToggle || 'natural';
-        const isAvailable = mode === 'lab' ? labAvailable : naturalAvailable;
-        if (!isAvailable) {
-          btn.setAttribute('disabled', 'true');
-          btn.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
-          return;
-        }
         btn.addEventListener('click', () => {
           diamondMode = mode;
-          apply();
+          apply(false);
         });
       });
-      document.querySelectorAll('[data-metal-toggle]').forEach((btn) => {
+      metalToggles.forEach((btn) => {
         btn.addEventListener('click', () => {
           metalMode = btn.dataset.metalToggle || '18k';
-          apply();
+          apply(false);
         });
       });
-      apply();
+      apply(true);
+      window.__hwApplyPricing = () => apply(false);
+      window.__hwRefreshPricingDefaults = () => apply(true);
+    })();
+  </script>
+  <script is:inline define:vars={{ catalogUrl, catalogMode, productSlug }}>
+    (() => {
+      const catalogUrl = String(catalogUrl || '');
+      const catalogMode = String(catalogMode || '').toLowerCase();
+      const productSlug = String(productSlug || '');
+      if (!catalogUrl || catalogMode === 'ssr' || !productSlug) return;
+
+      const priceEl = document.getElementById('price-display');
+      if (!priceEl) return;
+      const metalLabel = document.querySelector('[data-metal-label]');
+      const diamondLabel = document.querySelector('[data-diamond-label]');
+      const naturalToggle = document.querySelector('[data-price-toggle="natural"]');
+      const labToggle = document.querySelector('[data-price-toggle="lab"]');
+      const metal18Toggle = document.querySelector('[data-metal-toggle="18k"]');
+      const metal14Toggle = document.querySelector('[data-metal-toggle="14k"]');
+      const metalPlatinumToggle = document.querySelector('[data-metal-toggle="platinum"]');
+
+      const parseList = (value) => {
+        if (!value) return [];
+        return String(value)
+          .split('|')
+          .map((item) => item.trim())
+          .filter(Boolean);
+      };
+
+      const normalizeStoneType = (value) =>
+        String(value || '')
+          .replace(/diamond\\(s\\)/gi, 'Diamond')
+          .replace(/diamonds?\\b/gi, 'Diamond')
+          .replace(/\\s+/g, ' ')
+          .trim();
+
+      const parseNumber = (value) => {
+        if (value === undefined || value === null) return undefined;
+        if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+        const trimmed = String(value).trim();
+        if (!trimmed) return undefined;
+        const parsed = Number(trimmed);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      };
+
+      const updatePricingFromProduct = (item) => {
+        const stoneTypes = parseList(item.stone_types).map(normalizeStoneType).filter(Boolean);
+        const naturalAvailable = stoneTypes.some((entry) => /natural/i.test(entry));
+        const labAvailable = stoneTypes.some((entry) => /lab/i.test(entry));
+        const naturalStoneLabel =
+          stoneTypes.find((entry) => /natural/i.test(entry)) || 'Natural Diamond';
+        const labStoneLabel =
+          stoneTypes.find((entry) => /lab/i.test(entry)) || 'Lab Grown Diamond';
+        const metal18Label = String(item.metal || '18K Gold').replace(/14K/gi, '18K');
+        const metal14Label = metal18Label.replace(/18K/gi, '14K');
+
+        priceEl.dataset.priceUsdBase = String(parseNumber(item.price_usd_natural) || 0);
+        priceEl.dataset.labDiscount = String(
+          parseNumber(item.lab_discount_pct ?? -20) ?? -20
+        );
+        priceEl.dataset.platinumPremium = String(
+          parseNumber(item.metal_platinum_premium ?? 10) ?? 10
+        );
+        priceEl.dataset.metal14kDiscount = String(
+          parseNumber(item.metal_14k_discount_pct ?? -5) ?? -5
+        );
+        priceEl.dataset.naturalAvailable = String(naturalAvailable);
+        priceEl.dataset.labAvailable = String(labAvailable);
+        priceEl.dataset.diamondDefault = labAvailable ? 'lab' : naturalAvailable ? 'natural' : 'lab';
+
+        if (metalLabel) {
+          metalLabel.setAttribute('data-metal-18', metal18Label);
+          metalLabel.setAttribute('data-metal-14', metal14Label);
+          metalLabel.setAttribute('data-metal-platinum', 'Platinum');
+        }
+        if (diamondLabel) {
+          diamondLabel.setAttribute('data-diamond-natural', naturalStoneLabel);
+          diamondLabel.setAttribute('data-diamond-lab', labStoneLabel);
+        }
+        if (naturalToggle) {
+          naturalToggle.textContent = naturalStoneLabel;
+        }
+        if (labToggle) {
+          labToggle.textContent = labStoneLabel;
+        }
+        if (metal18Toggle) {
+          metal18Toggle.textContent = metal18Label;
+        }
+        if (metal14Toggle) {
+          metal14Toggle.textContent = metal14Label;
+        }
+        if (metalPlatinumToggle) {
+          metalPlatinumToggle.textContent = 'Platinum';
+        }
+
+        if (window.__hwRefreshPricingDefaults) {
+          window.__hwRefreshPricingDefaults();
+        } else if (window.__hwApplyPricing) {
+          window.__hwApplyPricing();
+        }
+      };
+
+      const fetchCatalog = async () => {
+        const joiner = catalogUrl.includes('?') ? '&' : '?';
+        const url = `${catalogUrl}${joiner}include=products`;
+        try {
+          const response = await fetch(url, { cache: 'no-store' });
+          if (!response.ok) return;
+          const data = await response.json();
+          if (!data || !Array.isArray(data.products)) return;
+          const match = data.products.find((entry) => entry && entry.slug === productSlug);
+          if (!match) return;
+          updatePricingFromProduct(match);
+        } catch {
+          // Ignore catalog errors; fall back to SSR data.
+        }
+      };
+
+      fetchCatalog();
     })();
   </script>
   <script is:inline>

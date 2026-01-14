@@ -26,6 +26,10 @@ SEND_REJECT = "false"
 SEND_SUBMIT = "true"
 SUBSCRIBE_TO = "noreply.heerawalla@gmail.com"
 ATELIER_SENDERS = "atelier.heerawalla@gmail.com"
+CATALOG_SHEET_ID = "1oFrJpxZmL94GeNXDK95OHHcCqG2zOiQuhOtOZ1y5i6o"
+CATALOG_PRODUCTS_GID = "1604026114"
+CATALOG_INSPIRATIONS_GID = "491031140"
+CATALOG_SITE_CONFIG_GID = "30223103"
 
 # Secrets are configured via `wrangler secret put` or in the Cloudflare dashboard.
 

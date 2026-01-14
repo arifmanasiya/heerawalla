@@ -21,6 +21,9 @@ const seo = {
     "fine jewelry for women"
   ]
 };
+const catalogUrl = import.meta.env.PUBLIC_CATALOG_API_URL || '';
+const catalogMode = (import.meta.env.PUBLIC_CATALOG_MODE || 'hybrid').toLowerCase();
+const basePath = import.meta.env.BASE_URL || '/';
 const metaTitle = `Heerawalla ${editionLabel} \u2014 Editions`;
 const metaDescription =
   'Heerawalla women\u2019s jewelry pairs luminous stones with sculpted gold, balancing softness with architectural restraint.';
@@ -89,34 +92,358 @@ const breadcrumbs = [
     </section>
 
     <section class="border-t border-slate-200 pt-8">
-      {products.length ? (
-        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((product) => (
-            <div data-product-card data-design-code={(product.design_code || '').toLowerCase()}>
-              <ProductCard product={product} />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p class="text-sm text-slate-500">
-          Selections are curated seasonally. The concierge can share availability.
-        </p>
-      )}
+      <div
+        class={`grid gap-6 sm:grid-cols-2 lg:grid-cols-3${products.length ? '' : ' hidden'}`}
+        data-product-grid
+      >
+        {products.map((product) => (
+          <div data-product-card data-design-code={(product.design_code || '').toLowerCase()}>
+            <ProductCard product={product} />
+          </div>
+        ))}
+      </div>
+      <p class={`text-sm text-slate-500${products.length ? ' hidden' : ''}`} data-product-empty>
+        Selections are curated seasonally. The concierge can share availability.
+      </p>
     </section>
   </main>
 
   <Footer />
 </BaseLayout>
 
-<script is:inline>
+<script is:inline define:vars={{ catalogUrl, catalogMode, basePath, editionKey }}>
   (() => {
+    const catalogUrl = String(catalogUrl || '');
+    const catalogMode = String(catalogMode || '').toLowerCase();
+    const basePath = String(basePath || '/');
+    const editionKey = String(editionKey || '');
+    const grid = document.querySelector('[data-product-grid]');
+    const empty = document.querySelector('[data-product-empty]');
     const container = document.querySelector('[data-design-filter]');
     if (!container) return;
     const buttons = Array.from(container.querySelectorAll('[data-code]'));
-    const cards = Array.from(document.querySelectorAll('[data-product-card]'));
     const desc = document.querySelector('[data-design-description]');
-    const defaultDesc = desc?.textContent?.trim() || '';
-    if (!buttons.length || !cards.length) return;
+    const defaultDesc = desc ? (desc.textContent || '').trim() : '';
+    if (!buttons.length) return;
+
+    const withBase = (path) => {
+      const base = basePath || '/';
+      const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+      const cleaned = path.replace(/^\/+/, '');
+      return `${normalizedBase}${cleaned}`;
+    };
+
+    const escapeHtml = (value) =>
+      String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const parseList = (value) => {
+      if (!value) return [];
+      return String(value)
+        .split('|')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    };
+
+    const parseNumber = (value) => {
+      if (value === undefined || value === null) return undefined;
+      if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+      const trimmed = String(value).trim();
+      if (!trimmed) return undefined;
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+
+    const normalizeStoneType = (value) =>
+      String(value || '')
+        .replace(/diamond\\(s\\)/gi, 'Diamond')
+        .replace(/diamonds?\\b/gi, 'Diamond')
+        .replace(/\\s+/g, ' ')
+        .trim();
+
+    const roundTo99 = (value) => {
+      if (!Number.isFinite(value)) return value;
+      const lower = Math.floor(value / 100) * 100 + 99;
+      const upper = Math.ceil(value / 100) * 100 + 99;
+      return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
+    };
+
+    const applyDiscount = (value, pct) => {
+      const ratio = 1 + (pct || 0) / 100;
+      return Math.round(value * ratio * 100) / 100;
+    };
+
+    const formatCarat = (value) => {
+      if (!value || Number.isNaN(value)) return '';
+      if (Number.isInteger(value)) return value.toString();
+      return value.toString();
+    };
+
+    const formatWeight = (value) => {
+      if (!value || Number.isNaN(value)) return '';
+      if (Number.isInteger(value)) return value.toString();
+      return value.toString();
+    };
+
+    const normalizeMetalLabel = (value) => {
+      if (!value) return '18K Gold';
+      return String(value).replace(/\\s+/g, ' ').trim();
+    };
+
+    const clarityToMarketing = (value) => {
+      if (!value) return '';
+      const normalized = String(value).toLowerCase();
+      if (normalized.includes('vvs1') && normalized.includes('vvs2')) {
+        return 'excellent clarity (VVS1 or VVS2)';
+      }
+      if (normalized.includes('vvs')) {
+        return 'excellent clarity (VVS)';
+      }
+      return String(value);
+    };
+
+    const cutToMarketing = (value) => {
+      if (!value) return '';
+      return `excellent cut${value ? ` (${value})` : ''}`;
+    };
+
+    const colorToMarketing = (value) => {
+      if (!value) return '';
+      return `color grade ${String(value).replace('/', ' or ')}`;
+    };
+
+    const slugify = (value) =>
+      String(value || '')
+        .split('/')
+        .map((part) =>
+          part.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'uncategorized'
+        )
+        .filter(Boolean)
+        .join('/');
+
+    const buildImageFallbacks = (product) => {
+      const categorySlug = slugify(product.category || 'uncategorized');
+      const folder = `/images/products/${categorySlug}/${product.id}`;
+      const baseFolder = withBase(folder);
+      const candidates = [
+        'img-hero-1.webp',
+        'img-hero-1.avif',
+        'img-hero-1.png',
+        'img-hero-1.jpeg',
+        'img-hero-1.jpg',
+        'img-1.webp',
+        'img-1.avif',
+        'img-1.png',
+        'img-1.jpeg',
+        'img-1.jpg',
+        'image-1.svg',
+      ];
+      const urls = candidates.map((file) => `${baseFolder}/${file}`);
+      urls.push(withBase(`/images/products/${categorySlug}/image-1.svg`));
+      urls.push(withBase('/images/products/placeholder.svg'));
+      return urls;
+    };
+
+    const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+
+    const buildEstimateTooltip = (product, priceOptions) => {
+      const sections = [];
+      const ariaParts = [];
+      const diamondParts = [];
+      const clarity = clarityToMarketing(product.clarity);
+      const cut = cutToMarketing(product.cut);
+      const color = colorToMarketing(product.color);
+      if (clarity) diamondParts.push(clarity);
+      if (cut) diamondParts.push(cut);
+      if (color) diamondParts.push(color);
+
+      const stoneWeight = parseNumber(product.stone_weight || product.carat);
+      const caratText = formatCarat(stoneWeight);
+      const diamondQualityText = diamondParts.length
+        ? caratText
+          ? `${caratText}ct TW, IGI-certified, ${diamondParts.join(', ')}`
+          : `IGI-certified, ${diamondParts.join(', ')}`
+        : '';
+      if (diamondQualityText) {
+        sections.push({ label: 'Diamond Quality', text: diamondQualityText });
+        ariaParts.push(`Diamond Quality. ${diamondQualityText}.`);
+      }
+
+      const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
+      if (stoneTypes.length) {
+        sections.push({ label: 'Diamond Options', items: stoneTypes });
+        ariaParts.push(`Diamond Options. ${stoneTypes.join('; ')}.`);
+      }
+
+      const metal18Label = normalizeMetalLabel(product.metal);
+      const metal14Label = metal18Label.replace(/18K/gi, '14K');
+      const metalPlatinumLabel = 'Platinum';
+      const metalOptionItems = Array.from(
+        new Set([metal18Label, metal14Label, metalPlatinumLabel].filter(Boolean))
+      );
+      const metalWeightText = formatWeight(parseNumber(product.metal_weight));
+      if (metalWeightText) {
+        metalOptionItems.push(`Approx. metal weight: ${metalWeightText}g`);
+      }
+      if (metalOptionItems.length) {
+        sections.push({ label: 'Metal Options', items: metalOptionItems });
+        ariaParts.push(`Metal Options. ${metalOptionItems.join('; ')}.`);
+      }
+
+      if (priceOptions.length) {
+        const optionItems = priceOptions.map(
+          (option) => `${option.label}: ${usdFormatter.format(option.price)}`
+        );
+        sections.push({ label: 'Price Options', items: optionItems });
+        ariaParts.push(`Price Options. ${optionItems.join('; ')}.`);
+      }
+
+      if (!sections.length) return null;
+      return { sections, ariaLabel: ariaParts.join(' ') };
+    };
+
+    const buildProductCard = (product) => {
+      const baseUsd = parseNumber(product.price_usd_natural) || 0;
+      const labDiscountPct = parseNumber(product.lab_discount_pct);
+      const metal14DiscountPct = parseNumber(product.metal_14k_discount_pct);
+      const platinumPremiumPct = parseNumber(product.metal_platinum_premium);
+      const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
+      const naturalAvailable = stoneTypes.some((item) => /natural/i.test(item));
+      const labAvailable = stoneTypes.some((item) => /lab/i.test(item));
+      const priceOptions = [];
+      if (naturalAvailable) {
+        priceOptions.push({ label: '18K Natural', price: roundTo99(baseUsd) });
+        priceOptions.push({
+          label: '14K Natural',
+          price: roundTo99(applyDiscount(baseUsd, metal14DiscountPct || -5)),
+        });
+        priceOptions.push({
+          label: 'Platinum Natural',
+          price: roundTo99(applyDiscount(baseUsd, platinumPremiumPct || 10)),
+        });
+      }
+      if (labAvailable) {
+        const labUsd = applyDiscount(baseUsd, labDiscountPct || -20);
+        priceOptions.push({ label: '18K Lab Grown', price: roundTo99(labUsd) });
+        priceOptions.push({
+          label: '14K Lab Grown',
+          price: roundTo99(applyDiscount(labUsd, metal14DiscountPct || -5)),
+        });
+        priceOptions.push({
+          label: 'Platinum Lab Grown',
+          price: roundTo99(applyDiscount(labUsd, platinumPremiumPct || 10)),
+        });
+      }
+      const startingPrice = priceOptions.length
+        ? priceOptions.reduce((best, option) => (option.price < best.price ? option : best))
+        : { label: '18K Natural', price: roundTo99(baseUsd) };
+
+      const editionLabel = (() => {
+        const category = product.category || '';
+        const group = category.split('/')[0] || '';
+        if (group === 'women') return "Women's Edition";
+        if (group === 'men') return "Men's Edition";
+        if (group === 'unisex') return 'Unisex Edition';
+        return product.collection || product.category || '';
+      })();
+
+      const tooltip = buildEstimateTooltip(product, priceOptions);
+      const tooltipHtml = tooltip
+        ? `<button type="button" class="estimate-info" aria-label="${escapeHtml(
+            tooltip.ariaLabel
+          )}">i<span class="estimate-tooltip" role="tooltip">${tooltip.sections
+            .map(
+              (section) =>
+                `<span class="estimate-tooltip__section"><span class="estimate-tooltip__label">${escapeHtml(
+                  section.label
+                )}</span>${
+                  section.text
+                    ? `<span class="estimate-tooltip__text">${escapeHtml(section.text)}</span>`
+                    : ''
+                }${
+                  section.items && section.items.length
+                    ? `<span class="estimate-tooltip__list">${section.items
+                        .map(
+                          (item) =>
+                            `<span class="estimate-tooltip__item">${escapeHtml(item)}</span>`
+                        )
+                        .join('')}</span>`
+                    : ''
+                }</span>`
+            )
+            .join('')}</span></button>`
+        : '';
+
+      const imageFallbacks = buildImageFallbacks(product);
+      const imageSrc = imageFallbacks[0];
+      const link = withBase(`/product/${product.slug}`);
+      const designCode = String(product.design_code || '').toLowerCase();
+
+      return `
+        <div data-product-card data-design-code="${escapeHtml(designCode)}">
+          <article class="card overflow-hidden group h-full flex flex-col" data-thumb-layout="column" data-thumb-layout-locked="true">
+            <div class="thumb-media flex items-stretch gap-2 sm:gap-3 bg-white" data-thumb-media>
+              <a href="${escapeHtml(link)}" class="thumb-main flex-1 flex items-stretch justify-end overflow-hidden" data-thumb-main>
+                <div class="aspect-[3/4] w-full bg-white">
+                  <img
+                    src="${escapeHtml(imageSrc)}"
+                    alt="${escapeHtml(product.name || '')}"
+                    loading="lazy"
+                    decoding="async"
+                    fetchpriority="low"
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    class="h-full w-full object-contain object-center transition duration-300 group-hover:scale-[1.02]"
+                    data-main-image
+                    data-default-src="${escapeHtml(imageSrc)}"
+                    data-fallback-index="0"
+                    data-image-fallbacks="${escapeHtml(imageFallbacks.join('|'))}"
+                    data-protected-image
+                  />
+                </div>
+              </a>
+            </div>
+            <div class="flex flex-col gap-2 p-4 flex-1">
+              <div class="text-xs uppercase tracking-[0.12em] text-slate-500">${escapeHtml(
+                editionLabel
+              )}</div>
+              <div class="flex items-start justify-between gap-3">
+                <a href="${escapeHtml(link)}" class="text-lg font-semibold leading-snug hover:text-accent">
+                  ${escapeHtml(product.name || '')}
+                </a>
+                <span class="flex items-center gap-2">
+                  <span class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap">
+                    ${escapeHtml(`Starting ${usdFormatter.format(startingPrice.price)}`)}
+                  </span>
+                  ${tooltipHtml}
+                </span>
+              </div>
+              <p class="text-sm text-slate-500 line-clamp-2">${escapeHtml(
+                product.description || ''
+              )}</p>
+              <div class="mt-auto pt-2"></div>
+            </div>
+          </article>
+        </div>
+      `;
+    };
+
+    const applyImageFallbacks = (scope) => {
+      const images = Array.from(scope.querySelectorAll('[data-image-fallbacks]'));
+      images.forEach((img) => {
+        img.addEventListener('error', () => {
+          const list = (img.getAttribute('data-image-fallbacks') || '').split('|').filter(Boolean);
+          const index = Number(img.getAttribute('data-fallback-index') || '0');
+          const next = index + 1;
+          if (!list.length || next >= list.length) return;
+          img.setAttribute('data-fallback-index', String(next));
+          img.setAttribute('src', list[next]);
+        });
+      });
+    };
 
     const setActive = (code) => {
       buttons.forEach((button) => {
@@ -126,8 +453,10 @@ const breadcrumbs = [
       });
     };
 
+    let activeCode = initialCode;
     const apply = (code) => {
       const target = (code || '').toLowerCase();
+      const cards = Array.from(document.querySelectorAll('[data-product-card]'));
       cards.forEach((card) => {
         const cardCode = (card.dataset.designCode || '').toLowerCase();
         const visible = !target || cardCode === target;
@@ -136,7 +465,8 @@ const breadcrumbs = [
       });
       if (desc) {
         const active = buttons.find((button) => (button.dataset.code || '') === target);
-        desc.textContent = active?.dataset.designDesc || defaultDesc;
+        const nextDesc = active ? active.dataset.designDesc || '' : '';
+        desc.textContent = nextDesc || defaultDesc;
       }
     };
 
@@ -157,9 +487,44 @@ const breadcrumbs = [
     buttons.forEach((button) => {
       button.addEventListener('click', () => {
         const code = button.dataset.code || '';
+        activeCode = code;
         setActive(code);
         apply(code);
       });
     });
+
+    window.__hwApplyDesignFilter = () => apply(activeCode);
+
+    const renderProducts = (items) => {
+      if (!grid) return;
+      grid.innerHTML = items.map(buildProductCard).join('');
+      applyImageFallbacks(grid);
+      grid.classList.toggle('hidden', items.length === 0);
+      if (empty) {
+        empty.classList.toggle('hidden', items.length !== 0);
+      }
+      apply(activeCode);
+    };
+
+    const fetchCatalog = async () => {
+      if (!catalogUrl || catalogMode === 'ssr') return;
+      const joiner = catalogUrl.includes('?') ? '&' : '?';
+      const url = `${catalogUrl}${joiner}include=products`;
+      try {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data || !Array.isArray(data.products)) return;
+        const items = data.products.filter((product) => {
+          const category = String(product.category || '').toLowerCase();
+          return category.startsWith(`${editionKey}/`) || category.startsWith('unisex/');
+        });
+        renderProducts(items);
+      } catch {
+        // Ignore catalog errors; fall back to static content.
+      }
+    };
+
+    fetchCatalog();
   })();
 </script>

@@ -31,6 +31,8 @@ jobs:
         env:
           PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.PUBLIC_TURNSTILE_SITE_KEY }}
           PUBLIC_GA_MEASUREMENT_ID: ${{ vars.PUBLIC_GA_MEASUREMENT_ID }}
+          PUBLIC_CATALOG_API_URL: ${{ vars.PUBLIC_CATALOG_API_URL }}
+          PUBLIC_CATALOG_MODE: ${{ vars.PUBLIC_CATALOG_MODE }}
           CSV_SOURCE: ${{ vars.CSV_SOURCE || 'local' }}
           PRODUCTS_CSV_URL: ${{ vars.PRODUCTS_CSV_URL }}
           PRODUCTS_CSV_URLS: ${{ vars.PRODUCTS_CSV_URLS }}
