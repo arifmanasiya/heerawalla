@@ -12,6 +12,7 @@ export interface Env {
   SEND_ACK?: string | boolean;
   SEND_REJECT?: string | boolean;
   SEND_SUBMIT?: string | boolean;
+  ACK_MODE?: string;
   SUBSCRIBE_TO?: string;
   RESEND_API_KEY?: string;
   ATELIER_SENDERS?: string;
@@ -1393,10 +1394,13 @@ export default {
           }
         } catch (error) {
           logError("order_sheet_failed", { requestId, error: String(error) });
-          return new Response(JSON.stringify({ ok: false, error: "order_store_failed" }), {
+          return new Response(
+            JSON.stringify({ ok: false, error: "order_store_failed", detail: String(error) }),
+            {
             status: 500,
             headers: buildCorsHeaders(allowedOrigin, true),
-          });
+            }
+          );
         }
 
         const forwardResponse = await fetch(new Request(`${url.origin}${SUBMIT_PATH}`, {
@@ -1690,17 +1694,21 @@ export default {
             }
           } catch (error) {
             logError("quote_sheet_failed", { requestId: normalizedRequestId, error: String(error) });
-            return new Response(JSON.stringify({ ok: false, error: "quote_store_failed" }), {
-              status: 500,
-              headers: buildCorsHeaders(allowedOrigin, true),
-            });
+            return new Response(
+              JSON.stringify({ ok: false, error: "quote_store_failed", detail: String(error) }),
+              {
+                status: 500,
+                headers: buildCorsHeaders(allowedOrigin, true),
+              }
+            );
           }
         } else {
           logInfo("quote_sheet_skipped", { requestId: normalizedRequestId, source });
         }
 
         const forwardTo = env.FORWARD_TO || "atelier.heerawalla@gmail.com";
-        const shouldSendAck = isEnabled(env.SEND_ACK, true);
+        const ackMode = getAckMode(env);
+        const shouldSendAck = isEnabled(env.SEND_ACK, true) && ackMode === "inline";
         const shouldSendSubmit = isEnabled(env.SEND_SUBMIT, true);
         if (!shouldSendSubmit) {
           logWarn("submit_send_disabled", { requestId, email: maskEmail(senderEmail) });
@@ -1734,8 +1742,8 @@ export default {
           });
           logInfo("submit_forward_sent", { requestId, email: maskEmail(senderEmail) });
 
-          let shouldAck = true;
-          if (env.HEERAWALLA_ACKS) {
+          let shouldAck = shouldSendAck;
+          if (shouldAck && env.HEERAWALLA_ACKS) {
             const ackKey = `ack:req:${normalizedRequestId}`;
             const alreadyAcked = await env.HEERAWALLA_ACKS.get(ackKey);
             if (alreadyAcked) {
@@ -1746,18 +1754,20 @@ export default {
             }
           }
 
-          if (shouldAck && shouldSendAck) {
+          if (shouldAck) {
             logInfo("submit_ack_start", { requestId, email: maskEmail(senderEmail) });
-          await sendEmail(env, {
-            to: [senderEmail],
-            sender: "Heerawalla <no-reply@heerawalla.com>",
-            replyTo: "no-reply@heerawalla.com",
-            subject: buildAckSubject(normalizedRequestId),
-            textBody: EMAIL_TEXT,
-            htmlBody: EMAIL_HTML,
+            await sendEmail(env, {
+              to: [senderEmail],
+              sender: "Heerawalla <no-reply@heerawalla.com>",
+              replyTo: "no-reply@heerawalla.com",
+              subject: buildAckSubject(normalizedRequestId),
+              textBody: EMAIL_TEXT,
+              htmlBody: EMAIL_HTML,
               headers: autoReplyHeaders(),
             });
             logInfo("submit_ack_sent", { requestId, email: maskEmail(senderEmail) });
+          } else if (ackMode === "cron") {
+            logInfo("submit_ack_deferred", { requestId, email: maskEmail(senderEmail) });
           }
 
           await syncGoogleContact(env, {
@@ -2033,6 +2043,11 @@ export default {
     } catch (error) {
       logError("email_processing_error", { message: String(error) });
     }
+  },
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    const ackMode = getAckMode(env);
+    if (!isEnabled(env.SEND_ACK, true) || ackMode !== "cron") return;
+    ctx.waitUntil(processAckQueues(env));
   },
 } satisfies ExportedHandler<Env>;
 
@@ -2834,6 +2849,159 @@ async function appendQuoteRow(env: Env, values: Array<string | number>) {
 async function appendContactRow(env: Env, values: Array<string | number>) {
   const config = getSheetConfig(env, "contact");
   await appendSheetRow(env, config, values, CONTACT_SHEET_HEADER);
+}
+
+async function fetchSheetValues(env: Env, sheetId: string, range: string): Promise<string[][]> {
+  const token = await getAccessToken(env);
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(range)}`
+  );
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`sheet_read_failed:${response.status}:${errorText}`);
+  }
+  const payload = (await response.json()) as { values?: string[][] };
+  return payload.values || [];
+}
+
+function columnToLetter(index: number) {
+  let result = "";
+  let value = index;
+  while (value > 0) {
+    const rem = (value - 1) % 26;
+    result = String.fromCharCode(65 + rem) + result;
+    value = Math.floor((value - 1) / 26);
+  }
+  return result;
+}
+
+async function updateSheetRow(
+  env: Env,
+  config: SheetConfig,
+  rowNumber: number,
+  startIndex: number,
+  endIndex: number,
+  values: string[]
+) {
+  const token = await getAccessToken(env);
+  const range = `${config.sheetName}!${columnToLetter(startIndex + 1)}${rowNumber}:${columnToLetter(
+    endIndex + 1
+  )}${rowNumber}`;
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${encodeURIComponent(range)}`
+  );
+  url.searchParams.set("valueInputOption", "RAW");
+  const response = await fetch(url.toString(), {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values: [values] }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`sheet_update_failed:${response.status}:${errorText}`);
+  }
+}
+
+async function processAckQueues(env: Env) {
+  await Promise.all([processAckQueue(env, "order"), processAckQueue(env, "quote")]);
+}
+
+async function processAckQueue(env: Env, kind: "order" | "quote") {
+  const config = getSheetConfig(env, kind);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const headerRow = headerRows[0] || [];
+  if (!headerRow.length) {
+    logWarn("ack_queue_missing_header", { kind });
+    return;
+  }
+  const headerIndex = new Map<string, number>();
+  headerRow.forEach((cell, idx) => {
+    headerIndex.set(String(cell || "").trim().toLowerCase(), idx);
+  });
+  const statusIdx = headerIndex.get("status") ?? -1;
+  const statusUpdatedIdx = headerIndex.get("status_updated_at") ?? -1;
+  const notesIdx = headerIndex.get("notes") ?? -1;
+  const lastErrorIdx = headerIndex.get("last_error") ?? -1;
+  const requestIdIdx = headerIndex.get("request_id") ?? -1;
+  const emailIdx = headerIndex.get("email") ?? -1;
+  const nameIdx = headerIndex.get("name") ?? -1;
+
+  if ([statusIdx, statusUpdatedIdx, notesIdx, lastErrorIdx, requestIdIdx, emailIdx].some((idx) => idx < 0)) {
+    logError("ack_queue_header_invalid", { kind });
+    return;
+  }
+
+  const dataRange = `${config.sheetName}!A2:AZ`;
+  const rows = await fetchSheetValues(env, config.sheetId, dataRange);
+  if (!rows.length) return;
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i] || [];
+    const statusRaw = String(row[statusIdx] || "").trim().toUpperCase();
+    if (statusRaw !== "NEW") continue;
+
+    const rowNumber = i + 2;
+    const requestId = getString(row[requestIdIdx]);
+    const senderEmail = getString(row[emailIdx]);
+    const senderName = getString(row[nameIdx]);
+    const notesValue = String(row[notesIdx] || "");
+    let lastErrorValue = "";
+    let nextStatus = statusRaw;
+    const now = new Date().toISOString();
+
+    if (!requestId || !senderEmail) {
+      lastErrorValue = "missing_request_or_email";
+    } else {
+      const normalizedRequestId = normalizeRequestId(requestId);
+      const ackKey = `ack:req:${normalizedRequestId}`;
+      const alreadyAcked = env.HEERAWALLA_ACKS ? await env.HEERAWALLA_ACKS.get(ackKey) : null;
+
+      if (alreadyAcked) {
+        nextStatus = "ACKNOWLEDGED";
+      } else {
+        try {
+          await sendEmail(env, {
+            to: [senderEmail],
+            sender: "Heerawalla <no-reply@heerawalla.com>",
+            replyTo: "no-reply@heerawalla.com",
+            subject: buildAckSubject(normalizedRequestId),
+            textBody: EMAIL_TEXT,
+            htmlBody: EMAIL_HTML,
+            headers: autoReplyHeaders(),
+          });
+          nextStatus = "ACKNOWLEDGED";
+          if (env.HEERAWALLA_ACKS) {
+            await env.HEERAWALLA_ACKS.put(ackKey, "1", { expirationTtl: 60 * 60 * 24 * 7 });
+          }
+          logInfo("ack_queue_sent", { kind, requestId: normalizedRequestId, email: maskEmail(senderEmail) });
+        } catch (error) {
+          lastErrorValue = String(error).slice(0, 200);
+          logWarn("ack_queue_failed", { kind, requestId: normalizedRequestId, error: lastErrorValue });
+        }
+      }
+    }
+
+    if (!nextStatus) continue;
+    const startIndex = Math.min(statusIdx, statusUpdatedIdx, notesIdx, lastErrorIdx);
+    const endIndex = Math.max(statusIdx, statusUpdatedIdx, notesIdx, lastErrorIdx);
+    const values = new Array(endIndex - startIndex + 1).fill("");
+    values[statusIdx - startIndex] = nextStatus;
+    values[statusUpdatedIdx - startIndex] = now;
+    values[notesIdx - startIndex] = notesValue;
+    values[lastErrorIdx - startIndex] = lastErrorValue;
+
+    try {
+      await updateSheetRow(env, config, rowNumber, startIndex, endIndex, values);
+    } catch (error) {
+      logError("ack_queue_update_failed", { kind, requestId, error: String(error) });
+    }
+  }
 }
 
 async function safeJson(request: Request) {
@@ -4709,6 +4877,12 @@ function isEnabled(value: string | boolean | undefined, defaultValue: boolean) {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return defaultValue;
   return ["1", "true", "yes", "y", "on"].includes(normalized);
+}
+
+function getAckMode(env: Env) {
+  const normalized = (env.ACK_MODE || "").trim().toLowerCase();
+  if (["cron", "scheduled", "schedule"].includes(normalized)) return "cron";
+  return "inline";
 }
 
 function buildOriginKey(requestId: string) {

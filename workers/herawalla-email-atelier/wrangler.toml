@@ -24,6 +24,7 @@ REPLY_TO_ADDRESS = "relay-reply@heerawalla.com"
 SEND_ACK = "true"
 SEND_REJECT = "false"
 SEND_SUBMIT = "true"
+ACK_MODE = "cron"
 SUBSCRIBE_TO = "noreply.heerawalla@gmail.com"
 ATELIER_SENDERS = "atelier.heerawalla@gmail.com"
 CATALOG_SHEET_ID = "1oFrJpxZmL94GeNXDK95OHHcCqG2zOiQuhOtOZ1y5i6o"
@@ -38,6 +39,9 @@ CONTACTS_SHEET_ID = ""
 CONTACTS_SHEET_NAME = "Contacts"
 
 # Secrets are configured via `wrangler secret put` or in the Cloudflare dashboard.
+
+[triggers]
+crons = ["*/15 * * * *"]
 
 [[send_email]]
 name = "SEND_EMAIL"
