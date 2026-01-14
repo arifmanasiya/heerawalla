@@ -7,7 +7,7 @@ interface Crumb {
 const { crumbs } = Astro.props as { crumbs: Crumb[] };
 ---
 
-<nav class="text-xs text-slate-500 mb-4" aria-label="Breadcrumb">
+<nav class="hidden sm:block text-xs text-slate-500 mb-4" aria-label="Breadcrumb">
   <ol class="flex items-center gap-2 flex-wrap">
     {crumbs.map((crumb, idx) => (
       <li class="flex items-center gap-2">

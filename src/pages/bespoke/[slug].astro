@@ -15,8 +15,8 @@ export async function getStaticPaths() {
 
 const { product } = Astro.props as { product: ProductWithMedia };
 const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
-const metaTitle = `Request final quote | ${product.name} | Heerawalla`;
-const metaDescription = `Finalize sizing and request a quote for ${product.name}.`;
+const metaTitle = `Begin purchase | ${product.name} | Heerawalla`;
+const metaDescription = `Confirm sizing and preferred details for ${product.name}.`;
 const categoryKey = (product.category || '').split('/').pop() || '';
 
 const parseList = (value?: string) => {
@@ -50,10 +50,10 @@ const productUrl = Astro.site
   <Header />
   <main class="container py-10 space-y-8">
     <div class="space-y-2">
-      <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Finalize quote</p>
-      <h1 class="font-display text-3xl sm:text-4xl tracking-tight">Request final quote</h1>
+      <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Begin purchase</p>
+      <h1 class="font-display text-3xl sm:text-4xl tracking-tight">Review your selections</h1>
       <p class="text-sm text-slate-600">
-        You have already selected the piece. Please confirm sizing and share your contact details.
+        Confirm sizing and your preferred details. No payment is required yet.
       </p>
     </div>
 
@@ -74,79 +74,6 @@ const productUrl = Astro.site
       <input type="hidden" data-stone-natural value={naturalStoneLabel} />
       <input type="hidden" data-stone-lab value={labStoneLabel} />
 
-      <div class="grid gap-4 sm:grid-cols-2" data-size-group>
-        <label class="text-sm space-y-1 sm:col-span-2 hidden" data-size-field="generic">
-          <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Sizing details</span>
-          <input
-            class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm"
-            data-size-input
-            placeholder="Ring size, wrist size, chain length, etc."
-          />
-        </label>
-        <label class="text-sm space-y-1 hidden" data-size-field="ring">
-          <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Ring size</span>
-          <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-size-input>
-            <option value="" disabled selected>Select a size</option>
-            <option value="4">4</option>
-            <option value="4.5">4.5</option>
-            <option value="5">5</option>
-            <option value="5.5">5.5</option>
-            <option value="6">6</option>
-            <option value="6.5">6.5</option>
-            <option value="7">7</option>
-            <option value="7.5">7.5</option>
-            <option value="8">8</option>
-            <option value="8.5">8.5</option>
-            <option value="9">9</option>
-            <option value="9.5">9.5</option>
-            <option value="10">10</option>
-            <option value="10.5">10.5</option>
-            <option value="11">11</option>
-            <option value="11.5">11.5</option>
-            <option value="12">12</option>
-            <option value="12.5">12.5</option>
-          </select>
-        </label>
-        <label class="text-sm space-y-1 hidden" data-size-field="bracelet">
-          <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Wrist size</span>
-          <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-size-input>
-            <option value="" disabled selected>Select a size</option>
-            <option value="5.5 in">5.5 in</option>
-            <option value="5.75 in">5.75 in</option>
-            <option value="6 in">6 in</option>
-            <option value="6.25 in">6.25 in</option>
-            <option value="6.5 in">6.5 in</option>
-            <option value="6.75 in">6.75 in</option>
-            <option value="7 in">7 in</option>
-            <option value="7.25 in">7.25 in</option>
-            <option value="7.5 in">7.5 in</option>
-            <option value="7.75 in">7.75 in</option>
-            <option value="8 in">8 in</option>
-          </select>
-        </label>
-        <label class="text-sm space-y-1 hidden" data-size-field="necklace">
-          <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Chain length</span>
-          <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-size-input>
-            <option value="" disabled selected>Select a length</option>
-            <option value="16 in">16 in</option>
-            <option value="18 in">18 in</option>
-            <option value="20 in">20 in</option>
-            <option value="22 in">22 in</option>
-            <option value="24 in">24 in</option>
-          </select>
-        </label>
-        <label class="text-sm space-y-1 hidden" data-size-field="earrings">
-          <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Earring preference</span>
-          <select class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-size-input>
-            <option value="" disabled selected>Select a style</option>
-            <option value="Stud">Stud</option>
-            <option value="Drop">Drop</option>
-            <option value="Hoop">Hoop</option>
-            <option value="No preference">No preference</option>
-          </select>
-        </label>
-      </div>
-
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="text-sm space-y-1">
           <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Your name</span>
@@ -157,8 +84,8 @@ const productUrl = Astro.site
           <input type="email" class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="email" required />
         </label>
         <label class="text-sm space-y-1 sm:col-span-2">
-          <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Phone (optional)</span>
-          <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="phone" />
+          <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Phone</span>
+          <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="phone" required />
         </label>
       </div>
 
@@ -167,6 +94,7 @@ const productUrl = Astro.site
       ) : null}
 
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <a class="btn btn-ghost" data-back-link href={productUrl}>Back to selections</a>
         <button
           type="submit"
           class="inline-flex items-center justify-center min-h-[44px] px-5 py-3 bg-ink text-white text-xs uppercase tracking-[0.2em] rounded-none"
@@ -205,17 +133,11 @@ const productUrl = Astro.site
     const params = new URLSearchParams(window.location.search);
     const metalMode = params.get('metal') || '14k';
     const stoneMode = params.get('stone') || 'natural';
+    const rawSize = params.get('size') || '';
+    const stoneWeight = params.get('stoneWeight') || '';
     const metalLabel = metalMode === 'platinum' ? metalPlatinum : metalMode === '14k' ? metal14 : metal18;
     const stoneLabel = stoneMode === 'lab' ? stoneLab : stoneNatural;
 
-    if (selectionSummary) {
-      const parts = [];
-      if (metalLabel) parts.push(`Metal: ${metalLabel}`);
-      if (stoneLabel) parts.push(`Stone: ${stoneLabel}`);
-      selectionSummary.textContent = parts.length ? parts.join(' • ') : 'Selections will appear here.';
-    }
-
-    const sizeFields = Array.prototype.slice.call(form.querySelectorAll('[data-size-field]'));
     const normalizeCategory = (value) => (value || '').toLowerCase().trim();
     const isIn = (value, list) => list.indexOf(value) >= 0;
     const category = normalizeCategory(categoryRaw);
@@ -229,20 +151,41 @@ const productUrl = Astro.site
       return 'generic';
     };
     const sizeKey = resolveSizeKey();
-    const getSizeInput = (field) => field.querySelector('[data-size-input]');
-    sizeFields.forEach((field) => {
-      const key = field.getAttribute('data-size-field') || '';
-      const show = key === sizeKey;
-      field.classList.toggle('hidden', !show);
-      const input = getSizeInput(field);
-      if (input) {
-        if (show) {
-          input.setAttribute('required', 'true');
-        } else {
-          input.removeAttribute('required');
-        }
+    const normalizeSizeValue = (value, key) => {
+      const normalized = String(value || '').trim();
+      if (!normalized) return '';
+      if (key === 'necklace' || key === 'bracelet') {
+        if (normalized.endsWith('"')) return `${normalized.replace(/"$/, '')} in`;
+        if (/^\d+(\.\d+)?$/.test(normalized)) return `${normalized} in`;
       }
-    });
+      return normalized;
+    };
+    const labelForSizeKey = (key) => {
+      if (key === 'ring') return 'Ring size';
+      if (key === 'bracelet') return 'Wrist size';
+      if (key === 'necklace') return 'Chain length';
+      if (key === 'earrings') return 'Earring preference';
+      return 'Sizing';
+    };
+    const sizeValue = normalizeSizeValue(rawSize, sizeKey);
+    if (selectionSummary) {
+      const parts = [];
+      if (metalLabel) parts.push(`Metal: ${metalLabel}`);
+      if (stoneLabel) parts.push(`Stone: ${stoneLabel}`);
+      if (stoneWeight) parts.push(`Stone weight: ${stoneWeight}`);
+      if (sizeValue) parts.push(`Size: ${sizeValue}`);
+      selectionSummary.textContent = parts.length ? parts.join(' | ') : 'Selections will appear here.';
+    }
+    const backLink = form.querySelector('[data-back-link]');
+    if (backLink && productUrl) {
+      const searchParams = new URLSearchParams();
+      if (params.get('metal')) searchParams.set('metal', params.get('metal'));
+      if (params.get('stone')) searchParams.set('stone', params.get('stone'));
+      if (params.get('size')) searchParams.set('size', params.get('size'));
+      if (params.get('stoneWeight')) searchParams.set('stoneWeight', params.get('stoneWeight'));
+      const suffix = searchParams.toString();
+      backLink.setAttribute('href', suffix ? `${productUrl}?${suffix}` : productUrl);
+    }
 
     const statusEl = form.querySelector('[data-status]');
     const submitBtn = form.querySelector('[data-submit]');
@@ -270,20 +213,16 @@ const productUrl = Astro.site
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const activeField = sizeFields.find((field) => !field.classList.contains('hidden'));
-      const activeInput = activeField ? getSizeInput(activeField) : null;
-      const sizeLabelEl = activeField ? activeField.querySelector('span') : null;
-      const sizeLabel = sizeLabelEl ? sizeLabelEl.textContent || 'Sizing' : 'Sizing';
+      const sizeLabel = labelForSizeKey(sizeKey);
       const nameField = form.querySelector('[data-field="name"]');
       const emailField = form.querySelector('[data-field="email"]');
       const phoneField = form.querySelector('[data-field="phone"]');
-      const size = activeInput ? String(activeInput.value || '').trim() : '';
       const name = nameField ? String(nameField.value || '').trim() : '';
       const email = emailField ? String(emailField.value || '').trim() : '';
       const phone = phoneField ? String(phoneField.value || '').trim() : '';
 
-      if (!size || !name || !email) {
-        setStatus('Please complete sizing, name, and email before sending.', true);
+      if (!name || !email || !phone) {
+        setStatus('Please complete name, email, and phone before sending.', true);
         return;
       }
 
@@ -301,7 +240,7 @@ const productUrl = Astro.site
         designCode ? `Design code: ${designCode}` : '',
         metalLabel ? `Metal: ${metalLabel}` : '',
         stoneLabel ? `Stone: ${stoneLabel}` : '',
-        `${sizeLabel}: ${size}`,
+        sizeValue ? `${sizeLabel}: ${sizeValue}` : '',
         `Heerawalla Request ID: ${id}`,
         productUrl ? `Product link: ${productUrl}` : ''
       ].filter(Boolean);

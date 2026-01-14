@@ -34,11 +34,20 @@ const roundTo99 = (value: number) => {
   return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
 };
 const parseList = (value?: string) => {
-  if (!value) return [];
-  return value
-    .split('|')
-    .map((item) => item.trim())
-    .filter(Boolean);
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/[|,]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return [String(value)];
+  }
+  return [];
 };
 const normalizeStoneType = (value: string) =>
   value
@@ -51,8 +60,6 @@ const labDiscountPct = product.lab_discount_pct ?? -20;
 const metal14DiscountPct = product.metal_14k_discount_pct ?? -5;
 const platinumPremiumPct = product.metal_platinum_premium ?? 10;
 const labUsd = applyDiscount(baseUsd, labDiscountPct);
-const platinumUsd = applyDiscount(baseUsd, platinumPremiumPct);
-const platinumLabUsd = applyDiscount(labUsd, platinumPremiumPct);
 const baseUsdRounded = roundTo99(baseUsd);
 const labUsdRounded = roundTo99(labUsd);
 const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
@@ -62,14 +69,62 @@ const naturalStoneLabel =
   stoneTypes.find((item) => /natural/i.test(item)) || 'Natural Diamond';
 const labStoneLabel =
   stoneTypes.find((item) => /lab/i.test(item)) || 'Lab Grown Diamond';
-const diamondDefault = labAvailable ? 'lab' : naturalAvailable ? 'natural' : 'lab';
+const stoneOptions = [
+  ...(naturalAvailable ? [{ value: 'natural', label: naturalStoneLabel }] : []),
+  ...(labAvailable ? [{ value: 'lab', label: labStoneLabel }] : [])
+];
+const hasStoneOptions = stoneOptions.length > 0;
+const stoneWeightOptions = parseList(product.stone_weight);
+const hasStoneWeight = stoneWeightOptions.length > 0;
+const diamondDefault = hasStoneOptions
+  ? labAvailable
+    ? 'lab'
+    : naturalAvailable
+      ? 'natural'
+      : 'natural'
+  : 'natural';
 const defaultDiamondUsd = diamondDefault === 'lab' ? labUsd : baseUsd;
-const defaultUsd = roundTo99(applyDiscount(defaultDiamondUsd, metal14DiscountPct));
+const metalBase = product.metal || '18K Gold';
+const metalColors = (() => {
+  const normalized = metalBase.toLowerCase();
+  const colors = [];
+  if (normalized.includes('yellow')) colors.push('Yellow');
+  if (normalized.includes('white')) colors.push('White');
+  if (normalized.includes('rose')) colors.push('Rose');
+  return colors.length ? colors : ['Yellow', 'White'];
+})();
+const metalOptions = [
+  ...metalColors.map((color) => ({
+    value: `18k-${color.toLowerCase()}`,
+    label: `18K ${color} Gold`
+  })),
+  ...metalColors.map((color) => ({
+    value: `14k-${color.toLowerCase()}`,
+    label: `14K ${color} Gold`
+  })),
+  { value: 'platinum', label: 'Platinum' }
+];
+const defaultMetalValue =
+  metalOptions.find((opt) => opt.value.startsWith('14k'))?.value ||
+  metalOptions[0]?.value ||
+  '18k-yellow';
+const defaultMetalLabel =
+  metalOptions.find((opt) => opt.value === defaultMetalValue)?.label ||
+  metalOptions[0]?.label ||
+  '18K Gold';
 const diamondDefaultLabel = diamondDefault === 'lab' ? labStoneLabel : naturalStoneLabel;
+const defaultMetalTier = defaultMetalValue.startsWith('14k')
+  ? '14k'
+  : defaultMetalValue === 'platinum'
+    ? 'platinum'
+    : '18k';
+const defaultUsd = (() => {
+  let price = defaultDiamondUsd;
+  if (defaultMetalTier === '14k') price = applyDiscount(price, metal14DiscountPct);
+  if (defaultMetalTier === 'platinum') price = applyDiscount(price, platinumPremiumPct);
+  return roundTo99(price);
+})();
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-const metal18Label = (product.metal || '18K Gold').replace(/14K/gi, '18K');
-const metal14Label = metal18Label.replace(/18K/gi, '14K');
-const metalPlatinumLabel = 'Platinum';
 const designCode = product.design_code || 'Signature';
 const designCodeSlug = designCode.toLowerCase();
 const isDesignCode = ['axis', 'continuum', 'eclipse'].includes(designCodeSlug);
@@ -110,6 +165,41 @@ const breadcrumbCrumbs = [
   { label: product.name }
 ];
 const bespokeHref = withBase(`/bespoke/${product.slug}`);
+
+const sizeSpec = (() => {
+  const tags = (() => {
+    const base = parseList(product.tags).map((tag) => tag.toLowerCase());
+    if (base.length) return base;
+    const category = (product.category || '').split('/').pop();
+    return category ? [category.toLowerCase()] : [];
+  })();
+  const hasTag = (values: string[]) => values.some((value) => tags.includes(value));
+  if (hasTag(['ring', 'rings', 'band', 'bands'])) {
+    return {
+      label: 'Ring size',
+      options: ['4', '4.5', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12']
+    };
+  }
+  if (hasTag(['bracelet', 'bracelets', 'bangle', 'bangles'])) {
+    return {
+      label: 'Bracelet length',
+      options: ['6"', '6.5"', '7"', '7.5"', '8"']
+    };
+  }
+  if (hasTag(['necklace', 'necklaces', 'pendant', 'pendants', 'chain', 'chains'])) {
+    return {
+      label: 'Chain length',
+      options: ['16"', '18"', '20"', '22"', '24"']
+    };
+  }
+  if (hasTag(['earring', 'earrings'])) {
+    return {
+      label: 'Earring size',
+      options: ['Standard']
+    };
+  }
+  return null;
+})();
 const productSlug = product.slug;
 
 const offers = [
@@ -211,7 +301,7 @@ void jsonLdString;
               data-lab-discount={labDiscountPct}
               data-platinum-premium={platinumPremiumPct}
               data-metal-14k-discount={metal14DiscountPct}
-              data-metal-default="14k"
+              data-metal-default={defaultMetalValue}
               data-diamond-default={diamondDefault}
               data-natural-available={naturalAvailable}
               data-lab-available={labAvailable}
@@ -220,14 +310,7 @@ void jsonLdString;
               {usdFormatter.format(defaultUsd)}
             </span>
             <span class="text-sm text-slate-500 flex items-center gap-2">
-              <span
-                data-metal-label
-                data-metal-18={metal18Label}
-                data-metal-14={metal14Label}
-                data-metal-platinum={metalPlatinumLabel}
-              >
-                {metal14Label}
-              </span>
+              <span data-selected-metal>{defaultMetalLabel}</span>
               <span class="relative group">
                 <button
                   type="button"
@@ -239,19 +322,16 @@ void jsonLdString;
                 <span
                   id="gold-tooltip"
                   role="tooltip"
-                  class="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-60 -translate-x-1/2 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+                  class="pointer-events-none absolute left-0 top-full z-10 mt-2 w-60 max-w-[90vw] translate-x-0 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 sm:left-1/2 sm:-translate-x-1/2"
                 >
                   For daily wear, 14K offers added durability; 18K brings richer color, and platinum adds a bright, weighty finish.
                 </span>
               </span>
-              <span class="relative group inline-flex items-center gap-1">
-                <span
-                  data-diamond-label
-                  data-diamond-natural={naturalStoneLabel}
-                  data-diamond-lab={labStoneLabel}
-                >
-                  {diamondDefaultLabel}
-                </span>
+              <span
+                class={`relative group inline-flex items-center gap-1${hasStoneOptions ? '' : ' hidden'}`}
+                data-stone-summary
+              >
+                <span data-selected-stone>{diamondDefaultLabel}</span>
                 <button
                   type="button"
                   class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
@@ -261,7 +341,7 @@ void jsonLdString;
                 </button>
                 <span
                   id="diamond-quality-tooltip"
-                  class="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-60 -translate-x-1/2 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+                  class="pointer-events-none absolute left-0 top-full z-10 mt-2 w-60 max-w-[90vw] translate-x-0 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 sm:left-1/2 sm:-translate-x-1/2"
                   role="tooltip"
                 >
                   Pricing reflects top-quality diamonds (ideal cut, VVS1-VVS2, E-F color).
@@ -282,31 +362,92 @@ void jsonLdString;
               <span
                 id="price-tooltip"
                 role="tooltip"
-                class="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-60 -translate-x-1/2 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+                class="pointer-events-none absolute left-0 top-full z-10 mt-2 w-60 max-w-[90vw] translate-x-0 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 sm:left-1/2 sm:-translate-x-1/2"
               >
                 Final pricing is confirmed after consultation based on metal, diamond choice, and sizing.
               </span>
             </div>
           </div>
-          {naturalAvailable && labAvailable ? (
-            <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
-              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Stone Type</span>
-              <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="natural">{naturalStoneLabel}</button>
-              <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-price-toggle="lab">{labStoneLabel}</button>
-            </div>
-          ) : naturalAvailable || labAvailable ? (
-            <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
-              <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Stone Type</span>
-              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">
-                {naturalAvailable ? naturalStoneLabel : labStoneLabel}
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label
+              class={`text-sm space-y-1${hasStoneOptions ? '' : ' hidden'}`}
+              data-stone-field
+            >
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Stone Type</span>
+              <select
+                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                data-stone-select
+                disabled={!hasStoneOptions}
+              >
+                {stoneOptions.length ? (
+                  stoneOptions.map((option) => (
+                    <option value={option.value} selected={option.value === diamondDefault}>
+                      {option.label}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">None</option>
+                )}
+              </select>
+            </label>
+            <label class="text-sm space-y-1">
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Metal Type</span>
+              <select
+                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                data-metal-select
+              >
+                {metalOptions.map((option) => (
+                  <option value={option.value} selected={option.value === defaultMetalValue}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              class={`text-sm space-y-1${hasStoneWeight ? '' : ' hidden'}`}
+              data-stone-weight-field
+            >
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Stone Weight</span>
+              <select
+                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                data-stone-weight-select
+                disabled={!hasStoneWeight}
+              >
+                {stoneWeightOptions.length ? (
+                  stoneWeightOptions.map((option) => (
+                    <option value={option} selected={stoneWeightOptions[0] === option}>
+                      {option}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Not specified</option>
+                )}
+              </select>
+            </label>
+            <label
+              class={`text-sm space-y-1${sizeSpec ? '' : ' hidden'}`}
+              data-size-field
+            >
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500" data-size-label>
+                {sizeSpec?.label || 'Size'}
               </span>
-            </div>
-          ) : null}
-          <div class="flex flex-wrap gap-2 text-xs text-slate-500 items-center">
-            <span class="px-2 py-1 rounded-full bg-slate-100 text-slate-700">Metal Type</span>
-            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="18k">{metal18Label}</button>
-            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="14k">{metal14Label}</button>
-            <button type="button" class="px-2 py-1 rounded-full border border-slate-200" data-metal-toggle="platinum">{metalPlatinumLabel}</button>
+              <select
+                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                data-size-select
+                disabled={!sizeSpec}
+              >
+                {sizeSpec?.options?.length ? (
+                  <>
+                    <option value="" selected>Select {sizeSpec.label.toLowerCase()}</option>
+                    {sizeSpec.options.map((option) => (
+                      <option value={option}>{option}</option>
+                    ))}
+                  </>
+                ) : (
+                  <option value="">Not applicable</option>
+                )}
+              </select>
+            </label>
           </div>
         </div>
         <p class="text-sm leading-relaxed text-slate-600 whitespace-pre-line" data-product-description>
@@ -321,16 +462,46 @@ void jsonLdString;
               data-bespoke-link
               data-bespoke-base={bespokeHref}
             >
-              Request final quote
+              Begin purchase
             </a>
-            <a class="btn btn-ghost" href={withBase('/contact?intent=consultation')}>Book a consultation</a>
+            <a class="btn btn-ghost" href={withBase('/how-it-works')}>How it works</a>
           </div>
         </div>
-        <div class="border-t border-slate-200 pt-4 text-sm text-slate-500 space-y-2">
-          <div class="text-xs uppercase tracking-[0.2em] text-slate-500">How checkout works</div>
-          <p>1) You request a quote and confirm your preferred details.</p>
-          <p>2) A concierge validates availability, sizing, and pricing.</p>
-          <p>3) We email a secure payment link. Your piece is reserved once paid.</p>
+        <div class="border-t border-slate-200 pt-4 text-sm text-slate-500">
+          <div class="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+            <span>How it works</span>
+            <span class="relative group">
+              <button
+                type="button"
+                class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                aria-describedby="how-it-works-tooltip"
+              >
+                i
+              </button>
+              <div
+                id="how-it-works-tooltip"
+                role="tooltip"
+                class="pointer-events-none absolute left-0 top-full z-10 mt-2 w-80 max-w-[90vw] translate-x-0 border border-slate-200 bg-white px-4 py-3 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 sm:left-1/2 sm:-translate-x-1/2"
+              >
+                <div class="text-[10px] uppercase tracking-[0.2em] text-slate-500">How checkout works</div>
+                <div class="mt-1 space-y-1">
+                  <div>1) You begin purchase. No payment is required yet.</div>
+                  <div>2) A concierge confirms your preferred details and validates availability and sizing.</div>
+                  <div>3) We email a secure payment link. Your piece is reserved once paid.</div>
+                </div>
+                <div class="mt-3 text-[10px] uppercase tracking-[0.2em] text-slate-500">How atelier works</div>
+                <div class="mt-1 space-y-1">
+                  <div>We translate your selection into a final spec, confirm materials, and schedule craftsmanship.</div>
+                  <div>Once approved, the atelier begins production and we keep you updated at key milestones.</div>
+                </div>
+                <div class="mt-3 text-[10px] uppercase tracking-[0.2em] text-slate-500">How shipping works</div>
+                <div class="mt-1 space-y-1">
+                  <div>We ship insured with signature required and provide tracking as soon as it leaves our atelier.</div>
+                  <div>Delivery timelines vary by piece and location; your concierge will confirm ETA.</div>
+                </div>
+              </div>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -402,8 +573,15 @@ void jsonLdString;
         metalDefault: priceEl.dataset.metalDefault || ''
       });
       let diamondMode = 'natural';
-      let metalMode = '14k';
-      const metalLabel = document.querySelector('[data-metal-label]');
+      let metalMode = '';
+      const stoneSelect = document.querySelector('[data-stone-select]');
+      const metalSelect = document.querySelector('[data-metal-select]');
+      const stoneWeightSelect = document.querySelector('[data-stone-weight-select]');
+      const sizeSelect = document.querySelector('[data-size-select]');
+      const stoneSummary = document.querySelector('[data-stone-summary]');
+      const stoneField = document.querySelector('[data-stone-field]');
+      const selectedMetal = document.querySelector('[data-selected-metal]');
+      const selectedStone = document.querySelector('[data-selected-stone]');
       const bespokeLink = document.querySelector('[data-bespoke-link]');
       const bespokeBase = bespokeLink ? (bespokeLink.getAttribute('data-bespoke-base') || bespokeLink.getAttribute('href') || '') : '';
       const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
@@ -414,90 +592,96 @@ void jsonLdString;
         const upper = Math.ceil(value / 100) * 100 + 99;
         return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
       };
-      const priceToggles = Array.from(document.querySelectorAll('[data-price-toggle]'));
-      const metalToggles = Array.from(document.querySelectorAll('[data-metal-toggle]'));
-      const setToggleAvailability = (state) => {
-        priceToggles.forEach((btn) => {
-          const mode = btn.dataset.priceToggle || 'natural';
-          const isAvailable = mode === 'lab' ? state.labAvailable : state.naturalAvailable;
-          if (!isAvailable) {
-            btn.setAttribute('disabled', 'true');
-            btn.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
-          } else {
-            btn.removeAttribute('disabled');
-            btn.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
-          }
-        });
+      const metalTier = (value) => {
+        if (!value) return '18k';
+        if (value === 'platinum') return 'platinum';
+        if (value.startsWith('14k')) return '14k';
+        return '18k';
       };
-      const syncModes = (state, refreshDefaults) => {
-        if (refreshDefaults) {
-          diamondMode = state.diamondDefault || (state.labAvailable ? 'lab' : 'natural');
-          metalMode = state.metalDefault || metalMode || '14k';
-        }
-        if (diamondMode === 'lab' && !state.labAvailable) diamondMode = 'natural';
-        if (diamondMode === 'natural' && !state.naturalAvailable) diamondMode = state.labAvailable ? 'lab' : 'natural';
+      const setSelectValue = (select, value) => {
+        if (!select) return;
+        const options = Array.from(select.options);
+        if (!options.length) return;
+        const match = options.find((option) => option.value === value);
+        select.value = match ? value : options[0].value;
+      };
+      const getSelectLabel = (select) => {
+        if (!select) return '';
+        const option = select.options[select.selectedIndex];
+        return option ? option.textContent || '' : '';
       };
       const apply = (refreshDefaults) => {
         const state = readState();
-        setToggleAvailability(state);
-        syncModes(state, refreshDefaults);
+        const hasStoneOptions = state.naturalAvailable || state.labAvailable;
+        if (refreshDefaults) {
+          if (stoneSelect && hasStoneOptions) {
+            const defaultStone = state.diamondDefault || (state.labAvailable ? 'lab' : 'natural');
+            setSelectValue(stoneSelect, defaultStone);
+          }
+          if (metalSelect) {
+            setSelectValue(metalSelect, state.metalDefault || metalSelect.value);
+          }
+        }
+
+        if (stoneField) {
+          stoneField.classList.toggle('hidden', !hasStoneOptions);
+        }
+        if (stoneSummary) {
+          stoneSummary.classList.toggle('hidden', !hasStoneOptions);
+        }
+
+        const nextStone = stoneSelect ? stoneSelect.value : state.diamondDefault || 'natural';
+        diamondMode = hasStoneOptions ? nextStone : 'natural';
+        if (diamondMode === 'lab' && !state.labAvailable) diamondMode = 'natural';
+        if (diamondMode === 'natural' && !state.naturalAvailable) diamondMode = state.labAvailable ? 'lab' : 'natural';
+
+        const nextMetal = metalSelect ? metalSelect.value : state.metalDefault || '';
+        metalMode = nextMetal;
+        const tier = metalTier(nextMetal);
+
         let price = state.baseUsd;
-        if (diamondMode === 'lab') {
+        if (diamondMode === 'lab' && state.labAvailable) {
           price = applyDiscount(price, state.labDiscount);
         }
-        if (metalMode === '14k') {
+        if (tier === '14k') {
           price = applyDiscount(price, state.metal14Discount);
         }
-        if (metalMode === 'platinum') {
+        if (tier === 'platinum') {
           price = applyDiscount(price, state.platinumPremium);
         }
         priceEl.textContent = formatter.format(roundTo99(price));
-        priceToggles.forEach((btn) => {
-          btn.classList.toggle('bg-ink', btn.dataset.priceToggle === diamondMode);
-          btn.classList.toggle('text-white', btn.dataset.priceToggle === diamondMode);
-        });
-        metalToggles.forEach((btn) => {
-          btn.classList.toggle('bg-ink', btn.dataset.metalToggle === metalMode);
-          btn.classList.toggle('text-white', btn.dataset.metalToggle === metalMode);
-        });
-        if (metalLabel) {
-          const label =
-            metalMode === '14k'
-              ? metalLabel.getAttribute('data-metal-14')
-              : metalMode === 'platinum'
-                ? metalLabel.getAttribute('data-metal-platinum')
-                : metalLabel.getAttribute('data-metal-18');
-          if (label) metalLabel.textContent = label;
+        if (selectedMetal && metalSelect) {
+          selectedMetal.textContent = getSelectLabel(metalSelect);
         }
-        const diamondLabel = document.querySelector('[data-diamond-label]');
-        if (diamondLabel) {
-          const label =
-            diamondMode === 'lab'
-              ? diamondLabel.getAttribute('data-diamond-lab')
-              : diamondLabel.getAttribute('data-diamond-natural');
-          if (label) diamondLabel.textContent = label;
+        if (selectedStone && stoneSelect && hasStoneOptions) {
+          selectedStone.textContent = getSelectLabel(stoneSelect);
         }
         if (bespokeLink && bespokeBase) {
           const params = new URLSearchParams();
-          params.set('metal', metalMode);
-          params.set('stone', diamondMode);
+          if (metalMode) params.set('metal', metalMode);
+          if (hasStoneOptions) params.set('stone', diamondMode);
+          if (stoneWeightSelect && stoneWeightSelect.value) {
+            params.set('stoneWeight', stoneWeightSelect.value);
+          }
+          if (sizeSelect && sizeSelect.value) {
+            params.set('size', sizeSelect.value);
+          }
           params.set('source', 'product');
           bespokeLink.setAttribute('href', `${bespokeBase}?${params.toString()}`);
         }
       };
-      priceToggles.forEach((btn) => {
-        const mode = btn.dataset.priceToggle || 'natural';
-        btn.addEventListener('click', () => {
-          diamondMode = mode;
-          apply(false);
-        });
-      });
-      metalToggles.forEach((btn) => {
-        btn.addEventListener('click', () => {
-          metalMode = btn.dataset.metalToggle || '18k';
-          apply(false);
-        });
-      });
+      if (stoneSelect) {
+        stoneSelect.addEventListener('change', () => apply(false));
+      }
+      if (metalSelect) {
+        metalSelect.addEventListener('change', () => apply(false));
+      }
+      if (stoneWeightSelect) {
+        stoneWeightSelect.addEventListener('change', () => apply(false));
+      }
+      if (sizeSelect) {
+        sizeSelect.addEventListener('change', () => apply(false));
+      }
       apply(true);
       window.__hwApplyPricing = () => apply(false);
       window.__hwRefreshPricingDefaults = () => apply(true);
@@ -512,18 +696,19 @@ void jsonLdString;
 
       const priceEl = document.getElementById('price-display');
       if (!priceEl) return;
-      const metalLabel = document.querySelector('[data-metal-label]');
-      const diamondLabel = document.querySelector('[data-diamond-label]');
-      const naturalToggle = document.querySelector('[data-price-toggle="natural"]');
-      const labToggle = document.querySelector('[data-price-toggle="lab"]');
-      const metal18Toggle = document.querySelector('[data-metal-toggle="18k"]');
-      const metal14Toggle = document.querySelector('[data-metal-toggle="14k"]');
-      const metalPlatinumToggle = document.querySelector('[data-metal-toggle="platinum"]');
+      const stoneField = document.querySelector('[data-stone-field]');
+      const stoneSelect = document.querySelector('[data-stone-select]');
+      const metalSelect = document.querySelector('[data-metal-select]');
+      const stoneWeightField = document.querySelector('[data-stone-weight-field]');
+      const stoneWeightSelect = document.querySelector('[data-stone-weight-select]');
+      const sizeField = document.querySelector('[data-size-field]');
+      const sizeSelect = document.querySelector('[data-size-select]');
+      const sizeLabel = document.querySelector('[data-size-label]');
 
       const parseList = (value) => {
         if (!value) return [];
         return String(value)
-          .split('|')
+          .split(/[|,]/)
           .map((item) => item.trim())
           .filter(Boolean);
       };
@@ -535,6 +720,30 @@ void jsonLdString;
           .replace(/\\s+/g, ' ')
           .trim();
 
+      const parseMetalColors = (value) => {
+        const normalized = String(value || '').toLowerCase();
+        const colors = [];
+        if (normalized.includes('yellow')) colors.push('yellow');
+        if (normalized.includes('white')) colors.push('white');
+        if (normalized.includes('rose')) colors.push('rose');
+        return colors.length ? colors : ['yellow', 'white'];
+      };
+
+      const buildMetalOptions = (value) => {
+        const colors = parseMetalColors(value);
+        return [
+          ...colors.map((color) => ({
+            value: `18k-${color}`,
+            label: `18K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`
+          })),
+          ...colors.map((color) => ({
+            value: `14k-${color}`,
+            label: `14K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`
+          })),
+          { value: 'platinum', label: 'Platinum' }
+        ];
+      };
+
       const parseNumber = (value) => {
         if (value === undefined || value === null) return undefined;
         if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
@@ -542,6 +751,65 @@ void jsonLdString;
         if (!trimmed) return undefined;
         const parsed = Number(trimmed);
         return Number.isFinite(parsed) ? parsed : undefined;
+      };
+
+      const setSelectOptions = (select, options, selectedValue, placeholderLabel) => {
+        if (!select) return;
+        select.innerHTML = '';
+        if (placeholderLabel) {
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = placeholderLabel;
+          if (!selectedValue) placeholder.selected = true;
+          select.appendChild(placeholder);
+        }
+        options.forEach((option) => {
+          const el = document.createElement('option');
+          el.value = option.value;
+          el.textContent = option.label;
+          if (selectedValue && option.value === selectedValue) {
+            el.selected = true;
+          }
+          select.appendChild(el);
+        });
+        if (selectedValue) {
+          select.value = selectedValue;
+        }
+      };
+
+      const buildSizeSpec = (tagsValue, categoryValue) => {
+        const tags = (() => {
+          const base = parseList(tagsValue).map((tag) => tag.toLowerCase());
+          if (base.length) return base;
+          const category = String(categoryValue || '').split('/').pop();
+          return category ? [category.toLowerCase()] : [];
+        })();
+        const hasTag = (values) => values.some((entry) => tags.includes(entry));
+        if (hasTag(['ring', 'rings', 'band', 'bands'])) {
+          return {
+            label: 'Ring size',
+            options: ['4', '4.5', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12']
+          };
+        }
+        if (hasTag(['bracelet', 'bracelets', 'bangle', 'bangles'])) {
+          return {
+            label: 'Bracelet length',
+            options: ['6"', '6.5"', '7"', '7.5"', '8"']
+          };
+        }
+        if (hasTag(['necklace', 'necklaces', 'pendant', 'pendants', 'chain', 'chains'])) {
+          return {
+            label: 'Chain length',
+            options: ['16"', '18"', '20"', '22"', '24"']
+          };
+        }
+        if (hasTag(['earring', 'earrings'])) {
+          return {
+            label: 'Earring size',
+            options: ['Standard']
+          };
+        }
+        return null;
       };
 
       const updatePricingFromProduct = (item) => {
@@ -552,8 +820,20 @@ void jsonLdString;
           stoneTypes.find((entry) => /natural/i.test(entry)) || 'Natural Diamond';
         const labStoneLabel =
           stoneTypes.find((entry) => /lab/i.test(entry)) || 'Lab Grown Diamond';
-        const metal18Label = String(item.metal || '18K Gold').replace(/14K/gi, '18K');
-        const metal14Label = metal18Label.replace(/18K/gi, '14K');
+        const metalOptions = buildMetalOptions(item.metal || '18K Gold');
+        const defaultMetalValue =
+          metalOptions.find((option) => option.value.startsWith('14k'))?.value ||
+          metalOptions[0]?.value ||
+          '18k-yellow';
+        const stoneOptions = [
+          ...(naturalAvailable ? [{ value: 'natural', label: naturalStoneLabel }] : []),
+          ...(labAvailable ? [{ value: 'lab', label: labStoneLabel }] : [])
+        ];
+        const stoneWeightOptions = parseList(item.stone_weight).map((option) => ({
+          value: option,
+          label: option
+        }));
+        const sizeSpec = buildSizeSpec(item.tags, item.category || item.categories);
 
         priceEl.dataset.priceUsdBase = String(parseNumber(item.price_usd_natural) || 0);
         priceEl.dataset.labDiscount = String(
@@ -565,33 +845,45 @@ void jsonLdString;
         priceEl.dataset.metal14kDiscount = String(
           parseNumber(item.metal_14k_discount_pct ?? -5) ?? -5
         );
-        priceEl.dataset.naturalAvailable = String(naturalAvailable);
-        priceEl.dataset.labAvailable = String(labAvailable);
-        priceEl.dataset.diamondDefault = labAvailable ? 'lab' : naturalAvailable ? 'natural' : 'lab';
+        if (stoneTypes.length) {
+          priceEl.dataset.naturalAvailable = String(naturalAvailable);
+          priceEl.dataset.labAvailable = String(labAvailable);
+          priceEl.dataset.diamondDefault = labAvailable ? 'lab' : naturalAvailable ? 'natural' : 'natural';
+        }
+        priceEl.dataset.metalDefault = defaultMetalValue;
 
-        if (metalLabel) {
-          metalLabel.setAttribute('data-metal-18', metal18Label);
-          metalLabel.setAttribute('data-metal-14', metal14Label);
-          metalLabel.setAttribute('data-metal-platinum', 'Platinum');
+        if (stoneSelect && stoneTypes.length) {
+          setSelectOptions(
+            stoneSelect,
+            stoneOptions,
+            priceEl.dataset.diamondDefault || (labAvailable ? 'lab' : 'natural')
+          );
+          stoneSelect.disabled = stoneOptions.length === 0;
         }
-        if (diamondLabel) {
-          diamondLabel.setAttribute('data-diamond-natural', naturalStoneLabel);
-          diamondLabel.setAttribute('data-diamond-lab', labStoneLabel);
+        if (stoneField && stoneTypes.length) {
+          stoneField.classList.toggle('hidden', stoneOptions.length === 0);
         }
-        if (naturalToggle) {
-          naturalToggle.textContent = naturalStoneLabel;
+        if (metalSelect) {
+          setSelectOptions(metalSelect, metalOptions, defaultMetalValue);
         }
-        if (labToggle) {
-          labToggle.textContent = labStoneLabel;
+        if (stoneWeightSelect) {
+          setSelectOptions(stoneWeightSelect, stoneWeightOptions, stoneWeightOptions[0]?.value);
+          stoneWeightSelect.disabled = stoneWeightOptions.length === 0;
         }
-        if (metal18Toggle) {
-          metal18Toggle.textContent = metal18Label;
+        if (stoneWeightField) {
+          stoneWeightField.classList.toggle('hidden', stoneWeightOptions.length === 0);
         }
-        if (metal14Toggle) {
-          metal14Toggle.textContent = metal14Label;
-        }
-        if (metalPlatinumToggle) {
-          metalPlatinumToggle.textContent = 'Platinum';
+        if (sizeField && sizeSelect && sizeLabel) {
+          if (sizeSpec) {
+            sizeField.classList.remove('hidden');
+            sizeSelect.disabled = false;
+            sizeLabel.textContent = sizeSpec.label;
+            const sizeOptions = sizeSpec.options.map((option) => ({ value: option, label: option }));
+            setSelectOptions(sizeSelect, sizeOptions, '', `Select ${sizeSpec.label.toLowerCase()}`);
+          } else if (!sizeSelect.options.length) {
+            sizeField.classList.add('hidden');
+            sizeSelect.disabled = true;
+          }
         }
 
         if (window.__hwRefreshPricingDefaults) {

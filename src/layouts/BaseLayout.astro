@@ -105,50 +105,19 @@ void websiteJson;
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://herawalla-email-atelier.arifmanasiya.workers.dev; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src https://challenges.cloudflare.com;"
+    />
     <link rel="icon" type="image/svg+xml" href={withBase('/images/engraving_mark.svg')} />
     <link rel="shortcut icon" href={withBase('/images/engraving_mark.svg')} />
     <link rel="apple-touch-icon" href={withBase('/images/engraving_mark.svg')} />
     <link rel="mask-icon" href={withBase('/images/engraving_mark.svg')} color="#0B1928" />
     {gaMeasurementId ? (
       <>
-        <script is:inline>
-          if (typeof globalThis === 'undefined') {
-            window.globalThis = window;
-          }
-        </script>
+        <meta name="ga-measurement-id" content={gaMeasurementId} />
         <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}></script>
-        <script is:inline define:vars={{ gaMeasurementId }}>
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){window.dataLayer.push(arguments);}
-          if (typeof window.gtag !== 'function') {
-            window.gtag = gtag;
-          }
-          gtag('js', new Date());
-          const isDebug = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-          const config = isDebug ? { debug_mode: true } : {};
-          gtag('config', gaMeasurementId, config);
-          window.addEventListener('click', (event) => {
-            const target = event.target;
-            if (!(target instanceof Element)) return;
-            const el = target.closest('[data-analytics-event]');
-            if (!el) return;
-            const eventName = el.getAttribute('data-analytics-event');
-            if (!eventName) return;
-            const labelText = el.textContent;
-            const label = el.getAttribute('data-analytics-label') || (labelText ? labelText.trim() : '');
-            const location = el.getAttribute('data-analytics-location') || '';
-            const href = el instanceof HTMLAnchorElement ? el.href : el.getAttribute('href') || '';
-            if (typeof window.gtag === 'function') {
-              window.gtag('event', eventName, {
-                event_category: 'cta',
-                event_label: label,
-                cta_label: label,
-                cta_location: location,
-                link_url: href
-              });
-            }
-          });
-        </script>
+        <script defer src={withBase('/scripts/ga.js')}></script>
       </>
     ) : null}
     <script type="application/ld+json" is:inline>

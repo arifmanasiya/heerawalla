@@ -1,0 +1,109 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+const metaTitle = 'How It Works | Heerawalla';
+const metaDescription =
+  'A clear, concierge-led journey from selection to atelier craftsmanship and insured delivery.';
+
+const checkoutSteps = [
+  {
+    title: 'Begin purchase',
+    text: 'No payment is required yet. Share your preferred details to start the process.'
+  },
+  {
+    title: 'Concierge confirmation',
+    text: 'We confirm availability, sizing, and materials to finalize your selection.'
+  },
+  {
+    title: 'Secure payment',
+    text: 'We email a secure payment link. Your piece is reserved once paid.'
+  }
+];
+
+const atelierSteps = [
+  {
+    title: 'Finalize the spec',
+    text: 'We translate your selection into a final specification and confirm materials.'
+  },
+  {
+    title: 'Craftsmanship begins',
+    text: 'Our atelier begins production once details are approved.'
+  },
+  {
+    title: 'Progress updates',
+    text: 'We share key milestones so you know exactly where your piece is.'
+  }
+];
+
+const shippingSteps = [
+  {
+    title: 'Delivery planning',
+    text: 'Your concierge confirms the delivery window and ETA.'
+  },
+  {
+    title: 'Insured shipment',
+    text: 'We ship fully insured with signature required.'
+  },
+  {
+    title: 'Tracking provided',
+    text: 'You receive tracking as soon as your piece leaves our atelier.'
+  }
+];
+---
+
+<BaseLayout title={metaTitle} description={metaDescription}>
+  <Header />
+
+  <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+    <section class="space-y-4">
+      <p class="text-xs uppercase tracking-[0.3em] text-slate-500">How it works</p>
+      <h1 class="font-display text-4xl sm:text-5xl tracking-tight">A concierge-led process, refined at every step.</h1>
+      <p class="text-sm sm:text-base text-slate-600 max-w-2xl">
+        From selection to atelier production and insured delivery, every step is confirmed and guided by a dedicated concierge.
+      </p>
+    </section>
+
+    <section class="space-y-6">
+      <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Checkout</div>
+      <ol class="grid gap-4 sm:grid-cols-3">
+        {checkoutSteps.map((step, index) => (
+          <li class="border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Step {index + 1}</p>
+            <h2 class="text-sm font-semibold tracking-tight">{step.title}</h2>
+            <p class="text-sm text-slate-600">{step.text}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="space-y-6">
+      <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Atelier</div>
+      <ol class="grid gap-4 sm:grid-cols-3">
+        {atelierSteps.map((step, index) => (
+          <li class="border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Step {index + 1}</p>
+            <h2 class="text-sm font-semibold tracking-tight">{step.title}</h2>
+            <p class="text-sm text-slate-600">{step.text}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="space-y-6">
+      <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Shipping</div>
+      <ol class="grid gap-4 sm:grid-cols-3">
+        {shippingSteps.map((step, index) => (
+          <li class="border border-slate-200 bg-white p-4 space-y-2">
+            <p class="text-[10px] uppercase tracking-[0.24em] text-slate-500">Step {index + 1}</p>
+            <h2 class="text-sm font-semibold tracking-tight">{step.title}</h2>
+            <p class="text-sm text-slate-600">{step.text}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
