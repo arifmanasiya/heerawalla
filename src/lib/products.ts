@@ -27,13 +27,6 @@ function toOptionalNumber(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function toOptionalBoolean(value: string | undefined): boolean | undefined {
-  if (value === undefined || value === null) return undefined;
-  const trimmed = value.toString().trim();
-  if (!trimmed) return undefined;
-  return ['true', '1', 'yes', 'y'].includes(trimmed.toLowerCase());
-}
-
 function toOptionalFirstListItem(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const first = value.split('|')[0];

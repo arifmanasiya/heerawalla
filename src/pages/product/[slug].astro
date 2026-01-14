@@ -74,7 +74,7 @@ const stoneOptions = [
   ...(labAvailable ? [{ value: 'lab', label: labStoneLabel }] : [])
 ];
 const hasStoneOptions = stoneOptions.length > 0;
-const stoneWeightOptions = parseList(product.stone_weight);
+const stoneWeightOptions = parseList(product.stone_weight === undefined ? '' : String(product.stone_weight));
 const hasStoneWeight = stoneWeightOptions.length > 0;
 const diamondDefault = hasStoneOptions
   ? labAvailable
@@ -157,7 +157,6 @@ const editionLabel = (() => {
 const groupLabel = editionLabel || product.collection || product.category || '';
 const editionKey = (product.category || '').split('/')[0] || '';
 const editionHref = editionHrefMap[editionKey];
-const groupLineLabel = editionHref ? 'Edition' : 'Collection';
 const breadcrumbCrumbs = [
   { label: 'Home', href: withBase('/') },
   { label: designCode, href: designCodeHref, kind: 'design-code' },

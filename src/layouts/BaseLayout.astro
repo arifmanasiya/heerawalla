@@ -116,8 +116,8 @@ void websiteJson;
     {gaMeasurementId ? (
       <>
         <meta name="ga-measurement-id" content={gaMeasurementId} />
-        <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}></script>
-        <script defer src={withBase('/scripts/ga.js')}></script>
+        <script async is:inline src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}></script>
+        <script defer is:inline src={withBase('/scripts/ga.js')}></script>
       </>
     ) : null}
     <script type="application/ld+json" is:inline>
