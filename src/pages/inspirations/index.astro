@@ -298,9 +298,9 @@ const buildEstimateMeta = (item: Inspiration) => {
 
 <script is:inline define:vars={{ catalogUrl, catalogMode, basePath }}>
   (() => {
-    const catalogUrl = String(catalogUrl || '');
-    const catalogMode = String(catalogMode || '').toLowerCase();
-    const basePath = String(basePath || '/');
+    const catalogUrlValue = String(catalogUrl || '');
+    const catalogModeValue = String(catalogMode || '').toLowerCase();
+    const basePathValue = String(basePath || '/');
     const grid = document.querySelector('[data-inspiration-grid]');
     const empty = document.querySelector('[data-inspiration-empty]');
     const selects = Array.from(document.querySelectorAll('[data-filter]'));
@@ -310,7 +310,7 @@ const buildEstimateMeta = (item: Inspiration) => {
     if (!grid || selects.length === 0) return;
 
     const withBase = (path) => {
-      const base = basePath || '/';
+      const base = basePathValue || '/';
       const normalizedBase = base.endsWith('/') ? base : `${base}/`;
       const cleaned = path.replace(/^\/+/, '');
       return `${normalizedBase}${cleaned}`;
@@ -577,9 +577,9 @@ const buildEstimateMeta = (item: Inspiration) => {
     };
 
     const fetchCatalog = async () => {
-      if (!catalogUrl || catalogMode === 'ssr') return;
-      const joiner = catalogUrl.includes('?') ? '&' : '?';
-      const url = `${catalogUrl}${joiner}include=inspirations`;
+      if (!catalogUrlValue || catalogModeValue === 'ssr') return;
+      const joiner = catalogUrlValue.includes('?') ? '&' : '?';
+      const url = `${catalogUrlValue}${joiner}include=inspirations`;
       try {
         const response = await fetch(url, { cache: 'no-store' });
         if (!response.ok) return;

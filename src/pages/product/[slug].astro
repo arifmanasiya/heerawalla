@@ -505,10 +505,10 @@ void jsonLdString;
   </script>
   <script is:inline define:vars={{ catalogUrl, catalogMode, productSlug }}>
     (() => {
-      const catalogUrl = String(catalogUrl || '');
-      const catalogMode = String(catalogMode || '').toLowerCase();
-      const productSlug = String(productSlug || '');
-      if (!catalogUrl || catalogMode === 'ssr' || !productSlug) return;
+      const catalogUrlValue = String(catalogUrl || '');
+      const catalogModeValue = String(catalogMode || '').toLowerCase();
+      const productSlugValue = String(productSlug || '');
+      if (!catalogUrlValue || catalogModeValue === 'ssr' || !productSlugValue) return;
 
       const priceEl = document.getElementById('price-display');
       if (!priceEl) return;
@@ -602,14 +602,14 @@ void jsonLdString;
       };
 
       const fetchCatalog = async () => {
-        const joiner = catalogUrl.includes('?') ? '&' : '?';
-        const url = `${catalogUrl}${joiner}include=products`;
+        const joiner = catalogUrlValue.includes('?') ? '&' : '?';
+        const url = `${catalogUrlValue}${joiner}include=products`;
         try {
           const response = await fetch(url, { cache: 'no-store' });
           if (!response.ok) return;
           const data = await response.json();
           if (!data || !Array.isArray(data.products)) return;
-          const match = data.products.find((entry) => entry && entry.slug === productSlug);
+          const match = data.products.find((entry) => entry && entry.slug === productSlugValue);
           if (!match) return;
           updatePricingFromProduct(match);
         } catch {

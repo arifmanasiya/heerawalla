@@ -173,10 +173,10 @@ const inspirationSlug = item.slug;
 
   <script is:inline define:vars={{ catalogUrl, catalogMode, inspirationSlug }}>
     (() => {
-      const catalogUrl = String(catalogUrl || '');
-      const catalogMode = String(catalogMode || '').toLowerCase();
-      const inspirationSlug = String(inspirationSlug || '');
-      if (!catalogUrl || catalogMode === 'ssr' || !inspirationSlug) return;
+      const catalogUrlValue = String(catalogUrl || '');
+      const catalogModeValue = String(catalogMode || '').toLowerCase();
+      const inspirationSlugValue = String(inspirationSlug || '');
+      if (!catalogUrlValue || catalogModeValue === 'ssr' || !inspirationSlugValue) return;
 
       const wrapper = document.querySelector('[data-estimate-wrapper]');
       const listEl = document.querySelector('[data-estimate-list]');
@@ -244,14 +244,14 @@ const inspirationSlug = item.slug;
       };
 
       const fetchCatalog = async () => {
-        const joiner = catalogUrl.includes('?') ? '&' : '?';
-        const url = `${catalogUrl}${joiner}include=inspirations`;
+        const joiner = catalogUrlValue.includes('?') ? '&' : '?';
+        const url = `${catalogUrlValue}${joiner}include=inspirations`;
         try {
           const response = await fetch(url, { cache: 'no-store' });
           if (!response.ok) return;
           const data = await response.json();
           if (!data || !Array.isArray(data.inspirations)) return;
-          const match = data.inspirations.find((entry) => entry && entry.slug === inspirationSlug);
+          const match = data.inspirations.find((entry) => entry && entry.slug === inspirationSlugValue);
           if (!match) return;
           renderDetails(buildDetails(match));
         } catch {

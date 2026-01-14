@@ -113,10 +113,10 @@ const breadcrumbs = [
 
 <script is:inline define:vars={{ catalogUrl, catalogMode, basePath, editionKey }}>
   (() => {
-    const catalogUrl = String(catalogUrl || '');
-    const catalogMode = String(catalogMode || '').toLowerCase();
-    const basePath = String(basePath || '/');
-    const editionKey = String(editionKey || '');
+    const catalogUrlValue = String(catalogUrl || '');
+    const catalogModeValue = String(catalogMode || '').toLowerCase();
+    const basePathValue = String(basePath || '/');
+    const editionKeyValue = String(editionKey || '');
     const grid = document.querySelector('[data-product-grid]');
     const empty = document.querySelector('[data-product-empty]');
     const container = document.querySelector('[data-design-filter]');
@@ -127,7 +127,7 @@ const breadcrumbs = [
     if (!buttons.length) return;
 
     const withBase = (path) => {
-      const base = basePath || '/';
+      const base = basePathValue || '/';
       const normalizedBase = base.endsWith('/') ? base : `${base}/`;
       const cleaned = path.replace(/^\/+/, '');
       return `${normalizedBase}${cleaned}`;
@@ -507,9 +507,9 @@ const breadcrumbs = [
     };
 
     const fetchCatalog = async () => {
-      if (!catalogUrl || catalogMode === 'ssr') return;
-      const joiner = catalogUrl.includes('?') ? '&' : '?';
-      const url = `${catalogUrl}${joiner}include=products`;
+      if (!catalogUrlValue || catalogModeValue === 'ssr') return;
+      const joiner = catalogUrlValue.includes('?') ? '&' : '?';
+      const url = `${catalogUrlValue}${joiner}include=products`;
       try {
         const response = await fetch(url, { cache: 'no-store' });
         if (!response.ok) return;
@@ -517,7 +517,7 @@ const breadcrumbs = [
         if (!data || !Array.isArray(data.products)) return;
         const items = data.products.filter((product) => {
           const category = String(product.category || '').toLowerCase();
-          return category.startsWith(`${editionKey}/`) || category.startsWith('unisex/');
+          return category.startsWith(`${editionKeyValue}/`) || category.startsWith('unisex/');
         });
         renderProducts(items);
       } catch {
