@@ -12,6 +12,11 @@ const products = (await loadProductsWithMedia()).filter((product) => {
   const category = product.category || '';
   return category.startsWith(`${editionKey}/`) || category.startsWith('unisex/');
 });
+const heroImageById = Object.fromEntries(
+  products
+    .map((product) => [product.id, product.media.images[0]?.url])
+    .filter((entry) => Boolean(entry[1]))
+);
 const seo = {
   primary: "men's jewelry",
   secondary: [
@@ -111,12 +116,13 @@ const breadcrumbs = [
   <Footer />
 </BaseLayout>
 
-<script is:inline define:vars={{ catalogUrl, catalogMode, basePath, editionKey }}>
+<script is:inline define:vars={{ catalogUrl, catalogMode, basePath, editionKey, heroImageById }}>
   (() => {
     const catalogUrlValue = String(catalogUrl || '');
     const catalogModeValue = String(catalogMode || '').toLowerCase();
     const basePathValue = String(basePath || '/');
     const editionKeyValue = String(editionKey || '');
+    const heroImageByIdValue = heroImageById || {};
     const grid = document.querySelector('[data-product-grid]');
     const empty = document.querySelector('[data-product-empty]');
     const container = document.querySelector('[data-design-filter]');
@@ -229,14 +235,22 @@ const breadcrumbs = [
       const categorySlug = slugify(product.category || 'uncategorized');
       const folder = `/images/products/${categorySlug}/${product.id}`;
       const baseFolder = withBase(folder);
+      const override = heroImageByIdValue[product.id] || product.hero_image;
+      if (override) {
+        const overrideUrl =
+          override.startsWith('http') || override.startsWith('/')
+            ? override
+            : `${baseFolder}/${override}`;
+        return [overrideUrl, withBase('/images/products/placeholder.svg')];
+      }
       const candidates = [
-        'img-hero-1.webp',
-        'img-hero-1.avif',
         'img-hero-1.png',
         'img-hero-1.jpeg',
         'img-hero-1.jpg',
-        'img-1.webp',
-        'img-1.avif',
+        'img-hero-2.png',
+        'img-hero-2.jpeg',
+        'img-hero-2.jpg',
+        'img-hero-03.jpeg',
         'img-1.png',
         'img-1.jpeg',
         'img-1.jpg',
@@ -453,7 +467,6 @@ const breadcrumbs = [
       });
     };
 
-    let activeCode = initialCode;
     const apply = (code) => {
       const target = (code || '').toLowerCase();
       const cards = Array.from(document.querySelectorAll('[data-product-card]'));
@@ -477,12 +490,15 @@ const breadcrumbs = [
       params.get('designCode') ||
       '';
     const normalized = initial.toLowerCase();
-    const initialCode = buttons.some((button) => (button.dataset.code || '') === normalized)
+    let initialCode = '';
+    let activeCode = '';
+    initialCode = buttons.some((button) => (button.dataset.code || '') === normalized)
       ? normalized
       : '';
+    activeCode = initialCode;
 
-    setActive(initialCode);
-    apply(initialCode);
+    setActive(activeCode);
+    apply(activeCode);
 
     buttons.forEach((button) => {
       button.addEventListener('click', () => {
