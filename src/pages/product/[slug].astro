@@ -649,7 +649,8 @@ void jsonLdString;
         if (tier === 'platinum') {
           price = applyDiscount(price, state.platinumPremium);
         }
-        priceEl.textContent = formatter.format(roundTo99(price));
+        const roundedPrice = roundTo99(price);
+        priceEl.textContent = formatter.format(roundedPrice);
         if (selectedMetal && metalSelect) {
           selectedMetal.textContent = getSelectLabel(metalSelect);
         }
@@ -665,6 +666,9 @@ void jsonLdString;
           }
           if (sizeSelect && sizeSelect.value) {
             params.set('size', sizeSelect.value);
+          }
+          if (Number.isFinite(roundedPrice)) {
+            params.set('price', String(roundedPrice));
           }
           params.set('source', 'product');
           bespokeLink.setAttribute('href', `${bespokeBase}?${params.toString()}`);

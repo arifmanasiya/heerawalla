@@ -29,10 +29,115 @@ export interface Env {
   PRODUCTS_CSV_URL?: string;
   INSPIRATIONS_CSV_URL?: string;
   SITE_CONFIG_CSV_URL?: string;
+  ORDER_SHEET_ID?: string;
+  ORDER_SHEET_NAME?: string;
+  ORDER_SHEET_RANGE?: string;
+  QUOTE_SHEET_ID?: string;
+  QUOTE_SHEET_NAME?: string;
+  QUOTE_SHEET_RANGE?: string;
+  CONTACTS_SHEET_ID?: string;
+  CONTACTS_SHEET_NAME?: string;
+  CONTACTS_SHEET_RANGE?: string;
 }
 
 const ACK_SUBJECT_PREFIX = "Heerawalla - Your request has been received";
 const CONTACT_ACK_SUBJECT = "Heerawalla - Thanks for your message";
+const ORDER_SHEET_HEADER = [
+  "created_at",
+  "request_id",
+  "status",
+  "status_updated_at",
+  "notes",
+  "last_error",
+  "price",
+  "timeline",
+  "name",
+  "email",
+  "phone",
+  "source",
+  "product_name",
+  "product_url",
+  "design_code",
+  "metal",
+  "stone",
+  "stone_weight",
+  "size",
+  "address_line1",
+  "address_line2",
+  "city",
+  "state",
+  "postal_code",
+  "country",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "referrer",
+  "origin",
+  "ip",
+  "user_agent",
+];
+const QUOTE_SHEET_HEADER = [
+  "created_at",
+  "request_id",
+  "status",
+  "status_updated_at",
+  "notes",
+  "last_error",
+  "price",
+  "timeline",
+  "name",
+  "email",
+  "phone",
+  "source",
+  "product_name",
+  "product_url",
+  "design_code",
+  "metal",
+  "stone",
+  "stone_weight",
+  "size",
+  "address_line1",
+  "address_line2",
+  "city",
+  "state",
+  "postal_code",
+  "country",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "referrer",
+  "origin",
+  "ip",
+  "user_agent",
+];
+const CONTACT_SHEET_HEADER = [
+  "created_at",
+  "email",
+  "name",
+  "phone",
+  "source",
+  "request_id",
+  "contact_preference",
+  "interests",
+  "page_url",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "referrer",
+  "address_line1",
+  "address_line2",
+  "city",
+  "state",
+  "postal_code",
+  "country",
+  "subscription_status",
+];
 const EMAIL_TEXT = [
   "Thank you for contacting Heerawalla.",
   "",
@@ -242,6 +347,7 @@ const BESPOKE_DIRECT_URL = "https://www.heerawalla.com/bespoke";
 const SUBMIT_PATH = "/submit";
 const SUBMIT_STATUS_PATH = "/submit-status";
 const CONTACT_SUBMIT_PATH = "/contact-submit";
+const ORDER_PATH = "/order";
 const SUBSCRIBE_PATH = "/subscribe";
 const UNSUBSCRIBE_PATH = "/unsubscribe";
 const REQUEST_ORIGIN_TTL = 60 * 60 * 24 * 180;
@@ -458,6 +564,10 @@ export default {
             : getBoolean(payload.phonePreferred);
           const replaceExisting = getBoolean(payload.replaceExisting || payload.replace_existing);
           const requestId = generateRequestId();
+          const pageUrl = getString(payload.pageUrl);
+          const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
+            resolveAttribution(payload, request);
+          const resolvedPageUrl = pageUrl || referrer;
 
           if (!name || !email || !date || !time) {
             return new Response(JSON.stringify({ ok: false, error: "missing_fields" }), {
@@ -521,6 +631,34 @@ export default {
             contactPreference: contactPreference || (phonePreferred ? "phone" : ""),
             subscriptionStatus: "subscribed",
           });
+          try {
+            await appendContactRow(env, [
+              new Date().toISOString(),
+              email,
+              name,
+              phone,
+              "concierge",
+              requestId,
+              contactPreference || (phonePreferred ? "phone" : ""),
+              "",
+              resolvedPageUrl,
+              utmSource,
+              utmMedium,
+              utmCampaign,
+              utmTerm,
+              utmContent,
+              referrer,
+              "",
+              "",
+              "",
+              "",
+              "",
+              "",
+              "subscribed",
+            ]);
+          } catch (error) {
+            logWarn("contact_sheet_failed", { requestId, error: String(error) });
+          }
 
           return new Response(JSON.stringify({ ok: true, booking }), {
             status: 200,
@@ -597,6 +735,9 @@ export default {
         const pageUrl = getString(payload.pageUrl);
         const requestId = generateRequestId();
         const sourceLabel = source || "subscribe";
+        const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
+          resolveAttribution(payload, request);
+        const resolvedPageUrl = pageUrl || referrer;
 
         if (!senderEmail) {
           logWarn("subscribe_missing_fields", { requestId });
@@ -735,6 +876,34 @@ export default {
             pageUrl,
             subscriptionStatus: "subscribed",
           });
+          try {
+            await appendContactRow(env, [
+              new Date().toISOString(),
+              senderEmail,
+              name,
+              phone,
+              sourceLabel,
+              requestId,
+              "",
+              interests.join(", "),
+              resolvedPageUrl,
+              utmSource,
+              utmMedium,
+              utmCampaign,
+              utmTerm,
+              utmContent,
+              referrer,
+              "",
+              "",
+              "",
+              "",
+              "",
+              "",
+              "subscribed",
+            ]);
+          } catch (error) {
+            logWarn("contact_sheet_failed", { requestId, error: String(error) });
+          }
         } catch (error) {
           logError("subscribe_send_failed", { requestId, email: maskEmail(senderEmail) });
           throw error;
@@ -865,6 +1034,9 @@ export default {
         const requestId = normalizeRequestId(requestIdInput);
         const phone = getString(payload.phone);
         const phonePreferred = getBoolean(payload.phonePreferred);
+        const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
+          resolveAttribution(payload, request);
+        const resolvedPageUrl = referrer || origin;
 
         if (!name || !senderEmail || !message) {
           logWarn("contact_submit_missing_fields", { requestId });
@@ -985,6 +1157,34 @@ export default {
             contactPreference: phonePreferred ? "phone" : "",
             subscriptionStatus: "subscribed",
           });
+          try {
+            await appendContactRow(env, [
+              new Date().toISOString(),
+              senderEmail,
+              name,
+              phone,
+              "contact",
+              requestId,
+              phonePreferred ? "phone" : "",
+              "",
+              resolvedPageUrl,
+              utmSource,
+              utmMedium,
+              utmCampaign,
+              utmTerm,
+              utmContent,
+              referrer,
+              "",
+              "",
+              "",
+              "",
+              "",
+              "",
+              "subscribed",
+            ]);
+          } catch (error) {
+            logWarn("contact_sheet_failed", { requestId, error: String(error) });
+          }
         } catch (error) {
           logError("contact_submit_send_failed", { requestId, email: maskEmail(senderEmail) });
           throw error;
@@ -998,6 +1198,238 @@ export default {
         const message = String(error);
         logError("contact_submit_error", { message });
         return new Response(JSON.stringify({ ok: false, error: "send_failed", detail: message }), {
+          status: 500,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+    }
+
+    if (url.pathname === ORDER_PATH) {
+      logInfo("order_received", { origin, method: request.method });
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: buildCorsHeaders(allowedOrigin),
+        });
+      }
+
+      if (request.method !== "POST") {
+        logWarn("order_invalid_method", { method: request.method });
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: buildCorsHeaders(allowedOrigin),
+        });
+      }
+
+      if (!allowedOrigin) {
+        logWarn("order_forbidden_origin", { origin });
+        return new Response("Forbidden", { status: 403 });
+      }
+
+      try {
+        const payload = await safeJson(request);
+        if (!isRecord(payload)) {
+          logWarn("order_invalid_payload", { origin });
+          return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        const subject = getString(payload.subject);
+        const body = getString(payload.body);
+        const senderEmail = getString(payload.email);
+        const senderName = getString(payload.name);
+        const requestId = getString(payload.requestId);
+        const turnstileToken = getString(payload.turnstileToken);
+        const phone = getString(payload.phone);
+        const source = getString(payload.source) || "order";
+        const productName = getString(payload.productName);
+        const productUrl = getString(payload.productUrl);
+        const designCode = getString(payload.designCode);
+        const metal = getString(payload.metal);
+        const stone = getString(payload.stone);
+        const stoneWeight = getString(payload.stoneWeight);
+        const size = getString(payload.size);
+        const addressLine1 = getString(payload.addressLine1 || payload.address_line1);
+        const addressLine2 = getString(payload.addressLine2 || payload.address_line2);
+        const city = getString(payload.city);
+        const state = getString(payload.state);
+        const postalCode = getString(payload.postalCode || payload.postal_code);
+        const country = getString(payload.country);
+        const status = "NEW";
+        let statusUpdatedAt = "";
+        const notes = "";
+        const lastError = "";
+        const price = getString(payload.price);
+        const timeline = normalizeTimeline(getString(payload.timeline));
+        const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
+          resolveAttribution(payload, request);
+        const pageUrl = getString(payload.pageUrl) || productUrl || referrer;
+
+        if (!subject || !body || !senderEmail || !requestId) {
+          logWarn("order_missing_fields", {
+            requestId,
+            hasSubject: Boolean(subject),
+            hasBody: Boolean(body),
+            hasEmail: Boolean(senderEmail),
+          });
+          return new Response(JSON.stringify({ ok: false, error: "missing_fields" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        if (!phone || !addressLine1 || !city || !state || !postalCode || !country) {
+          logWarn("order_missing_address", { requestId });
+          return new Response(JSON.stringify({ ok: false, error: "missing_address" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        if (!isValidPhone(phone)) {
+          logWarn("order_invalid_phone", { requestId, email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "invalid_phone" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        if (!env.TURNSTILE_SECRET) {
+          logError("order_turnstile_missing_secret", { requestId });
+          return new Response(JSON.stringify({ ok: false, error: "turnstile_not_configured" }), {
+            status: 500,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        if (!turnstileToken) {
+          logWarn("order_turnstile_missing", { requestId, email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "turnstile_required" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        const clientIp = request.headers.get("CF-Connecting-IP") || undefined;
+        const turnstileOk = await verifyTurnstile(env.TURNSTILE_SECRET, turnstileToken, clientIp);
+        if (!turnstileOk) {
+          logWarn("order_turnstile_failed", { requestId, email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "turnstile_failed" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        try {
+          const now = new Date().toISOString();
+          statusUpdatedAt = now;
+          const ip = request.headers.get("CF-Connecting-IP") || "";
+          const userAgent = request.headers.get("User-Agent") || "";
+          await appendOrderRow(env, [
+            now,
+            requestId,
+            status,
+            statusUpdatedAt,
+            notes,
+            lastError,
+            price,
+            timeline,
+            senderName,
+            senderEmail,
+            phone,
+            source,
+            productName,
+            productUrl,
+            designCode,
+            metal,
+            stone,
+            stoneWeight,
+            size,
+            addressLine1,
+            addressLine2,
+            city,
+            state,
+            postalCode,
+            country,
+            utmSource,
+            utmMedium,
+            utmCampaign,
+            utmTerm,
+            utmContent,
+            referrer,
+            origin,
+            ip,
+            userAgent,
+          ]);
+          logInfo("order_sheet_written", { requestId });
+          try {
+            await appendContactRow(env, [
+              now,
+              senderEmail,
+              senderName,
+              phone,
+              source,
+              requestId,
+              "",
+              "",
+              pageUrl,
+              utmSource,
+              utmMedium,
+              utmCampaign,
+              utmTerm,
+              utmContent,
+              referrer,
+              addressLine1,
+              addressLine2,
+              city,
+              state,
+              postalCode,
+              country,
+              "subscribed",
+            ]);
+          } catch (error) {
+            logWarn("contact_sheet_failed", { requestId, error: String(error) });
+          }
+        } catch (error) {
+          logError("order_sheet_failed", { requestId, error: String(error) });
+          return new Response(JSON.stringify({ ok: false, error: "order_store_failed" }), {
+            status: 500,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        const forwardResponse = await fetch(new Request(`${url.origin}${SUBMIT_PATH}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Origin: origin,
+          },
+          body: JSON.stringify(payload),
+        }));
+        const text = await forwardResponse.text();
+        if (!text) {
+          return new Response(JSON.stringify({ ok: true, orderStored: true }), {
+            status: forwardResponse.status,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        try {
+          const data = JSON.parse(text);
+          return new Response(JSON.stringify({ ...data, orderStored: true }), {
+            status: forwardResponse.status,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        } catch {
+          return new Response(text, {
+            status: forwardResponse.status,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+      } catch (error) {
+        const message = String(error);
+        logError("order_error", { message });
+        return new Response(JSON.stringify({ ok: false, error: "order_failed", detail: message }), {
           status: 500,
           headers: buildCorsHeaders(allowedOrigin, true),
         });
@@ -1042,7 +1474,31 @@ export default {
         const senderName = getString(payload.name);
         const requestId = getString(payload.requestId);
         const turnstileToken = getString(payload.turnstileToken);
+        const phone = getString(payload.phone);
+        const source = getString(payload.source) || "quote";
+        const productName = getString(payload.productName || payload.inspirationTitle);
+        const productUrl = getString(payload.productUrl || payload.inspirationUrl);
+        const designCode = getString(payload.designCode);
+        const metal = getString(payload.metal);
+        const stone = getString(payload.stone);
+        const stoneWeight = getString(payload.stoneWeight);
+        const size = getString(payload.size);
+        const addressLine1 = getString(payload.addressLine1 || payload.address_line1);
+        const addressLine2 = getString(payload.addressLine2 || payload.address_line2);
+        const city = getString(payload.city);
+        const state = getString(payload.state);
+        const postalCode = getString(payload.postalCode || payload.postal_code);
+        const country = getString(payload.country);
         const normalizedRequestId = normalizeRequestId(requestId);
+        const status = "NEW";
+        let statusUpdatedAt = "";
+        const notes = "";
+        const lastError = "";
+        const price = getString(payload.price);
+        const timeline = normalizeTimeline(getString(payload.timeline));
+        const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
+          resolveAttribution(payload, request);
+        const pageUrl = getString(payload.pageUrl) || productUrl || referrer;
 
         if (!subject || !body || !senderEmail || !normalizedRequestId) {
           logWarn("submit_missing_fields", {
@@ -1052,6 +1508,21 @@ export default {
             hasEmail: Boolean(senderEmail),
           });
           return new Response(JSON.stringify({ ok: false, error: "missing_fields" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+
+        if (!phone || !addressLine1 || !city || !state || !postalCode || !country) {
+          logWarn("submit_missing_address", { requestId });
+          return new Response(JSON.stringify({ ok: false, error: "missing_address" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        if (!isValidPhone(phone)) {
+          logWarn("submit_invalid_phone", { requestId, email: maskEmail(senderEmail) });
+          return new Response(JSON.stringify({ ok: false, error: "invalid_phone" }), {
             status: 400,
             headers: buildCorsHeaders(allowedOrigin, true),
           });
@@ -1143,6 +1614,89 @@ export default {
           }
           await env.HEERAWALLA_ACKS.put(rateKey, String(currentCount + 1), { expirationTtl: 60 * 60 });
           await env.HEERAWALLA_ACKS.put(requestKey, "1", { expirationTtl: 60 * 60 * 24 });
+        }
+
+        const shouldWriteQuoteSheet = source !== "order";
+        if (shouldWriteQuoteSheet) {
+          try {
+            const now = new Date().toISOString();
+            statusUpdatedAt = now;
+            const ip = request.headers.get("CF-Connecting-IP") || "";
+            const userAgent = request.headers.get("User-Agent") || "";
+            await appendQuoteRow(env, [
+              now,
+              normalizedRequestId,
+              status,
+              statusUpdatedAt,
+              notes,
+              lastError,
+              price,
+              timeline,
+              senderName,
+              senderEmail,
+              phone,
+              source,
+              productName,
+              productUrl,
+              designCode,
+              metal,
+              stone,
+              stoneWeight,
+              size,
+              addressLine1,
+              addressLine2,
+              city,
+              state,
+              postalCode,
+              country,
+              utmSource,
+              utmMedium,
+              utmCampaign,
+              utmTerm,
+              utmContent,
+              referrer,
+              origin,
+              ip,
+              userAgent,
+            ]);
+            logInfo("quote_sheet_written", { requestId: normalizedRequestId });
+            try {
+              await appendContactRow(env, [
+                now,
+                senderEmail,
+                senderName,
+                phone,
+                source,
+                normalizedRequestId,
+                "",
+                "",
+                pageUrl,
+                utmSource,
+                utmMedium,
+                utmCampaign,
+                utmTerm,
+                utmContent,
+                referrer,
+                addressLine1,
+                addressLine2,
+                city,
+                state,
+                postalCode,
+                country,
+                "subscribed",
+              ]);
+            } catch (error) {
+              logWarn("contact_sheet_failed", { requestId: normalizedRequestId, error: String(error) });
+            }
+          } catch (error) {
+            logError("quote_sheet_failed", { requestId: normalizedRequestId, error: String(error) });
+            return new Response(JSON.stringify({ ok: false, error: "quote_store_failed" }), {
+              status: 500,
+              headers: buildCorsHeaders(allowedOrigin, true),
+            });
+          }
+        } else {
+          logInfo("quote_sheet_skipped", { requestId: normalizedRequestId, source });
         }
 
         const forwardTo = env.FORWARD_TO || "atelier.heerawalla@gmail.com";
@@ -2165,6 +2719,123 @@ async function fetchText(url: string) {
   return await response.text();
 }
 
+type SheetConfig = {
+  sheetId: string;
+  sheetName: string;
+  appendRange: string;
+  headerRange: string;
+};
+
+function getSheetConfig(env: Env, kind: "order" | "quote" | "contact"): SheetConfig {
+  const id =
+    kind === "order"
+      ? env.ORDER_SHEET_ID
+      : kind === "quote"
+      ? env.QUOTE_SHEET_ID
+      : env.CONTACTS_SHEET_ID;
+  const name =
+    kind === "order"
+      ? env.ORDER_SHEET_NAME
+      : kind === "quote"
+      ? env.QUOTE_SHEET_NAME
+      : env.CONTACTS_SHEET_NAME;
+  const range =
+    kind === "order"
+      ? env.ORDER_SHEET_RANGE
+      : kind === "quote"
+      ? env.QUOTE_SHEET_RANGE
+      : env.CONTACTS_SHEET_RANGE;
+  const sheetId = (id || "").trim();
+  if (!sheetId) {
+    throw new Error(`${kind}_sheet_missing`);
+  }
+  const sheetName = (name || "").trim() || (kind === "order" ? "Orders" : kind === "quote" ? "Quotes" : "Contacts");
+  const appendRange = (range || "").trim() || `${sheetName}!A1`;
+  const resolvedSheetName = appendRange.includes("!")
+    ? appendRange.split("!")[0]
+    : sheetName;
+  const headerRange = `${resolvedSheetName}!A1:AZ1`;
+  return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
+}
+
+async function ensureSheetHeader(
+  env: Env,
+  config: SheetConfig,
+  headerRow: string[],
+  cacheKey: string
+) {
+  if (env.HEERAWALLA_ACKS) {
+    const cached = await env.HEERAWALLA_ACKS.get(cacheKey);
+    if (cached) return;
+  }
+  const token = await getAccessToken(env);
+  const headerUrl = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${encodeURIComponent(config.headerRange)}`
+  );
+  const headerResponse = await fetch(headerUrl.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!headerResponse.ok) {
+    const errorText = await headerResponse.text();
+    throw new Error(`sheet_header_check_failed:${headerResponse.status}:${errorText}`);
+  }
+  const headerPayload = (await headerResponse.json()) as { values?: string[][] };
+  const firstRow = headerPayload.values?.[0] || [];
+  const hasHeader = firstRow.some((cell) => String(cell || "").trim());
+  if (!hasHeader) {
+    await appendSheetRow(env, config, headerRow, headerRow, true);
+  }
+  if (env.HEERAWALLA_ACKS) {
+    await env.HEERAWALLA_ACKS.put(cacheKey, "1", { expirationTtl: 60 * 60 * 12 });
+  }
+}
+
+async function appendSheetRow(
+  env: Env,
+  config: SheetConfig,
+  values: Array<string | number>,
+  headerRow: string[],
+  skipHeaderCheck = false
+) {
+  if (!skipHeaderCheck) {
+    const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+    await ensureSheetHeader(env, config, headerRow, cacheKey);
+  }
+  const token = await getAccessToken(env);
+  const appendUrl = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/${encodeURIComponent(config.appendRange)}:append`
+  );
+  appendUrl.searchParams.set("valueInputOption", "USER_ENTERED");
+  appendUrl.searchParams.set("insertDataOption", "INSERT_ROWS");
+  const response = await fetch(appendUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ values: [values] }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`sheet_append_failed:${response.status}:${errorText}`);
+  }
+}
+
+async function appendOrderRow(env: Env, values: Array<string | number>) {
+  const config = getSheetConfig(env, "order");
+  await appendSheetRow(env, config, values, ORDER_SHEET_HEADER);
+}
+
+async function appendQuoteRow(env: Env, values: Array<string | number>) {
+  const config = getSheetConfig(env, "quote");
+  await appendSheetRow(env, config, values, QUOTE_SHEET_HEADER);
+}
+
+async function appendContactRow(env: Env, values: Array<string | number>) {
+  const config = getSheetConfig(env, "contact");
+  await appendSheetRow(env, config, values, CONTACT_SHEET_HEADER);
+}
+
 async function safeJson(request: Request) {
   try {
     return await request.json();
@@ -2194,6 +2865,46 @@ function getStringArray(value: unknown) {
   return [];
 }
 
+function extractUtmFromUrl(urlValue: string) {
+  if (!urlValue) return {};
+  try {
+    const url = new URL(urlValue);
+    return {
+      utmSource: url.searchParams.get("utm_source") || "",
+      utmMedium: url.searchParams.get("utm_medium") || "",
+      utmCampaign: url.searchParams.get("utm_campaign") || "",
+      utmTerm: url.searchParams.get("utm_term") || "",
+      utmContent: url.searchParams.get("utm_content") || "",
+    };
+  } catch {
+    return {};
+  }
+}
+
+function resolveAttribution(payload: Record<string, unknown>, request: Request) {
+  const referrerInput =
+    getString(payload.referrer || payload.referrerUrl || payload.pageReferrer) ||
+    request.headers.get("Referer") ||
+    "";
+  const utmFromPayload = {
+    utmSource: getString(payload.utmSource || payload.utm_source),
+    utmMedium: getString(payload.utmMedium || payload.utm_medium),
+    utmCampaign: getString(payload.utmCampaign || payload.utm_campaign),
+    utmTerm: getString(payload.utmTerm || payload.utm_term),
+    utmContent: getString(payload.utmContent || payload.utm_content),
+  };
+  const utmFromUrl = extractUtmFromUrl(referrerInput);
+
+  return {
+    utmSource: utmFromPayload.utmSource || utmFromUrl.utmSource || "",
+    utmMedium: utmFromPayload.utmMedium || utmFromUrl.utmMedium || "",
+    utmCampaign: utmFromPayload.utmCampaign || utmFromUrl.utmCampaign || "",
+    utmTerm: utmFromPayload.utmTerm || utmFromUrl.utmTerm || "",
+    utmContent: utmFromPayload.utmContent || utmFromUrl.utmContent || "",
+    referrer: referrerInput,
+  };
+}
+
 function getBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
   if (typeof value === "string") {
@@ -2217,6 +2928,14 @@ function normalizeContactPreference(value: string) {
   if (["phone", "call"].includes(normalized)) return "phone";
   if (["meet", "video"].includes(normalized)) return "meet";
   return "";
+}
+
+function normalizeTimeline(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "Standard";
+  if (normalized.includes("rush")) return "Rush";
+  if (normalized.includes("standard")) return "Standard";
+  return "Standard";
 }
 
 function generateRequestId() {

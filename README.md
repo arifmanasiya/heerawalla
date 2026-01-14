@@ -99,6 +99,7 @@ The concierge booking and contact sync use Google APIs via the worker at `worker
 Add these scopes on the same Google Cloud project:
 - `https://www.googleapis.com/auth/calendar` (concierge booking)
 - `https://www.googleapis.com/auth/contacts` (People API sync)
+- `https://www.googleapis.com/auth/spreadsheets` (order/quote/contact sheet logging)
 
 ### Generate a refresh token (OAuth Playground)
 1) In Google Cloud Console, create an OAuth Client ID (Web).
@@ -113,6 +114,12 @@ Set these secrets on the worker (Wrangler or Cloudflare UI):
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REFRESH_TOKEN` (must include the Contacts scope if People API is used)
 - `GOOGLE_CALENDAR_ID` (calendar to book against)
+- `ORDER_SHEET_ID` (Orders tab)
+- `ORDER_SHEET_NAME` (default `Orders`) or `ORDER_SHEET_RANGE` (e.g. `Orders!A1`)
+- `QUOTE_SHEET_ID` (Quotes tab)
+- `QUOTE_SHEET_NAME` (default `Quotes`) or `QUOTE_SHEET_RANGE`
+- `CONTACTS_SHEET_ID` (Contacts tab)
+- `CONTACTS_SHEET_NAME` (default `Contacts`) or `CONTACTS_SHEET_RANGE`
 
 After updating secrets, redeploy the worker.
 

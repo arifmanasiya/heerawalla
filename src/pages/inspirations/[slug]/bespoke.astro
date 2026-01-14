@@ -127,6 +127,7 @@ const defaultStoneType = (() => {
           data-inspiration-title={item.title}
           data-inspiration-image={item.heroImage}
         >
+          <input type="hidden" data-estimate-price value={item.estimatedPriceUsdVvs1Vvs2_18k || ''} />
           <section class="space-y-6" data-step="1">
             <div class="space-y-2">
               <h2 class="font-display text-2xl tracking-tight">Piece</h2>
@@ -344,8 +345,34 @@ const defaultStoneType = (() => {
                   <input type="email" class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="email" required />
                 </label>
                 <label class="text-sm space-y-1">
-                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Phone (optional)</span>
-                  <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="phone" />
+                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Phone</span>
+                  <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="phone" required />
+                </label>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <label class="text-sm space-y-1 sm:col-span-2">
+                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Address line 1</span>
+                  <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="addressLine1" required />
+                </label>
+                <label class="text-sm space-y-1 sm:col-span-2">
+                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Address line 2 (optional)</span>
+                  <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="addressLine2" />
+                </label>
+                <label class="text-sm space-y-1">
+                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">City</span>
+                  <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="city" required />
+                </label>
+                <label class="text-sm space-y-1">
+                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">State / Region</span>
+                  <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="state" required />
+                </label>
+                <label class="text-sm space-y-1">
+                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Postal code</span>
+                  <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="postalCode" required />
+                </label>
+                <label class="text-sm space-y-1">
+                  <span class="text-xs uppercase tracking-[0.2em] text-slate-500">Country</span>
+                  <input class="w-full rounded-none border border-slate-200 px-3 py-2 text-sm" data-field="country" required />
                 </label>
               </div>
             </div>
@@ -374,6 +401,10 @@ const defaultStoneType = (() => {
                 <div class="space-y-2">
                   <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Contact</div>
                   <ul class="space-y-2" data-review-contact></ul>
+                </div>
+                <div class="space-y-2">
+                  <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Shipping</div>
+                  <ul class="space-y-2" data-review-shipping></ul>
                 </div>
               </div>
               <div class="space-y-2">
@@ -462,6 +493,7 @@ const defaultStoneType = (() => {
     const reviewMaterials = form.querySelector('[data-review-materials]');
     const reviewSizes = form.querySelector('[data-review-sizes]');
     const reviewContact = form.querySelector('[data-review-contact]');
+    const reviewShipping = form.querySelector('[data-review-shipping]');
     const reviewLinks = form.querySelector('[data-review-links]');
     const reviewNotes = form.querySelector('[data-review-notes]');
     const reviewAttachments = form.querySelector('[data-review-attachments]');
@@ -485,6 +517,7 @@ const defaultStoneType = (() => {
     const requiresReferenceLinks = !inspirationImageValue || directRequest;
     let workerSubmitEnabled = true;
     let hasSubmitted = false;
+    const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
     const getTurnstileToken = () => {
       const tokenEl = form.querySelector('[name="cf-turnstile-response"]');
       return tokenEl ? (tokenEl.value || '').trim() : '';
@@ -553,6 +586,17 @@ const defaultStoneType = (() => {
       return (el.value || '').trim();
     };
 
+    const readEstimatePrice = () => {
+      const raw = fieldValue('[data-estimate-price]');
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value <= 0) {
+        return { value: '', display: '' };
+      }
+      return { value: String(value), display: usdFormatter.format(value) };
+    };
+
+    const normalizeTimeline = (value) => (String(value || '').toLowerCase().includes('rush') ? 'Rush' : 'Standard');
+
     const getLinks = () => {
       if (linkSection && linkSection.classList.contains('hidden')) return [];
       const links = [];
@@ -575,16 +619,22 @@ const defaultStoneType = (() => {
       const budgetMax = fieldValue('[data-field="budgetMax"]');
       const styleIntensity = fieldValue('[data-field="styleIntensity"]');
       const style = styleFromIntensity(styleIntensity);
+      const estimatePrice = readEstimatePrice();
+      const timelineValue = fieldValue('[data-field="timeline"]') || 'Standard';
+      const timeline = normalizeTimeline(timelineValue);
       const subject = `Heerawalla Bespoke Request [HW-REQ:${requestId}]`;
       const hasInspiration = !requiresReferenceLinks;
 
       const specs = [
         `Category: ${category}`,
         `Occasion: ${fieldValue('[data-field="occasion"]') || 'Not specified'}`,
-        `Timeline: ${fieldValue('[data-field="timeline"]') || 'Standard'}`,
+        `Timeline: ${timeline}`,
         `Style intensity: ${style}`,
         `Budget: ${currency} ${budgetMin || '?'}-${budgetMax || '?'}`
       ];
+      if (estimatePrice.display) {
+        specs.push(`Estimated price: ${estimatePrice.display}`);
+      }
 
       const sizes = [];
       const ringSize = fieldValue('[data-field="ringSize"]');
@@ -612,6 +662,12 @@ const defaultStoneType = (() => {
       const name = fieldValue('[data-field="name"]') || 'Name withheld';
       const email = fieldValue('[data-field="email"]') || 'Not provided';
       const phone = fieldValue('[data-field="phone"]') || 'Not provided';
+      const addressLine1 = fieldValue('[data-field="addressLine1"]') || 'Not provided';
+      const addressLine2 = fieldValue('[data-field="addressLine2"]');
+      const city = fieldValue('[data-field="city"]') || 'Not provided';
+      const state = fieldValue('[data-field="state"]') || 'Not provided';
+      const postalCode = fieldValue('[data-field="postalCode"]') || 'Not provided';
+      const country = fieldValue('[data-field="country"]') || 'Not provided';
       const attachmentNote = 'Attachments: Not accepted via web form. Please include links.';
 
       const acknowledgment =
@@ -655,6 +711,12 @@ const defaultStoneType = (() => {
         `Name: ${name}`,
         `Preferred/CC email: ${email}`,
         `Phone: ${phone}`,
+        `Address line 1: ${addressLine1}`,
+        addressLine2 ? `Address line 2: ${addressLine2}` : '',
+        `City: ${city}`,
+        `State/Region: ${state}`,
+        `Postal code: ${postalCode}`,
+        `Country: ${country}`,
         '',
         acknowledgmentLine
       ].join('\n');
@@ -720,7 +782,9 @@ const defaultStoneType = (() => {
       if (reviewRequestId) reviewRequestId.textContent = requestId;
       const category = fieldValue('[data-field="category"]') || 'Not specified';
       const occasion = fieldValue('[data-field="occasion"]') || 'Not specified';
-      const timeline = fieldValue('[data-field="timeline"]') || 'Standard';
+      const timelineValue = fieldValue('[data-field="timeline"]') || 'Standard';
+      const timeline = normalizeTimeline(timelineValue);
+      const estimatePrice = readEstimatePrice();
       const currency = fieldValue('[data-field="currency"]') || 'USD';
       const budgetMin = fieldValue('[data-field="budgetMin"]');
       const budgetMax = fieldValue('[data-field="budgetMax"]');
@@ -743,6 +807,9 @@ const defaultStoneType = (() => {
         { label: 'Style', value: style || 'Not specified' },
         { label: 'Budget', value: budget },
       ];
+      if (estimatePrice.display) {
+        specs.push({ label: 'Estimated price', value: estimatePrice.display });
+      }
       const materials = [
         { label: 'Metal', value: fieldValue('[data-field="metal"]') || 'Not specified' },
         { label: 'Stone type', value: fieldValue('[data-field="stoneType"]') || 'Not specified' },
@@ -763,11 +830,20 @@ const defaultStoneType = (() => {
         { label: 'Email', value: fieldValue('[data-field="email"]') || 'Not provided' },
         { label: 'Phone', value: fieldValue('[data-field="phone"]') || 'Not provided' },
       ];
+      const shipping = [
+        { label: 'Address', value: fieldValue('[data-field="addressLine1"]') || 'Not provided' },
+        { label: 'Address 2', value: fieldValue('[data-field="addressLine2"]') || '—' },
+        { label: 'City', value: fieldValue('[data-field="city"]') || 'Not provided' },
+        { label: 'State/Region', value: fieldValue('[data-field="state"]') || 'Not provided' },
+        { label: 'Postal code', value: fieldValue('[data-field="postalCode"]') || 'Not provided' },
+        { label: 'Country', value: fieldValue('[data-field="country"]') || 'Not provided' },
+      ];
       const links = getLinks();
       renderReviewList(reviewSpecs, specs, 'No details provided.');
       renderReviewList(reviewMaterials, materials, 'No materials provided.');
       renderReviewList(reviewSizes, sizes, 'No sizing details provided.');
       renderReviewList(reviewContact, contact, 'No contact details provided.');
+      renderReviewList(reviewShipping, shipping, 'No shipping details provided.');
       renderReviewLinks(reviewLinks, links);
       if (reviewNotes) {
         reviewNotes.textContent = fieldValue('[data-field="notes"]') || 'None provided.';
@@ -1076,13 +1152,33 @@ const defaultStoneType = (() => {
           return;
         }
         const { subject, body } = buildEmail();
+        const estimatePrice = readEstimatePrice();
+        const timelineValue = fieldValue('[data-field="timeline"]') || 'Standard';
+        const timeline = normalizeTimeline(timelineValue);
         const payload = {
           subject,
           body,
           email: fieldValue('[data-field="email"]'),
           name: fieldValue('[data-field="name"]'),
+          phone: fieldValue('[data-field="phone"]'),
           requestId,
-          turnstileToken: getTurnstileToken()
+          turnstileToken: getTurnstileToken(),
+          source: 'quote',
+          productName: inspirationTitleValue,
+          productUrl: inspirationImageValue ? window.location.href : window.location.href,
+          designCode: '',
+          metal: fieldValue('[data-field="metal"]'),
+          stone: fieldValue('[data-field="stoneType"]'),
+          stoneWeight: '',
+          size: fieldValue('[data-field="ringSize"]') || fieldValue('[data-field="wristSize"]') || fieldValue('[data-field="chainLength"]') || fieldValue('[data-field="earringPreference"]'),
+          price: estimatePrice.value,
+          timeline,
+          addressLine1: fieldValue('[data-field="addressLine1"]'),
+          addressLine2: fieldValue('[data-field="addressLine2"]'),
+          city: fieldValue('[data-field="city"]'),
+          state: fieldValue('[data-field="state"]'),
+          postalCode: fieldValue('[data-field="postalCode"]'),
+          country: fieldValue('[data-field="country"]')
         };
 
         const originalText = sendWorkerBtn.textContent || '';
