@@ -4,6 +4,7 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import { loadProductsWithMedia, type ProductWithMedia } from '../../lib/products';
 import { withBase } from '../../lib/paths';
+import { loadSiteConfig, getConfigValue } from '../../lib/config';
 
 export async function getStaticPaths() {
   const products = await loadProductsWithMedia();
@@ -15,6 +16,8 @@ export async function getStaticPaths() {
 
 const { product } = Astro.props as { product: ProductWithMedia };
 const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+const config = await loadSiteConfig();
+const atelierApiBase = getConfigValue(config, 'atelier_api_base', 'https://admin-api.heerawalla.com');
 const metaTitle = `Begin purchase | ${product.name} | Heerawalla`;
 const metaDescription = `Confirm sizing and preferred details for ${product.name}.`;
 const categoryKey = (product.category || '').split('/').pop() || '';
@@ -63,7 +66,7 @@ const productUrl = Astro.site
       <div class="text-sm text-slate-600" data-selection-summary>Selections will appear here.</div>
     </section>
 
-    <form class="space-y-6" data-bespoke-form>
+    <form class="space-y-6" data-bespoke-form data-atelier-api={atelierApiBase}>
       <input type="hidden" data-product-name value={product.name} />
       <input type="hidden" data-product-url value={productUrl} />
       <input type="hidden" data-design-code value={product.design_code || ''} />
@@ -145,6 +148,8 @@ const productUrl = Astro.site
   (function () {
     const form = document.querySelector('[data-bespoke-form]');
     if (!form) return;
+    const apiBase = form.dataset.atelierApi || '';
+    const orderUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/order` : '';
 
     const selectionSummary = document.querySelector('[data-selection-summary]');
     const getValue = (selector) => {
@@ -310,7 +315,12 @@ const productUrl = Astro.site
       setStatus('Sending your request...', false);
 
       try {
-        const response = await fetch('https://herawalla-email-atelier.arifmanasiya.workers.dev/order', {
+        if (!orderUrl) {
+          setStatus('Order service is unavailable. Please try again later.', true);
+          if (submitBtn) submitBtn.removeAttribute('disabled');
+          return;
+        }
+        const response = await fetch(orderUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
