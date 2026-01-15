@@ -4,7 +4,7 @@
 - Build: `npm run build`
 - Update `/data/products-*.csv` and `/data/site_config.sample.csv` with your data.
 - (If using GitHub Pages without a custom domain) set `BASE_PATH` to your repo path, e.g. `/heerawalla`.
-- Push to `main`; GitHub Actions deploys to Pages.
+- Push to `main`; GitHub Actions deploys the worker + admin pages to Cloudflare.
 
 ---
 
@@ -86,12 +86,28 @@ When set, list pages and detail pages refresh catalog-driven pricing on page loa
 - Add log sampling and an error-only log view in Cloudflare Workers Logs.
 - Add Cloudflare cache rules for product vs editorial images (longer TTL for product imagery).
 
-## Deploy (GitHub Pages)
+## Deploy (Cloudflare)
 - Workflow: `.github/workflows/deploy.yml`
-- Push to `main`; GitHub Actions builds (`npm run build`) then deploys `dist` to Pages.
-- If you use a project page (e.g., `https://username.github.io/heerawalla/`), set repo variable `BASE_PATH=/heerawalla` so asset URLs resolve; keep it `/` when using the `heerawalla.com` custom domain.
-- Optionally set `SITE=https://heerawalla.com` (or your Pages URL) to override the canonical/OG base URL.
-- Configure your Pages custom domain (optional) to `heerawalla.com`.
+- Push to `main`; GitHub Actions deploys:
+  - Worker: `workers/herawalla-email-atelier`
+  - Admin Pages: `admin-placeholder`
+- GitHub secrets required:
+  - `CLOUDFLARE_API_TOKEN`
+  - `CLOUDFLARE_ACCOUNT_ID`
+- GitHub variables required:
+  - `CF_ADMIN_PAGES_PROJECT` (Cloudflare Pages project name)
+
+### Local deploy helper
+```bash
+npm run deploy -- -m "comment"
+```
+- Commits/pushes changes, then waits for GitHub Actions to finish.
+- Validation checks run after deploy unless you pass `--no-verify`.
+- Set `GH_HEERAWALLA_TOKEN` (or `GH_TOKEN`) locally to allow workflow verification.
+- Optional verification overrides:
+  - `VERIFY_WORKER_URL` (defaults to `https://admin-api.heerawalla.com/health`)
+  - `VERIFY_ADMIN_URL` (defaults to `https://<CF_ADMIN_PAGES_PROJECT>.pages.dev`)
+  - `VERIFY_SITE_URL` (set if you also want to validate the public site)
 
 ## Google Calendar + People API setup (Worker)
 The concierge booking and contact sync use Google APIs via the worker at `workers/herawalla-email-atelier`.

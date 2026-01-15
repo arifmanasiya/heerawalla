@@ -40,6 +40,12 @@ export interface Env {
   CONTACTS_SHEET_ID?: string;
   CONTACTS_SHEET_NAME?: string;
   CONTACTS_SHEET_RANGE?: string;
+  CUSTOMER_TICKETS_SHEET_ID?: string;
+  CUSTOMER_TICKETS_SHEET_NAME?: string;
+  CUSTOMER_TICKETS_SHEET_RANGE?: string;
+  UNIFIED_CONTACTS_SHEET_ID?: string;
+  UNIFIED_CONTACTS_SHEET_NAME?: string;
+  UNIFIED_CONTACTS_SHEET_RANGE?: string;
   ADMIN_ALLOWLIST?: string;
   OPS_ALLOWLIST?: string;
   VIEWER_ALLOWLIST?: string;
@@ -173,6 +179,21 @@ export const CONTACT_SHEET_HEADER = [
   "status_updated_at",
   "notes",
   "last_error",
+];
+export const UNIFIED_CONTACTS_SHEET_HEADER = [
+  "created_at",
+  "email",
+  "name",
+  "phone",
+  "type",
+  "subscribed",
+  "sources",
+  "first_seen_at",
+  "last_seen_at",
+  "last_source",
+  "unsubscribed_at",
+  "unsubscribed_reason",
+  "updated_at",
 ];
 export const EMAIL_TEXT = [
   "Thank you for contacting Heerawalla.",

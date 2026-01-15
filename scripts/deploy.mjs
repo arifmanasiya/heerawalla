@@ -31,11 +31,15 @@ if (!shouldVerify) {
   process.exit(0);
 }
 
-const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
+const token =
+  process.env.GH_TOKEN ||
+  process.env.GH_HEERAWALLA_TOKEN ||
+  process.env.GITHUB_TOKEN ||
+  "";
 const origin = runOutput("git", ["remote", "get-url", "origin"]);
 const repoInfo = parseGitHubRepo(origin);
 if (!token) {
-  console.warn("GH_TOKEN is not set. Skipping verification.");
+  console.warn("GH_TOKEN (or GH_HEERAWALLA_TOKEN) is not set. Skipping verification.");
   process.exit(0);
 }
 if (!repoInfo) {
@@ -60,9 +64,15 @@ await waitForWorkflow({
   workflowFile: "deploy.yml",
 });
 
-const verifyUrl = resolveVerifyUrl({ owner, repo });
-await verifySite(verifyUrl);
-console.log(`Verified deployment at ${verifyUrl}`);
+const verifyTargets = resolveVerifyTargets({ owner, repo });
+if (!verifyTargets.length) {
+  console.log("No verification targets configured.");
+  process.exit(0);
+}
+for (const target of verifyTargets) {
+  await verifyEndpoint(target);
+  console.log(`Verified ${target.label} at ${target.url}`);
+}
 
 function run(command, commandArgs) {
   const result = spawnSync(command, commandArgs, { stdio: "inherit" });
@@ -276,14 +286,61 @@ function resolveVerifyUrl({ owner, repo }) {
   return `https://${owner}.github.io${withSlash}`;
 }
 
-async function verifySite(url) {
+function resolveSiteVerifyUrl({ owner, repo }) {
+  const explicit = (process.env.VERIFY_SITE_URL || "").trim();
+  if (explicit) return explicit;
+  const cnamePath = path.join(process.cwd(), "public", "CNAME");
+  if (fs.existsSync(cnamePath)) {
+    const domain = fs.readFileSync(cnamePath, "utf8").trim();
+    if (domain) {
+      return `https://${domain}`;
+    }
+  }
+  const siteEnv = (process.env.SITE || "").trim();
+  if (siteEnv) {
+    return siteEnv;
+  }
+  if (!owner || !repo) return "";
+  return "";
+}
+
+function resolveAdminVerifyUrl() {
+  const explicit = (process.env.VERIFY_ADMIN_URL || "").trim();
+  if (explicit) return explicit;
+  const project = (process.env.CF_ADMIN_PAGES_PROJECT || "").trim();
+  if (project) {
+    return `https://${project}.pages.dev`;
+  }
+  return "";
+}
+
+function resolveVerifyTargets({ owner, repo }) {
+  const targets = [];
+  const workerUrl = (process.env.VERIFY_WORKER_URL || "https://admin-api.heerawalla.com/health").trim();
+  if (workerUrl) {
+    targets.push({ label: "Worker health", url: workerUrl, expectHtml: false });
+  }
+  const adminUrl = resolveAdminVerifyUrl();
+  if (adminUrl) {
+    targets.push({ label: "Admin Pages", url: adminUrl, expectHtml: true });
+  }
+  const siteUrl = resolveSiteVerifyUrl({ owner, repo });
+  if (siteUrl) {
+    targets.push({ label: "Site", url: siteUrl, expectHtml: true });
+  }
+  return targets;
+}
+
+async function verifyEndpoint({ url, label, expectHtml }) {
   const response = await fetch(url, { redirect: "follow" });
   if (!response.ok) {
-    throw new Error(`Site check failed: ${response.status} ${response.statusText}`);
+    throw new Error(`${label} check failed: ${response.status} ${response.statusText}`);
   }
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("text/html")) {
-    console.warn(`Unexpected content-type for ${url}: ${contentType}`);
+  if (expectHtml) {
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("text/html")) {
+      console.warn(`Unexpected content-type for ${url}: ${contentType}`);
+    }
   }
 }
 

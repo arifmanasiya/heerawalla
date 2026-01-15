@@ -617,7 +617,8 @@
     state.pendingChanges = [];
     state.confirmation = null;
 
-    ui.detailType.textContent = `${state.tab.slice(0, -1)} details`;
+    const detailLabel = state.tab === "contacts" ? "Customer ticket" : state.tab.slice(0, -1);
+    ui.detailType.textContent = `${detailLabel} details`;
     ui.detailTitle.textContent = item.product_name || item.name || requestId;
     ui.detailSub.textContent = requestId;
     if (ui.detailStatusCorner) {

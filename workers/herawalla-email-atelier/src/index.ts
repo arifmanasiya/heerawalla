@@ -8,6 +8,7 @@ import {
   ORDER_DETAILS_SHEET_HEADER,
   QUOTE_SHEET_HEADER,
   CONTACT_SHEET_HEADER,
+  UNIFIED_CONTACTS_SHEET_HEADER,
   EMAIL_TEXT,
   EMAIL_HTML,
   ORDER_ACK_SUBJECT,
@@ -330,6 +331,17 @@ export default {
           } catch (error) {
             logWarn("contact_sheet_failed", { requestId, error: String(error) });
           }
+          try {
+            await upsertUnifiedContact(env, {
+              email,
+              name,
+              phone,
+              source: "contact",
+              createdAt: new Date().toISOString(),
+            });
+          } catch (error) {
+            logWarn("unified_contact_failed", { requestId, error: String(error) });
+          }
 
           return new Response(JSON.stringify({ ok: true, booking }), {
             status: 200,
@@ -406,9 +418,6 @@ export default {
         const pageUrl = getString(payload.pageUrl);
         const requestId = generateRequestId();
         const sourceLabel = source || "subscribe";
-        const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
-          resolveAttribution(payload, request);
-        const resolvedPageUrl = pageUrl || referrer;
 
         if (!senderEmail) {
           logWarn("subscribe_missing_fields", { requestId });
@@ -479,38 +488,9 @@ export default {
           await env.HEERAWALLA_ACKS.put(rateKey, String(currentCount + 1), { expirationTtl: 60 * 60 });
         }
 
-        const subject = name
-          ? `Heerawalla join request from ${name}`
-          : "Heerawalla join request";
-        const bodyLines = [
-          name ? `Name: ${name}` : "",
-          `Email: ${senderEmail}`,
-          phone ? `Phone: ${phone}` : "",
-          interests.length ? `Interests: ${interests.join(", ")}` : "",
-          source ? `Source: ${source}` : "",
-          pageUrl ? `Page: ${pageUrl}` : "",
-        ].filter(Boolean);
-        const body = bodyLines.join("\n");
-
-        const forwardTo = (env.SUBSCRIBE_TO || "noreply.heerawalla@gmail.com").trim();
-        const replyTo = name ? `${name} <${senderEmail}>` : senderEmail;
-        try {
-          await sendEmail(env, {
-            to: [forwardTo || "noreply.heerawalla@gmail.com"],
-            sender: "Heerawalla <atelier@heerawalla.com>",
-            replyTo,
-            subject,
-            textBody: body,
-            htmlBody: buildForwardHtml({
-              subject,
-              body,
-              senderEmail,
-              senderName: name,
-              requestId,
-            }),
-          });
-
-          if (isEnabled(env.SEND_ACK, true)) {
+        const now = new Date().toISOString();
+        if (isEnabled(env.SEND_ACK, true)) {
+          try {
             await sendEmail(env, {
               to: [senderEmail],
               sender: "Heerawalla <no-reply@heerawalla.com>",
@@ -520,23 +500,12 @@ export default {
               htmlBody: SUBSCRIBE_ACK_HTML,
               headers: autoReplyHeaders(),
             });
-          }
-
-          try {
-            await storeSubscription(env, {
-              email: senderEmail,
-              name,
-              phone,
-              interests,
-              source: sourceLabel,
-              pageUrl,
-              requestId,
-              createdAt: new Date().toISOString(),
-            });
           } catch (error) {
-            logWarn("subscribe_store_failed", { requestId, error: String(error) });
+            logWarn("subscribe_ack_failed", { requestId, error: String(error) });
           }
+        }
 
+        try {
           await syncGoogleContact(env, {
             email: senderEmail,
             name,
@@ -547,37 +516,21 @@ export default {
             pageUrl,
             subscriptionStatus: "subscribed",
           });
-          try {
-            await appendContactRow(env, [
-              new Date().toISOString(),
-              senderEmail,
-              name,
-              phone,
-              sourceLabel,
-              requestId,
-              "",
-              interests.join(", "),
-              resolvedPageUrl,
-              utmSource,
-              utmMedium,
-              utmCampaign,
-              utmTerm,
-              utmContent,
-              referrer,
-              "",
-              "",
-              "",
-              "",
-              "",
-              "",
-              "subscribed",
-            ]);
-          } catch (error) {
-            logWarn("contact_sheet_failed", { requestId, error: String(error) });
-          }
         } catch (error) {
-          logError("subscribe_send_failed", { requestId, email: maskEmail(senderEmail) });
-          throw error;
+          logWarn("subscribe_contact_sync_failed", { requestId, error: String(error) });
+        }
+
+        try {
+          await upsertUnifiedContact(env, {
+            email: senderEmail,
+            name,
+            phone,
+            source: "subscribe",
+            createdAt: now,
+            subscriptionStatus: "subscribed",
+          });
+        } catch (error) {
+          logWarn("unified_contact_failed", { requestId, error: String(error) });
         }
 
         return new Response(JSON.stringify({ ok: true }), {
@@ -644,7 +597,18 @@ export default {
           });
         }
 
-        await markUnsubscribed(env, senderEmail, reason);
+        const now = new Date().toISOString();
+        try {
+          await upsertUnifiedContact(env, {
+            email: senderEmail,
+            source: "subscribe",
+            createdAt: now,
+            subscriptionStatus: "unsubscribed",
+            unsubscribedReason: reason,
+          });
+        } catch (error) {
+          logWarn("unified_contact_failed", { email: maskEmail(senderEmail), error: String(error) });
+        }
         await syncGoogleContact(env, {
           email: senderEmail,
           source: "unsubscribe",
@@ -856,6 +820,17 @@ export default {
           } catch (error) {
             logWarn("contact_sheet_failed", { requestId, error: String(error) });
           }
+          try {
+            await upsertUnifiedContact(env, {
+              email: senderEmail,
+              name,
+              phone,
+              source: "contact",
+              createdAt: new Date().toISOString(),
+            });
+          } catch (error) {
+            logWarn("unified_contact_failed", { requestId, error: String(error) });
+          }
         } catch (error) {
           logError("contact_submit_send_failed", { requestId, email: maskEmail(senderEmail) });
           throw error;
@@ -1035,32 +1010,16 @@ export default {
           ]);
           logInfo("order_sheet_written", { requestId });
           try {
-            await appendContactRow(env, [
-              now,
-              senderEmail,
-              senderName,
+            await upsertUnifiedContact(env, {
+              email: senderEmail,
+              name: senderName,
               phone,
-              source,
-              requestId,
-              "",
-              "",
-              pageUrl,
-              utmSource,
-              utmMedium,
-              utmCampaign,
-              utmTerm,
-              utmContent,
-              referrer,
-              addressLine1,
-              addressLine2,
-              city,
-              state,
-              postalCode,
-              country,
-              "subscribed",
-            ]);
+              source: "order",
+              createdAt: now,
+              isCustomer: true,
+            });
           } catch (error) {
-            logWarn("contact_sheet_failed", { requestId, error: String(error) });
+            logWarn("unified_contact_failed", { requestId, error: String(error) });
           }
         } catch (error) {
           logError("order_sheet_failed", { requestId, error: String(error) });
@@ -1396,6 +1355,7 @@ export default {
     if (env.ORDER_DETAILS_SHEET_ID) {
       tasks.push(processShippedOrderUpdates(env));
     }
+    tasks.push(processUnifiedContacts(env));
     if (tasks.length) {
       ctx.waitUntil(Promise.all(tasks));
     }
@@ -3355,19 +3315,19 @@ function getSheetConfig(env: Env, kind: "order" | "quote" | "contact"): SheetCon
       ? env.ORDER_SHEET_ID
       : kind === "quote"
       ? env.QUOTE_SHEET_ID
-      : env.CONTACTS_SHEET_ID;
+      : env.CUSTOMER_TICKETS_SHEET_ID || env.CONTACTS_SHEET_ID;
   const name =
     kind === "order"
       ? env.ORDER_SHEET_NAME
       : kind === "quote"
       ? env.QUOTE_SHEET_NAME
-      : env.CONTACTS_SHEET_NAME;
+      : env.CUSTOMER_TICKETS_SHEET_NAME || env.CONTACTS_SHEET_NAME;
   const range =
     kind === "order"
       ? env.ORDER_SHEET_RANGE
       : kind === "quote"
       ? env.QUOTE_SHEET_RANGE
-      : env.CONTACTS_SHEET_RANGE;
+      : env.CUSTOMER_TICKETS_SHEET_RANGE || env.CONTACTS_SHEET_RANGE;
   const sheetId = (id || "").trim();
   if (!sheetId) {
     throw new Error(`${kind}_sheet_missing`);
@@ -3388,6 +3348,20 @@ function getOrderDetailsSheetConfig(env: Env): SheetConfig {
   }
   const sheetName = (env.ORDER_DETAILS_SHEET_NAME || "").trim() || "order_details";
   const appendRange = (env.ORDER_DETAILS_SHEET_RANGE || "").trim() || `${sheetName}!A1`;
+  const resolvedSheetName = appendRange.includes("!") ? appendRange.split("!")[0] : sheetName;
+  const headerRange = `${resolvedSheetName}!A1:AZ1`;
+  return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
+}
+
+function getUnifiedContactsSheetConfig(env: Env): SheetConfig | null {
+  const sheetId = (env.UNIFIED_CONTACTS_SHEET_ID || env.CONTACTS_SHEET_ID || "").trim();
+  if (!sheetId) return null;
+  const sheetName =
+    (env.UNIFIED_CONTACTS_SHEET_NAME || env.CONTACTS_SHEET_NAME || "").trim() ||
+    "contacts";
+  const appendRange =
+    (env.UNIFIED_CONTACTS_SHEET_RANGE || env.CONTACTS_SHEET_RANGE || "").trim() ||
+    `${sheetName}!A1`;
   const resolvedSheetName = appendRange.includes("!") ? appendRange.split("!")[0] : sheetName;
   const headerRange = `${resolvedSheetName}!A1:AZ1`;
   return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
@@ -3470,6 +3444,413 @@ async function appendQuoteRow(env: Env, values: Array<string | number>) {
 async function appendContactRow(env: Env, values: Array<string | number>) {
   const config = getSheetConfig(env, "contact");
   await appendSheetRow(env, config, values, CONTACT_SHEET_HEADER);
+}
+
+type UnifiedContactUpdate = {
+  email: string;
+  name?: string;
+  phone?: string;
+  source?: string;
+  sources?: string[];
+  createdAt?: string;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  lastSource?: string;
+  isCustomer?: boolean;
+  subscriptionStatus?: "subscribed" | "unsubscribed";
+  unsubscribedReason?: string;
+};
+
+type UnifiedContactsState = {
+  config: SheetConfig;
+  header: string[];
+  headerIndex: Map<string, number>;
+  map: Map<string, { rowNumber: number; record: Record<string, string> }>;
+};
+
+type UnifiedContactAggregate = {
+  email: string;
+  name: string;
+  phone: string;
+  sources: Set<string>;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  lastSource: string;
+  isCustomer: boolean;
+};
+
+function normalizeSource(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function parseSourcesList(value: string) {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((entry) => normalizeSource(entry))
+    .filter(Boolean);
+}
+
+function mergeSources(existing: string[], incoming: string[]) {
+  const merged = [...existing];
+  const seen = new Set(existing);
+  incoming.forEach((source) => {
+    if (!source || seen.has(source)) return;
+    seen.add(source);
+    merged.push(source);
+  });
+  return merged;
+}
+
+function parseSubscribedFlag(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (["1", "true", "yes", "y"].includes(normalized)) return true;
+  if (["0", "false", "no", "n"].includes(normalized)) return false;
+  return null;
+}
+
+function resolveSubscribedStatus(
+  existingValue: string,
+  status?: "subscribed" | "unsubscribed"
+) {
+  if (status === "unsubscribed") return false;
+  if (status === "subscribed") return true;
+  const parsed = parseSubscribedFlag(existingValue);
+  return parsed === null ? true : parsed;
+}
+
+function resolveEarlierDate(existing: string, candidate: string) {
+  if (!existing) return candidate;
+  if (!candidate) return existing;
+  const existingMs = Date.parse(existing);
+  const candidateMs = Date.parse(candidate);
+  if (Number.isFinite(existingMs) && Number.isFinite(candidateMs)) {
+    return candidateMs < existingMs ? candidate : existing;
+  }
+  if (!Number.isFinite(existingMs) && Number.isFinite(candidateMs)) return candidate;
+  return existing;
+}
+
+function resolveLaterDate(existing: string, candidate: string) {
+  if (!existing) return candidate;
+  if (!candidate) return existing;
+  const existingMs = Date.parse(existing);
+  const candidateMs = Date.parse(candidate);
+  if (Number.isFinite(existingMs) && Number.isFinite(candidateMs)) {
+    return candidateMs > existingMs ? candidate : existing;
+  }
+  if (!Number.isFinite(existingMs) && Number.isFinite(candidateMs)) return candidate;
+  return existing;
+}
+
+function isAfterDate(candidate: string, baseline: string) {
+  const candidateMs = Date.parse(candidate);
+  const baselineMs = Date.parse(baseline);
+  if (!Number.isFinite(candidateMs)) return false;
+  if (!Number.isFinite(baselineMs)) return true;
+  return candidateMs > baselineMs;
+}
+
+function choosePreferredText(existing: string, incoming: string) {
+  const trimmedIncoming = incoming.trim();
+  if (!trimmedIncoming) return existing;
+  if (!existing) return trimmedIncoming;
+  return trimmedIncoming.length > existing.length ? trimmedIncoming : existing;
+}
+
+function resolveContactType(existingType: string, isCustomer: boolean, sources: string[]) {
+  const normalizedExisting = existingType.trim().toLowerCase();
+  if (normalizedExisting === "customer") return "Customer";
+  if (isCustomer) return "Customer";
+  if (sources.some((source) => source === "order" || source === "quote")) {
+    return "Customer";
+  }
+  return "Subscriber";
+}
+
+function mergeUnifiedContactRecord(
+  existing: Record<string, string> | null,
+  update: UnifiedContactUpdate,
+  now: string
+) {
+  const base = existing || {};
+  const normalizedEmail = normalizeEmailAddress(update.email);
+  const incomingSources = mergeSources(
+    parseSourcesList(base.sources || ""),
+    (update.sources || (update.source ? [update.source] : [])).map((source) => normalizeSource(source))
+  );
+  const incomingFirstSeen = update.firstSeenAt || update.createdAt || "";
+  const incomingLastSeen = update.lastSeenAt || update.createdAt || incomingFirstSeen;
+  const incomingLastSource = normalizeSource(update.lastSource || update.source || "");
+
+  const createdAt = base.created_at || incomingFirstSeen || now;
+  const firstSeenAt =
+    resolveEarlierDate(base.first_seen_at || "", incomingFirstSeen) || createdAt;
+  const lastSeenAt =
+    resolveLaterDate(base.last_seen_at || "", incomingLastSeen) || incomingLastSeen || now;
+
+  const shouldUpdateLastSource = incomingLastSource
+    ? isAfterDate(incomingLastSeen || now, base.last_seen_at || "")
+    : false;
+  const lastSource =
+    incomingLastSource && (shouldUpdateLastSource || !base.last_source)
+      ? incomingLastSource
+      : base.last_source || incomingLastSource;
+
+  const subscribed = resolveSubscribedStatus(base.subscribed || "", update.subscriptionStatus);
+  let unsubscribedAt = base.unsubscribed_at || "";
+  let unsubscribedReason = base.unsubscribed_reason || "";
+  if (update.subscriptionStatus === "unsubscribed") {
+    unsubscribedAt = now;
+    unsubscribedReason = update.unsubscribedReason || "";
+  }
+  if (update.subscriptionStatus === "subscribed") {
+    unsubscribedAt = "";
+    unsubscribedReason = "";
+  }
+
+  const type = resolveContactType(
+    base.type || "",
+    Boolean(update.isCustomer),
+    incomingSources
+  );
+
+  return {
+    created_at: createdAt,
+    email: normalizedEmail,
+    name: choosePreferredText(base.name || "", update.name || ""),
+    phone: base.phone || update.phone || "",
+    type,
+    subscribed: subscribed ? "True" : "False",
+    sources: incomingSources.join(", "),
+    first_seen_at: firstSeenAt,
+    last_seen_at: lastSeenAt,
+    last_source: lastSource || "",
+    unsubscribed_at: unsubscribedAt,
+    unsubscribed_reason: unsubscribedReason,
+    updated_at: now,
+  };
+}
+
+function buildUnifiedRowValues(header: string[], record: Record<string, string>) {
+  return header.map((key) => {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey) return "";
+    return getString(record[normalizedKey]);
+  });
+}
+
+function buildUnifiedContactUpdates(record: Record<string, string>) {
+  const updates: Record<string, string> = {};
+  UNIFIED_CONTACTS_SHEET_HEADER.forEach((key) => {
+    updates[key] = getString(record[key]);
+  });
+  return updates;
+}
+
+function hasUnifiedRecordChanged(
+  existing: Record<string, string> | null,
+  updated: Record<string, string>
+) {
+  if (!existing) return true;
+  for (const key of UNIFIED_CONTACTS_SHEET_HEADER) {
+    if (getString(existing[key]) !== getString(updated[key])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function loadUnifiedContactsState(env: Env): Promise<UnifiedContactsState | null> {
+  const config = getUnifiedContactsSheetConfig(env);
+  if (!config) return null;
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}:unified`;
+  await ensureSheetHeader(env, config, UNIFIED_CONTACTS_SHEET_HEADER, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header =
+    headerRows[0] && headerRows[0].length ? headerRows[0] : UNIFIED_CONTACTS_SHEET_HEADER;
+  const headerIndex = new Map(header.map((key, idx) => [String(key || "").trim(), idx]));
+  const emailIdx = headerIndex.get("email") ?? -1;
+  if (emailIdx < 0) return null;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const map = new Map<string, { rowNumber: number; record: Record<string, string> }>();
+  rows.forEach((row, index) => {
+    const email = normalizeEmailAddress(getString(row[emailIdx]));
+    if (!email) return;
+    map.set(email, { rowNumber: index + 2, record: mapSheetRowToRecord(header, row) });
+  });
+  return { config, header, headerIndex, map };
+}
+
+async function upsertUnifiedContact(env: Env, update: UnifiedContactUpdate) {
+  const normalizedEmail = normalizeEmailAddress(update.email);
+  if (!normalizedEmail) return;
+  const state = await loadUnifiedContactsState(env);
+  if (!state) return;
+  const now = new Date().toISOString();
+  const existing = state.map.get(normalizedEmail) || null;
+  const merged = mergeUnifiedContactRecord(
+    existing?.record || null,
+    { ...update, email: normalizedEmail },
+    now
+  );
+  const updates = buildUnifiedContactUpdates(merged);
+  if (existing) {
+    if (hasUnifiedRecordChanged(existing.record, merged)) {
+      await updateSheetColumns(env, state.config, state.headerIndex, existing.rowNumber, updates);
+    }
+    return;
+  }
+  const values = buildUnifiedRowValues(state.header, merged);
+  await appendSheetRow(env, state.config, values, UNIFIED_CONTACTS_SHEET_HEADER);
+}
+
+function applyUnifiedAggregate(
+  map: Map<string, UnifiedContactAggregate>,
+  entry: {
+    email: string;
+    name: string;
+    phone: string;
+    source: string;
+    createdAt: string;
+    isCustomer: boolean;
+  }
+) {
+  const normalizedEmail = normalizeEmailAddress(entry.email);
+  if (!normalizedEmail) return;
+  const normalizedSource = normalizeSource(entry.source || "");
+  const aggregate = map.get(normalizedEmail) || {
+    email: normalizedEmail,
+    name: "",
+    phone: "",
+    sources: new Set<string>(),
+    firstSeenAt: "",
+    lastSeenAt: "",
+    lastSource: "",
+    isCustomer: false,
+  };
+
+  aggregate.name = choosePreferredText(aggregate.name, entry.name || "");
+  if (!aggregate.phone && entry.phone) {
+    aggregate.phone = entry.phone;
+  }
+
+  if (normalizedSource) {
+    aggregate.sources.add(normalizedSource);
+  }
+
+  if (entry.createdAt) {
+    aggregate.firstSeenAt = resolveEarlierDate(aggregate.firstSeenAt, entry.createdAt);
+    const isNewer = isAfterDate(entry.createdAt, aggregate.lastSeenAt);
+    aggregate.lastSeenAt = resolveLaterDate(aggregate.lastSeenAt, entry.createdAt);
+    if (normalizedSource && (isNewer || !aggregate.lastSource)) {
+      aggregate.lastSource = normalizedSource;
+    }
+  } else if (normalizedSource && !aggregate.lastSource) {
+    aggregate.lastSource = normalizedSource;
+  }
+
+  if (entry.isCustomer) {
+    aggregate.isCustomer = true;
+  }
+
+  map.set(normalizedEmail, aggregate);
+}
+
+async function collectUnifiedContacts(
+  env: Env,
+  kind: "order" | "quote" | "contact",
+  source: string,
+  isCustomer: boolean,
+  aggregates: Map<string, UnifiedContactAggregate>
+) {
+  const config = getSheetConfig(env, kind);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const headerFallback =
+    kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
+  const headerIndex = new Map<string, number>();
+  header.forEach((cell, idx) => {
+    headerIndex.set(String(cell || "").trim().toLowerCase(), idx);
+  });
+
+  const emailIdx = headerIndex.get("email") ?? -1;
+  if (emailIdx < 0) return;
+  const nameIdx = headerIndex.get("name") ?? -1;
+  const phoneIdx = headerIndex.get("phone") ?? -1;
+  const createdAtIdx = headerIndex.get("created_at") ?? -1;
+
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  rows.forEach((row) => {
+    const email = getString(row[emailIdx]);
+    if (!email) return;
+    applyUnifiedAggregate(aggregates, {
+      email,
+      name: nameIdx >= 0 ? getString(row[nameIdx]) : "",
+      phone: phoneIdx >= 0 ? getString(row[phoneIdx]) : "",
+      source,
+      createdAt: createdAtIdx >= 0 ? getString(row[createdAtIdx]) : "",
+      isCustomer,
+    });
+  });
+}
+
+async function processUnifiedContacts(env: Env) {
+  let state: UnifiedContactsState | null = null;
+  try {
+    state = await loadUnifiedContactsState(env);
+  } catch (error) {
+    logWarn("unified_contacts_load_failed", { error: String(error) });
+    return;
+  }
+  if (!state) return;
+
+  const aggregates = new Map<string, UnifiedContactAggregate>();
+  try {
+    await collectUnifiedContacts(env, "order", "order", true, aggregates);
+  } catch (error) {
+    logWarn("unified_contacts_orders_failed", { error: String(error) });
+  }
+  try {
+    await collectUnifiedContacts(env, "quote", "quote", true, aggregates);
+  } catch (error) {
+    logWarn("unified_contacts_quotes_failed", { error: String(error) });
+  }
+  try {
+    await collectUnifiedContacts(env, "contact", "contact", false, aggregates);
+  } catch (error) {
+    logWarn("unified_contacts_contacts_failed", { error: String(error) });
+  }
+
+  if (!aggregates.size) return;
+  const now = new Date().toISOString();
+  for (const [email, aggregate] of aggregates) {
+    const existing = state.map.get(email) || null;
+    const merged = mergeUnifiedContactRecord(
+      existing?.record || null,
+      {
+        email,
+        name: aggregate.name,
+        phone: aggregate.phone,
+        sources: Array.from(aggregate.sources),
+        firstSeenAt: aggregate.firstSeenAt,
+        lastSeenAt: aggregate.lastSeenAt,
+        lastSource: aggregate.lastSource,
+        isCustomer: aggregate.isCustomer,
+      },
+      now
+    );
+    const updates = buildUnifiedContactUpdates(merged);
+    if (existing) {
+      if (hasUnifiedRecordChanged(existing.record, merged)) {
+        await updateSheetColumns(env, state.config, state.headerIndex, existing.rowNumber, updates);
+      }
+    } else {
+      const values = buildUnifiedRowValues(state.header, merged);
+      await appendSheetRow(env, state.config, values, UNIFIED_CONTACTS_SHEET_HEADER);
+    }
+  }
 }
 
 async function fetchSheetValues(env: Env, sheetId: string, range: string): Promise<string[][]> {
@@ -3856,32 +4237,16 @@ async function handleSubmitPayload(
         ]);
         logInfo("quote_sheet_written", { requestId: normalizedRequestId });
         try {
-          await appendContactRow(env, [
-            now,
-            senderEmail,
-            senderName,
+          await upsertUnifiedContact(env, {
+            email: senderEmail,
+            name: senderName,
             phone,
-            source,
-            normalizedRequestId,
-            "",
-            "",
-            pageUrl,
-            utmSource,
-            utmMedium,
-            utmCampaign,
-            utmTerm,
-            utmContent,
-            referrer,
-            addressLine1,
-            addressLine2,
-            city,
-            state,
-            postalCode,
-            country,
-            "subscribed",
-          ]);
+            source: "quote",
+            createdAt: now,
+            isCustomer: true,
+          });
         } catch (error) {
-          logWarn("contact_sheet_failed", { requestId: normalizedRequestId, error: String(error) });
+          logWarn("unified_contact_failed", { requestId: normalizedRequestId, error: String(error) });
         }
       } catch (error) {
         logError("quote_sheet_failed", { requestId: normalizedRequestId, error: String(error) });
@@ -6946,59 +7311,6 @@ async function getRequestOrigin(env: Env, requestId: string) {
     return { email: parsed.email, name: parsed.name || "" };
   } catch {
     return null;
-  }
-}
-
-type SubscriptionRecord = {
-  email: string;
-  name?: string;
-  phone?: string;
-  interests?: string[];
-  source?: string;
-  pageUrl?: string;
-  requestId?: string;
-  createdAt: string;
-};
-
-function buildSubscribeKey(email: string) {
-  const normalized = normalizeEmailAddress(email);
-  return normalized ? `sub:${normalized}` : "";
-}
-
-function buildUnsubscribeKey(email: string) {
-  const normalized = normalizeEmailAddress(email);
-  return normalized ? `unsub:${normalized}` : "";
-}
-
-async function storeSubscription(env: Env, record: SubscriptionRecord) {
-  if (!env.HEERAWALLA_ACKS) return;
-  const key = buildSubscribeKey(record.email);
-  if (!key) return;
-  await env.HEERAWALLA_ACKS.put(key, JSON.stringify(record));
-  const unsubKey = buildUnsubscribeKey(record.email);
-  if (unsubKey) {
-    await env.HEERAWALLA_ACKS.delete(unsubKey);
-  }
-}
-
-async function markUnsubscribed(env: Env, email: string, reason?: string) {
-  if (!env.HEERAWALLA_ACKS) return;
-  const normalized = normalizeEmailAddress(email);
-  if (!normalized) return;
-  const unsubKey = buildUnsubscribeKey(normalized);
-  if (unsubKey) {
-    await env.HEERAWALLA_ACKS.put(
-      unsubKey,
-      JSON.stringify({
-        email: normalized,
-        reason: reason || "",
-        updatedAt: new Date().toISOString(),
-      })
-    );
-  }
-  const subKey = buildSubscribeKey(normalized);
-  if (subKey) {
-    await env.HEERAWALLA_ACKS.delete(subKey);
   }
 }
 
