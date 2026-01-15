@@ -18,11 +18,11 @@
       "ACKNOWLEDGED",
       "PENDING_CONFIRMATION",
       "INVOICED",
+      "INVOICE_EXPIRED",
       "INVOICE_PAID",
       "PROCESSING",
       "SHIPPED",
       "DELIVERED",
-      "INVOICE_NOT_PAID",
       "CANCELLED",
     ],
     quotes: ["NEW", "ACKNOWLEDGED", "QUOTED", "CONVERTED", "DROPPED"],
@@ -34,6 +34,8 @@
       { action: "acknowledge", label: "Acknowledge", confirm: "Mark as acknowledged?" },
       { action: "send_invoice", label: "Send invoice", confirm: "Send invoice and mark invoiced?" },
       { action: "mark_paid", label: "Mark paid", confirm: "Confirm payment received?" },
+      { action: "mark_invoice_expired", label: "Mark invoice expired", confirm: "Mark invoice as expired?" },
+      { action: "mark_processing", label: "Mark processing", confirm: "Move order into processing?" },
       { action: "mark_shipped", label: "Mark shipped", confirm: "Mark as shipped?" },
       { action: "mark_delivered", label: "Mark delivered", confirm: "Mark as delivered?" },
       { action: "cancel", label: "Cancel order", confirm: "Cancel this order?" },
@@ -63,6 +65,46 @@
     { key: "stone", label: "Stone type", normalize: normalizeText, format: formatPlain },
     { key: "stone_weight", label: "Stone weight", normalize: normalizeNumber, format: formatStoneWeight },
   ];
+
+  const ORDER_STATUS_FLOW = {
+    NEW: ["ACKNOWLEDGED", "CANCELLED"],
+    ACKNOWLEDGED: ["PENDING_CONFIRMATION", "INVOICED", "CANCELLED"],
+    PENDING_CONFIRMATION: ["INVOICED", "CANCELLED"],
+    INVOICED: ["INVOICE_PAID", "INVOICE_EXPIRED", "CANCELLED"],
+    INVOICE_EXPIRED: ["INVOICED", "CANCELLED"],
+    INVOICE_PAID: ["PROCESSING", "SHIPPED"],
+    PROCESSING: ["SHIPPED"],
+    SHIPPED: ["DELIVERED"],
+    DELIVERED: [],
+    CANCELLED: ["INVOICED"],
+  };
+
+  const ORDER_ACTION_FLOW = {
+    NEW: ["acknowledge", "cancel"],
+    ACKNOWLEDGED: ["send_invoice", "cancel"],
+    PENDING_CONFIRMATION: ["send_invoice", "cancel"],
+    INVOICED: ["mark_paid", "mark_invoice_expired", "cancel"],
+    INVOICE_EXPIRED: ["send_invoice", "cancel"],
+    INVOICE_PAID: ["mark_processing", "mark_shipped"],
+    PROCESSING: ["mark_shipped"],
+    SHIPPED: ["mark_delivered"],
+    DELIVERED: [],
+    CANCELLED: ["send_invoice"],
+  };
+
+  const normalizeStatus = (value) => {
+    const normalized = String(value || "NEW").trim().toUpperCase();
+    return normalized === "INVOICE_NOT_PAID" ? "INVOICE_EXPIRED" : normalized || "NEW";
+  };
+
+  const getOrderStatusOptions = () => {
+    const current = normalizeStatus(state.selectedItem?.status);
+    const allowed = new Set([current, ...(ORDER_STATUS_FLOW[current] || [])]);
+    if (current !== "PENDING_CONFIRMATION") {
+      allowed.delete("PENDING_CONFIRMATION");
+    }
+    return Array.from(allowed);
+  };
 
   const ui = {
     syncLine: document.querySelector("[data-sync-line]"),
@@ -227,11 +269,15 @@
   function renderActions() {
     const canEdit = state.role === "admin" || (state.role === "ops" && state.tab !== "contacts");
     if (ui.actionSelect) {
+      const actions =
+        state.tab === "orders" && state.selectedItem
+          ? ACTIONS.orders.filter((action) =>
+              (ORDER_ACTION_FLOW[normalizeStatus(state.selectedItem.status)] || []).includes(action.action)
+            )
+          : ACTIONS[state.tab];
       ui.actionSelect.innerHTML =
         '<option value="">Select an action</option>' +
-        ACTIONS[state.tab]
-          .map((action) => `<option value="${action.action}">${action.label}</option>`)
-          .join("");
+        actions.map((action) => `<option value="${action.action}">${action.label}</option>`).join("");
       ui.actionSelect.disabled = !canEdit;
     }
     if (ui.actionRun) {
@@ -766,7 +812,7 @@
     const notes = getNotesValue();
     const updatePayload = {
       requestId: state.selectedItem.request_id,
-      action: "edit",
+      action: "request_confirmation",
       status: "PENDING_CONFIRMATION",
       notes,
       fields,
@@ -787,6 +833,8 @@
         subject: emailPayload.subject,
         textBody: emailPayload.textBody,
         htmlBody: emailPayload.htmlBody,
+        requestId: state.selectedItem.request_id,
+        orderStatus: "PENDING_CONFIRMATION",
       }),
     });
 

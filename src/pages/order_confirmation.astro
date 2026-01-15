@@ -63,6 +63,34 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
             <button class="btn btn-primary" data-confirm-btn disabled>Confirm &amp; continue</button>
             <button class="btn btn-ghost" data-cancel-btn disabled>Cancel update</button>
           </div>
+          <div class="space-y-2">
+            <label class="text-xs uppercase tracking-[0.2em] text-slate-500" for="cancel-reason">
+              Cancellation reason
+            </label>
+            <select
+              id="cancel-reason"
+              class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+              data-cancel-reason
+              disabled
+            >
+              <option value="" selected>Select a reason</option>
+              <option value="Timing changed">Timing changed</option>
+              <option value="Budget changed">Budget changed</option>
+              <option value="Found another option">Found another option</option>
+              <option value="Need more details">Need more details</option>
+              <option value="Order mistake">Order mistake</option>
+              <option value="Other">Other</option>
+            </select>
+            <input
+              class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink hidden"
+              type="text"
+              placeholder="Share any additional context (optional)"
+              data-cancel-note
+            />
+            <p class="text-xs text-slate-500">
+              We use this to improve service and follow up with the right details.
+            </p>
+          </div>
           <p class="text-xs text-slate-500">
             Confirmation opens secure checkout to reserve your piece.
           </p>
@@ -103,6 +131,8 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
     const listEl = root.querySelector('[data-change-list]');
     const confirmBtn = root.querySelector('[data-confirm-btn]');
     const cancelBtn = root.querySelector('[data-cancel-btn]');
+    const cancelReason = root.querySelector('[data-cancel-reason]');
+    const cancelNote = root.querySelector('[data-cancel-note]');
     const apiBase = root.getAttribute('data-confirmation-api') || '';
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token') || params.get('t') || params.get('confirmation');
@@ -123,6 +153,7 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
     const setButtonsEnabled = (enabled) => {
       if (confirmBtn) confirmBtn.disabled = !enabled;
       if (cancelBtn) cancelBtn.disabled = !enabled;
+      if (cancelReason) cancelReason.disabled = !enabled;
     };
 
     const labelMap = {
@@ -221,17 +252,17 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
               : status === 'canceled'
               ? 'This update was canceled. Our concierge will follow up.'
               : 'This confirmation link has already been used.';
-          setStatus(statusMessage, status === 'canceled' ? 'error' : 'success');
-          setButtonsEnabled(false);
-          return;
-        }
-
-        setStatus('Review the updated details and confirm to continue.', 'success');
-        setButtonsEnabled(true);
-      } catch (error) {
-        setStatus('We could not load your confirmation details. Please contact the concierge.', 'error');
+        setStatus(statusMessage, status === 'canceled' ? 'error' : 'success');
+        setButtonsEnabled(false);
+        return;
       }
-    };
+
+      setStatus('Review the updated details and confirm to continue.', 'success');
+      setButtonsEnabled(true);
+    } catch (error) {
+      setStatus('We could not load your confirmation details. Please contact the concierge.', 'error');
+    }
+  };
 
     const confirmUpdate = async () => {
       if (!confirmBtn) return;
@@ -256,12 +287,18 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
 
     const cancelUpdate = async () => {
       if (!cancelBtn) return;
+      const reasonValue = cancelReason ? cancelReason.value : '';
+      const noteValue = cancelNote ? cancelNote.value.trim() : '';
+      if (!reasonValue) {
+        setStatus('Select a cancellation reason to continue.', 'error');
+        return;
+      }
       setStatus('Canceling your update...');
       setButtonsEnabled(false);
       try {
         await requestJson('/orders/confirmation/cancel', {
           method: 'POST',
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token, reason: reasonValue, note: noteValue }),
         });
         setStatus('Update canceled. Our concierge will follow up.', 'success');
       } catch (error) {
@@ -272,6 +309,14 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
 
     if (confirmBtn) confirmBtn.addEventListener('click', confirmUpdate);
     if (cancelBtn) cancelBtn.addEventListener('click', cancelUpdate);
+    if (cancelReason) {
+      cancelReason.addEventListener('change', () => {
+        if (!cancelNote) return;
+        const showNote = cancelReason.value === 'Other';
+        cancelNote.classList.toggle('hidden', !showNote);
+        if (!showNote) cancelNote.value = '';
+      });
+    }
 
     loadConfirmation();
   })();

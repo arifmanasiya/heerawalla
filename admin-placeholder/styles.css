@@ -476,6 +476,11 @@ button:disabled {
   color: #b45309;
 }
 
+.badge[data-status="INVOICE_EXPIRED"] {
+  border-color: #fdba74;
+  color: #c2410c;
+}
+
 .badge[data-status="CANCELLED"],
 .badge[data-status="DROPPED"] {
   border-color: #fecaca;

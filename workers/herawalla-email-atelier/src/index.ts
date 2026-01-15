@@ -38,6 +38,10 @@ import {
   ORDER_CONFIRMATION_CANCEL_PATH,
   ORDER_CONFIRMATION_PAGE_URL,
   ORDER_CONFIRMATION_TTL,
+  ORDER_CANCEL_PATH,
+  ORDER_CANCEL_CONFIRM_PATH,
+  ORDER_CANCEL_PAGE_URL,
+  ORDER_CANCEL_TTL,
   REQUEST_ORIGIN_TTL,
   REQUEST_SUMMARY_TTL,
   REQUEST_SUMMARY_MAX_LINES,
@@ -82,6 +86,11 @@ export default {
     );
     if (confirmationResponse) {
       return confirmationResponse;
+    }
+
+    const cancelResponse = await handleOrderCancellationRequest(request, env, url, allowedOrigin);
+    if (cancelResponse) {
+      return cancelResponse;
     }
 
     if (url.pathname === CATALOG_PATH) {
@@ -1369,8 +1378,16 @@ export default {
   },
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     const ackMode = getAckMode(env);
-    if (!isEnabled(env.SEND_ACK, true) || ackMode !== "cron") return;
-    ctx.waitUntil(processAckQueues(env));
+    const tasks: Array<Promise<void>> = [];
+    if (isEnabled(env.SEND_ACK, true) && ackMode === "cron") {
+      tasks.push(processAckQueues(env));
+    }
+    if (isEnabled(env.SEND_STATUS_UPDATES, true)) {
+      tasks.push(processOrderStatusEmails(env));
+    }
+    if (tasks.length) {
+      ctx.waitUntil(Promise.all(tasks));
+    }
   },
 } satisfies ExportedHandler<Env>;
 
@@ -1943,8 +1960,16 @@ async function handleOrderConfirmationRequest(
       });
     }
     const token = getString(payload.token || payload.confirmationToken);
+    const reason = getString(payload.reason || payload.cancelReason);
+    const note = getString(payload.note || payload.cancelNote);
     if (!token) {
       return new Response(JSON.stringify({ ok: false, error: "missing_token" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (!reason) {
+      return new Response(JSON.stringify({ ok: false, error: "missing_reason" }), {
         status: 400,
         headers: buildCorsHeaders(allowedOrigin, true),
       });
@@ -2009,9 +2034,159 @@ async function handleOrderConfirmationRequest(
       });
     }
     const canceledAt = new Date().toISOString();
-    const updatedRecord = { ...record, status: "canceled", canceledAt };
+    const updatedRecord = {
+      ...record,
+      status: "canceled",
+      canceledAt,
+      cancellationReason: reason || undefined,
+      cancellationNote: note || undefined,
+    };
     await storeOrderConfirmationRecord(env, updatedRecord);
-    await appendOrderNote(env, record.requestId, `Customer canceled update on ${canceledAt}.`);
+    const reasonNote = reason ? ` Reason: ${reason}.` : "";
+    const detailNote = note ? ` Note: ${note}.` : "";
+    await appendOrderNote(
+      env,
+      record.requestId,
+      `Customer canceled update on ${canceledAt}.${reasonNote}${detailNote}`.trim()
+    );
+    return new Response(JSON.stringify({ ok: true, status: updatedRecord.status }), {
+      status: 200,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+
+  return new Response("Method Not Allowed", {
+    status: 405,
+    headers: buildCorsHeaders(allowedOrigin, true),
+  });
+}
+
+async function handleOrderCancellationRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  allowedOrigin: string
+) {
+  if (!url.pathname.startsWith(ORDER_CANCEL_PATH)) return null;
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  if (!allowedOrigin) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  if (url.pathname === ORDER_CANCEL_PATH && request.method === "GET") {
+    const token =
+      url.searchParams.get("token") ||
+      url.searchParams.get("t") ||
+      url.searchParams.get("cancel") ||
+      "";
+    const normalizedToken = token.trim();
+    if (!normalizedToken) {
+      return new Response(JSON.stringify({ ok: false, error: "missing_token" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const record = await getOrderCancelRecord(env, normalizedToken);
+    if (!record) {
+      return new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+        status: 404,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        status: record.status,
+        requestId: record.requestId,
+        name: record.name || "",
+        productName: record.productName || "",
+      }),
+      {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      }
+    );
+  }
+
+  if (url.pathname === ORDER_CANCEL_CONFIRM_PATH && request.method === "POST") {
+    const payload = await safeJson(request);
+    if (!isRecord(payload)) {
+      return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const token = getString(payload.token || payload.cancelToken);
+    const reason = getString(payload.reason || payload.cancelReason);
+    const note = getString(payload.note || payload.cancelNote);
+    if (!token) {
+      return new Response(JSON.stringify({ ok: false, error: "missing_token" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (!reason) {
+      return new Response(JSON.stringify({ ok: false, error: "missing_reason" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const record = await getOrderCancelRecord(env, token);
+    if (!record) {
+      return new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+        status: 404,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (record.status !== "pending") {
+      return new Response(JSON.stringify({ ok: false, error: "already_used", status: record.status }), {
+        status: 409,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+
+    const lookup = await findSheetRowByRequestId(env, "order", record.requestId);
+    if (!lookup) {
+      return new Response(JSON.stringify({ ok: false, error: "request_not_found" }), {
+        status: 404,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const currentStatus = getOrderStatusFromRow(lookup);
+    if (!isOrderTransitionAllowed(currentStatus, "CANCELLED")) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "status_not_cancellable", status: currentStatus }),
+        {
+          status: 409,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        }
+      );
+    }
+
+    const canceledAt = new Date().toISOString();
+    const reasonNote = reason ? `Reason: ${reason}.` : "";
+    const detailNote = note ? `Note: ${note}.` : "";
+    const cancelNote = `Customer canceled order on ${canceledAt}. ${reasonNote} ${detailNote}`.trim();
+    const notesIdx = lookup.headerIndex.get("notes");
+    const existingNotes = notesIdx === undefined ? "" : getString(lookup.row[notesIdx]);
+    const combinedNotes = appendNote(appendNote(existingNotes, cancelNote), buildStatusAuditNote("CANCELLED"));
+
+    await updateAdminRow(env, "order", record.requestId, "CANCELLED", combinedNotes, {});
+
+    const updatedRecord = {
+      ...record,
+      status: "canceled" as const,
+      canceledAt,
+      cancellationReason: reason,
+      cancellationNote: note || undefined,
+    };
+    await storeOrderCancelRecord(env, updatedRecord);
+
     return new Response(JSON.stringify({ ok: true, status: updatedRecord.status }), {
       status: 200,
       headers: buildCorsHeaders(allowedOrigin, true),
@@ -2149,11 +2324,44 @@ async function handleOrderAdminAction(env: Env, payload: Record<string, unknown>
   const requestId = getString(payload.requestId || payload.request_id);
   if (!requestId) return { ok: false, error: "missing_request_id" };
   const action = getString(payload.action).toLowerCase();
-  const status = getString(payload.status).toUpperCase();
+  const requestedStatus = getString(payload.status).toUpperCase();
   const notes = getString(payload.notes);
   const updates = coerceUpdates(payload.fields, ORDER_UPDATE_FIELDS);
-  const nextStatus = resolveOrderStatus(action, status);
-  return await updateAdminRow(env, "order", requestId, nextStatus, notes, updates);
+  const lookup = await findSheetRowByRequestId(env, "order", requestId);
+  if (!lookup) return { ok: false, error: "request_not_found" };
+  const currentStatus = getOrderStatusFromRow(lookup);
+  const resolvedStatus = resolveOrderStatus(action, requestedStatus);
+  let nextStatus = resolvedStatus;
+  if (!nextStatus && action === "set_status") {
+    nextStatus = requestedStatus;
+  }
+
+  if (nextStatus === "PENDING_CONFIRMATION" && action !== "request_confirmation") {
+    return { ok: false, error: "confirmation_required" };
+  }
+
+  if (nextStatus && nextStatus !== currentStatus) {
+    if (!isOrderTransitionAllowed(currentStatus, nextStatus)) {
+      return {
+        ok: false,
+        error: "invalid_transition",
+        currentStatus,
+        nextStatus,
+      };
+    }
+  } else if (nextStatus === currentStatus) {
+    nextStatus = "";
+  }
+
+  const notesIdx = lookup.headerIndex.get("notes");
+  const existingNotes = notesIdx === undefined ? "" : getString(lookup.row[notesIdx]);
+  const statusChanged = Boolean(nextStatus);
+  const auditNote = statusChanged ? buildStatusAuditNote(nextStatus) : "";
+  const baseNotes = notes || existingNotes;
+  const combinedNotes = appendNote(baseNotes, auditNote);
+  const notesToSave = combinedNotes && (statusChanged || notes) ? combinedNotes : "";
+
+  return await updateAdminRow(env, "order", requestId, nextStatus, notesToSave, updates);
 }
 
 async function handleQuoteAdminAction(env: Env, payload: Record<string, unknown>) {
@@ -2206,6 +2414,7 @@ async function handleOrderConfirmationAdmin(env: Env, payload: Record<string, un
     paymentUrl: paymentUrl || undefined,
   };
   await storeOrderConfirmationRecord(env, record);
+  await storeOrderConfirmationIndex(env, record);
   const confirmationUrl = buildOrderConfirmationPageUrl(env, token);
   return {
     ok: true,
@@ -2220,6 +2429,8 @@ async function handleAdminEmail(env: Env, payload: Record<string, unknown>) {
   const subject = getString(payload.subject);
   const textBody = getString(payload.textBody || payload.text);
   const htmlBody = getString(payload.htmlBody || payload.html);
+  const statusRequestId = getString(payload.requestId || payload.request_id);
+  const statusValue = normalizeOrderStatus(getString(payload.orderStatus || payload.status));
   if (!to || !subject || (!textBody && !htmlBody)) {
     return { ok: false, error: "missing_fields" };
   }
@@ -2234,6 +2445,9 @@ async function handleAdminEmail(env: Env, payload: Record<string, unknown>) {
     textBody: textBody || undefined,
     htmlBody: htmlBody || undefined,
   });
+  if (statusRequestId && statusValue) {
+    await recordOrderStatusEmailSent(env, statusRequestId, statusValue);
+  }
   return { ok: true };
 }
 
@@ -2318,10 +2532,16 @@ function coerceUpdates(
 function resolveOrderStatus(action: string, status: string) {
   if (status) return status;
   switch (action) {
+    case "request_confirmation":
+      return "PENDING_CONFIRMATION";
     case "send_invoice":
       return "INVOICED";
+    case "mark_invoice_expired":
+      return "INVOICE_EXPIRED";
     case "mark_paid":
       return "INVOICE_PAID";
+    case "mark_processing":
+      return "PROCESSING";
     case "mark_shipped":
       return "SHIPPED";
     case "mark_delivered":
@@ -2333,6 +2553,38 @@ function resolveOrderStatus(action: string, status: string) {
     default:
       return "";
   }
+}
+
+const ORDER_STATUS_FLOW: Record<string, string[]> = {
+  NEW: ["ACKNOWLEDGED", "CANCELLED"],
+  ACKNOWLEDGED: ["PENDING_CONFIRMATION", "INVOICED", "CANCELLED"],
+  PENDING_CONFIRMATION: ["INVOICED", "CANCELLED"],
+  INVOICED: ["INVOICE_PAID", "INVOICE_EXPIRED", "CANCELLED"],
+  INVOICE_EXPIRED: ["INVOICED", "CANCELLED"],
+  INVOICE_PAID: ["PROCESSING", "SHIPPED"],
+  PROCESSING: ["SHIPPED"],
+  SHIPPED: ["DELIVERED"],
+  DELIVERED: [],
+  CANCELLED: ["INVOICED"],
+};
+
+function normalizeOrderStatus(value: string) {
+  const normalized = getString(value).toUpperCase();
+  return normalized === "INVOICE_NOT_PAID" ? "INVOICE_EXPIRED" : normalized;
+}
+
+function getOrderStatusFromRow(lookup: SheetRowLookup) {
+  const statusIdx = lookup.headerIndex.get("status");
+  const rawStatus = statusIdx === undefined ? "" : getString(lookup.row[statusIdx]);
+  return normalizeOrderStatus(rawStatus) || "NEW";
+}
+
+function isOrderTransitionAllowed(currentStatus: string, nextStatus: string) {
+  const normalizedCurrent = normalizeOrderStatus(currentStatus) || "NEW";
+  const normalizedNext = normalizeOrderStatus(nextStatus);
+  if (!normalizedNext) return false;
+  const allowed = ORDER_STATUS_FLOW[normalizedCurrent] || [];
+  return allowed.includes(normalizedNext);
 }
 
 function resolveQuoteStatus(action: string, status: string) {
@@ -2393,8 +2645,10 @@ async function updateAdminRow(
 
   const now = new Date().toISOString();
   const updatesToApply: Record<string, string> = { ...updates };
-  if (status) updatesToApply.status = status;
-  updatesToApply.status_updated_at = now;
+  if (status) {
+    updatesToApply.status = status;
+    updatesToApply.status_updated_at = now;
+  }
   if (notes) updatesToApply.notes = notes;
   updatesToApply.last_error = "";
 
@@ -3048,8 +3302,8 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
           const ackHtml = kind === "order" ? ORDER_ACK_HTML : EMAIL_HTML;
           await sendEmail(env, {
             to: [senderEmail],
-            sender: "Heerawalla <no-reply@heerawalla.com>",
-            replyTo: "no-reply@heerawalla.com",
+            sender: kind === "order" ? "Heerawalla <atelier@heerawalla.com>" : "Heerawalla <no-reply@heerawalla.com>",
+            replyTo: kind === "order" ? getCustomerReplyTo() : "no-reply@heerawalla.com",
             subject: buildAckSubject(normalizedRequestId, ackPrefix),
             textBody: ackText,
             htmlBody: ackHtml,
@@ -3059,6 +3313,9 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
           shouldThrottle = useResend;
           if (env.HEERAWALLA_ACKS) {
             await env.HEERAWALLA_ACKS.put(ackKey, "1", { expirationTtl: 60 * 60 * 24 * 7 });
+          }
+          if (kind === "order") {
+            await recordOrderStatusEmailSent(env, normalizedRequestId, "ACKNOWLEDGED", now);
           }
           logInfo("ack_queue_sent", { kind, requestId: normalizedRequestId, email: maskEmail(senderEmail) });
         } catch (error) {
@@ -3428,6 +3685,576 @@ async function handleSubmitPayload(
       headers: buildCorsHeaders(allowedOrigin, true),
     });
   }
+}
+
+const STATUS_EMAIL_MAX_ATTEMPTS = 3;
+const ORDER_STATUS_EMAIL_TTL_SECONDS = 60 * 60 * 24 * 180;
+const STATUS_EMAIL_REMINDER_STATUSES = new Set(["PENDING_CONFIRMATION", "INVOICE_EXPIRED"]);
+const STATUS_EMAIL_SKIP_STATUSES = new Set(["NEW"]);
+const ORDER_STATUS_EMAIL_KEY_PREFIX = "order:status-email:";
+const ORDER_CONFIRMATION_INDEX_PREFIX = "order:confirm:request:";
+const ORDER_CANCEL_INDEX_PREFIX = "order:cancel:request:";
+
+type OrderStatusEmailRecord = {
+  status: string;
+  statusUpdatedAt: string;
+  lastSentAt: string;
+  attempts: number;
+};
+
+function buildOrderStatusEmailKey(requestId: string, status: string) {
+  const normalizedId = normalizeRequestId(requestId);
+  const normalizedStatus = normalizeOrderStatus(status);
+  if (!normalizedId || !normalizedStatus) return "";
+  return `${ORDER_STATUS_EMAIL_KEY_PREFIX}${normalizedId}:${normalizedStatus}`;
+}
+
+function buildOrderConfirmationIndexKey(requestId: string) {
+  const normalized = normalizeRequestId(requestId);
+  return normalized ? `${ORDER_CONFIRMATION_INDEX_PREFIX}${normalized}` : "";
+}
+
+function buildOrderCancelIndexKey(requestId: string) {
+  const normalized = normalizeRequestId(requestId);
+  return normalized ? `${ORDER_CANCEL_INDEX_PREFIX}${normalized}` : "";
+}
+
+async function storeOrderConfirmationIndex(env: Env, record: OrderConfirmationRecord) {
+  if (!env.HEERAWALLA_ACKS) return;
+  const key = buildOrderConfirmationIndexKey(record.requestId);
+  if (!key) return;
+  const payload = JSON.stringify({ token: record.token, createdAt: record.createdAt });
+  await env.HEERAWALLA_ACKS.put(key, payload, { expirationTtl: ORDER_CONFIRMATION_TTL });
+}
+
+async function storeOrderCancelIndex(env: Env, record: OrderCancelRecord) {
+  if (!env.HEERAWALLA_ACKS) return;
+  const key = buildOrderCancelIndexKey(record.requestId);
+  if (!key) return;
+  const payload = JSON.stringify({ token: record.token, createdAt: record.createdAt });
+  await env.HEERAWALLA_ACKS.put(key, payload, { expirationTtl: ORDER_CANCEL_TTL });
+}
+
+async function getOrderConfirmationTokenByRequestId(env: Env, requestId: string) {
+  if (!env.HEERAWALLA_ACKS) return "";
+  const key = buildOrderConfirmationIndexKey(requestId);
+  if (!key) return "";
+  const value = await env.HEERAWALLA_ACKS.get(key);
+  if (!value) return "";
+  try {
+    const parsed = JSON.parse(value) as { token?: string };
+    return getString(parsed.token);
+  } catch {
+    return "";
+  }
+}
+
+async function getOrderCancelTokenByRequestId(env: Env, requestId: string) {
+  if (!env.HEERAWALLA_ACKS) return "";
+  const key = buildOrderCancelIndexKey(requestId);
+  if (!key) return "";
+  const value = await env.HEERAWALLA_ACKS.get(key);
+  if (!value) return "";
+  try {
+    const parsed = JSON.parse(value) as { token?: string };
+    return getString(parsed.token);
+  } catch {
+    return "";
+  }
+}
+
+async function ensureOrderCancelRecord(
+  env: Env,
+  requestId: string,
+  email: string,
+  name: string,
+  productName: string
+) {
+  const existingToken = await getOrderCancelTokenByRequestId(env, requestId);
+  if (existingToken) {
+    const existing = await getOrderCancelRecord(env, existingToken);
+    if (existing && existing.status === "pending") return existing;
+  }
+
+  const token = generateOrderConfirmationToken();
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + ORDER_CANCEL_TTL * 1000).toISOString();
+  const record: OrderCancelRecord = {
+    token,
+    requestId: normalizeRequestId(requestId),
+    email,
+    name,
+    productName,
+    status: "pending",
+    createdAt,
+    expiresAt,
+  };
+  await storeOrderCancelRecord(env, record);
+  await storeOrderCancelIndex(env, record);
+  return record;
+}
+
+async function getOrderStatusEmailRecord(env: Env, requestId: string, status: string) {
+  if (!env.HEERAWALLA_ACKS) return null;
+  const key = buildOrderStatusEmailKey(requestId, status);
+  if (!key) return null;
+  const value = await env.HEERAWALLA_ACKS.get(key);
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as OrderStatusEmailRecord;
+  } catch {
+    return null;
+  }
+}
+
+async function storeOrderStatusEmailRecord(
+  env: Env,
+  requestId: string,
+  status: string,
+  record: OrderStatusEmailRecord
+) {
+  if (!env.HEERAWALLA_ACKS) return;
+  const key = buildOrderStatusEmailKey(requestId, status);
+  if (!key) return;
+  await env.HEERAWALLA_ACKS.put(key, JSON.stringify(record), { expirationTtl: ORDER_STATUS_EMAIL_TTL_SECONDS });
+}
+
+function getStatusEmailIntervalHours(env: Env) {
+  const raw = getString(env.STATUS_EMAIL_INTERVAL_HOURS);
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 48;
+  return parsed;
+}
+
+function formatOrderReference(requestId: string) {
+  const normalized = normalizeRequestId(requestId);
+  return normalized ? `HW-REQ:${normalized}` : "Heerawalla Request";
+}
+
+function appendNote(base: string, note: string) {
+  const trimmed = base.trim();
+  const next = note.trim();
+  if (!next) return trimmed;
+  return trimmed ? `${trimmed}\n\n${next}` : next;
+}
+
+function buildStatusAuditNote(status: string) {
+  return `Status updated to ${status}. Status email pending.`;
+}
+
+function resolveOrderPaymentUrl(env: Env, requestId: string, email: string, token = "") {
+  const template = getString(env.ORDER_CONFIRMATION_PAYMENT_URL);
+  if (!template) return "";
+  return template
+    .replace(/\{requestId\}/g, requestId)
+    .replace(/\{token\}/g, token)
+    .replace(/\{email\}/g, email || "");
+}
+
+function buildChangeSummaryText(changes: ConfirmationChange[]) {
+  if (!changes.length) return "";
+  return changes
+    .map((change) => {
+      const label = change.label || change.key || "Update";
+      const fromValue = change.from || "--";
+      const toValue = change.to || "--";
+      return `${label}: ${fromValue} -> ${toValue}`;
+    })
+    .join("\n");
+}
+
+function buildChangeSummaryHtml(changes: ConfirmationChange[]) {
+  if (!changes.length) return "";
+  const rows = changes
+    .map((change) => {
+      const label = escapeHtml(change.label || change.key || "Update");
+      const fromValue = escapeHtml(change.from || "--");
+      const toValue = escapeHtml(change.to || "--");
+      return `<tr>
+        <td style="padding:8px 0;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.18em;">${label}</td>
+        <td style="padding:8px 0;font-size:14px;color:#0f172a;">
+          <span style="color:#94a3b8;text-decoration:line-through;">${fromValue}</span>
+          <span style="margin:0 6px;color:#94a3b8;">→</span>
+          <strong>${toValue}</strong>
+        </td>
+      </tr>`;
+    })
+    .join("");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rows}</table>`;
+}
+
+function buildOrderStatusEmail(payload: {
+  status: string;
+  requestId: string;
+  name: string;
+  email: string;
+  productName: string;
+  confirmationUrl?: string;
+  paymentUrl?: string;
+  cancelUrl?: string;
+  changes?: ConfirmationChange[];
+}) {
+  const status = normalizeOrderStatus(payload.status);
+  const reference = formatOrderReference(payload.requestId);
+  const customerName = payload.name || "there";
+  const productName = payload.productName || "your piece";
+  const confirmationUrl = payload.confirmationUrl || "";
+  const paymentUrl = payload.paymentUrl || "";
+  const cancelUrl = payload.cancelUrl || "";
+  const changeSummaryText = payload.changes ? buildChangeSummaryText(payload.changes) : "";
+  const changeSummaryHtml = payload.changes ? buildChangeSummaryHtml(payload.changes) : "";
+
+  const baseDetails = [
+    `Request: ${reference}`,
+    `Piece: ${productName}`,
+  ];
+
+  let subject = `Heerawalla - Order update [${reference}]`;
+  let title = "Order update";
+  let intro = "";
+  let ctaLabel = "";
+  let ctaUrl = "";
+  let secondaryLabel = "";
+  let secondaryUrl = "";
+  let footer = "Warm regards,\nHeerawalla";
+  let detailIntro = "Order details";
+  let extraHtml = "";
+  let extraText = "";
+
+  switch (status) {
+    case "ACKNOWLEDGED":
+      subject = `Heerawalla - We received your order request [${reference}]`;
+      title = "We received your order request";
+      intro = `Thank you, ${customerName}. Your request for ${productName} is in good hands. A concierge will confirm availability and sizing shortly.`;
+      detailIntro = "Order summary";
+      break;
+    case "PENDING_CONFIRMATION":
+      if (!confirmationUrl) return null;
+      subject = `Heerawalla - Please confirm your updated order [${reference}]`;
+      title = "Please confirm your updated order";
+      intro = `Hello ${customerName}, your concierge updated the details for ${productName}. Review the changes and confirm to continue to secure checkout.`;
+      ctaLabel = "Review and confirm";
+      ctaUrl = confirmationUrl;
+      detailIntro = "Updated details";
+      if (changeSummaryText) {
+        extraText = `\nChanges:\n${changeSummaryText}`;
+      }
+      if (changeSummaryHtml) {
+        extraHtml = `<div style="margin-top:16px;">${changeSummaryHtml}</div>`;
+      }
+      break;
+    case "INVOICED":
+      subject = `Heerawalla - Your secure checkout link is ready [${reference}]`;
+      title = "Your secure checkout link is ready";
+      intro = `Your concierge prepared secure checkout for ${productName}. Complete payment to reserve your piece.`;
+      ctaLabel = "Open secure checkout";
+      ctaUrl = paymentUrl;
+      detailIntro = "Order summary";
+      break;
+    case "INVOICE_EXPIRED":
+      subject = `Heerawalla - Your payment link expired [${reference}]`;
+      title = "Your payment link expired";
+      intro = `We can reopen secure checkout whenever you're ready. Use the link below or reply to this email if you'd like to pause or cancel.`;
+      ctaLabel = paymentUrl ? "Reopen secure checkout" : "";
+      ctaUrl = paymentUrl;
+      secondaryLabel = cancelUrl ? "Cancel order" : "";
+      secondaryUrl = cancelUrl;
+      detailIntro = "Order summary";
+      break;
+    case "INVOICE_PAID":
+      subject = `Heerawalla - Payment received [${reference}]`;
+      title = "Payment received";
+      intro = `Thank you. Your payment is confirmed and your piece is reserved. Our atelier will begin next steps shortly.`;
+      detailIntro = "Order summary";
+      break;
+    case "PROCESSING":
+      subject = `Heerawalla - Your piece is in production [${reference}]`;
+      title = "Your piece is in production";
+      intro = `Our atelier has started crafting ${productName}. We'll keep you updated at key milestones.`;
+      detailIntro = "Order summary";
+      break;
+    case "SHIPPED":
+      subject = `Heerawalla - Your order has shipped [${reference}]`;
+      title = "Your order has shipped";
+      intro = `Your piece is on its way. We'll share tracking details as soon as they are available.`;
+      detailIntro = "Shipment details";
+      break;
+    case "DELIVERED":
+      subject = `Heerawalla - Delivered [${reference}]`;
+      title = "Delivered";
+      intro = `We hope you love your Heerawalla piece. If anything needs attention, reply to this email and we'll help right away.`;
+      detailIntro = "Order summary";
+      break;
+    case "CANCELLED":
+      subject = `Heerawalla - Order canceled [${reference}]`;
+      title = "Order canceled";
+      intro = `We've noted your order as canceled. If you'd like to revisit the design or timing, reply and we'll assist.`;
+      detailIntro = "Order summary";
+      break;
+    default:
+      return null;
+  }
+
+  if ((status === "INVOICED" || status === "INVOICE_EXPIRED") && !paymentUrl) {
+    return null;
+  }
+
+  const safeTitle = escapeHtml(title);
+  const safeIntro = escapeHtml(intro);
+  const safeDetailIntro = escapeHtml(detailIntro);
+  const detailRows = baseDetails
+    .map((line) => {
+      const [label, value] = line.split(": ");
+      return `<tr>
+        <td style="padding:6px 0;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.18em;">${escapeHtml(
+          label
+        )}</td>
+        <td style="padding:6px 0;font-size:14px;color:#0f172a;">${escapeHtml(value || "")}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const ctaBlock = ctaLabel && ctaUrl
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:18px;">
+        <tr>
+          <td style="background:#0f172a;">
+            <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;padding:12px 22px;font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#ffffff;text-decoration:none;">${escapeHtml(
+              ctaLabel
+            )}</a>
+          </td>
+        </tr>
+      </table>`
+    : "";
+  const secondaryBlock = secondaryLabel && secondaryUrl
+    ? `<p style="margin:14px 0 0 0;font-size:12px;">
+        <a href="${escapeHtml(secondaryUrl)}" style="color:#0f172a;text-decoration:underline;">${escapeHtml(
+          secondaryLabel
+        )}</a>
+      </p>`
+    : "";
+
+  const htmlBody = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${safeTitle}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial, sans-serif;color:#0f172a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;">
+            <tr>
+              <td style="padding:28px 32px;">
+                <p style="margin:0 0 8px 0;font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:#94a3b8;">Order update</p>
+                <h1 style="margin:0 0 12px 0;font-size:24px;font-weight:600;color:#0f172a;">${safeTitle}</h1>
+                <p style="margin:0 0 20px 0;font-size:14px;line-height:1.6;color:#475569;">${safeIntro}</p>
+                <div style="border-top:1px solid #e2e8f0;padding-top:16px;">
+                  <div style="font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#94a3b8;">${safeDetailIntro}</div>
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;border-collapse:collapse;">
+                    ${detailRows}
+                  </table>
+                  ${extraHtml}
+                  ${ctaBlock}
+                  ${secondaryBlock}
+                </div>
+                <p style="margin:20px 0 0 0;font-size:12px;color:#94a3b8;line-height:1.6;">
+                  Reply to this email if you need anything in the meantime.
+                </p>
+                <p style="margin:16px 0 0 0;font-size:14px;color:#0f172a;">Warm regards,<br>Heerawalla</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  const textLines = [
+    title,
+    "",
+    intro,
+    "",
+    detailIntro,
+    ...baseDetails,
+    extraText,
+    ctaLabel && ctaUrl ? "" : "",
+    ctaLabel && ctaUrl ? `${ctaLabel}: ${ctaUrl}` : "",
+    secondaryLabel && secondaryUrl ? `${secondaryLabel}: ${secondaryUrl}` : "",
+    "",
+    footer,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+
+  return { subject, textBody: textLines, htmlBody };
+}
+
+async function processOrderStatusEmails(env: Env) {
+  if (!env.HEERAWALLA_ACKS) return;
+  if (!isEnabled(env.SEND_STATUS_UPDATES, true)) return;
+
+  const config = getSheetConfig(env, "order");
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const headerRow = headerRows[0] || [];
+  if (!headerRow.length) return;
+
+  const headerIndex = new Map<string, number>();
+  headerRow.forEach((cell, idx) => {
+    headerIndex.set(String(cell || "").trim().toLowerCase(), idx);
+  });
+
+  const requestIdIdx = headerIndex.get("request_id") ?? -1;
+  const statusIdx = headerIndex.get("status") ?? -1;
+  const statusUpdatedIdx = headerIndex.get("status_updated_at") ?? -1;
+  const createdAtIdx = headerIndex.get("created_at") ?? -1;
+  const emailIdx = headerIndex.get("email") ?? -1;
+  const nameIdx = headerIndex.get("name") ?? -1;
+  const productIdx = headerIndex.get("product_name") ?? -1;
+  if ([requestIdIdx, statusIdx, emailIdx].some((idx) => idx < 0)) return;
+
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  if (!rows.length) return;
+
+  const intervalMs = getStatusEmailIntervalHours(env) * 60 * 60 * 1000;
+  const now = Date.now();
+
+  const useResend = Boolean(env.RESEND_API_KEY);
+  const resendThrottleMs = 600;
+  for (const row of rows) {
+    const requestId = getString(row[requestIdIdx]);
+    const statusRaw = getString(row[statusIdx]);
+    const status = normalizeOrderStatus(statusRaw);
+    if (!requestId || !status || STATUS_EMAIL_SKIP_STATUSES.has(status)) continue;
+    const email = getString(row[emailIdx]);
+    if (!email) continue;
+    const name = nameIdx >= 0 ? getString(row[nameIdx]) : "";
+    const productName = productIdx >= 0 ? getString(row[productIdx]) : "";
+    const statusUpdatedAt =
+      (statusUpdatedIdx >= 0 ? getString(row[statusUpdatedIdx]) : "") ||
+      (createdAtIdx >= 0 ? getString(row[createdAtIdx]) : "") ||
+      "";
+
+    const existingRecord = await getOrderStatusEmailRecord(env, requestId, status);
+    const isNewStatus = !existingRecord || existingRecord.statusUpdatedAt !== statusUpdatedAt;
+    const attempts = existingRecord && !isNewStatus ? existingRecord.attempts : 0;
+    const lastSentAt = existingRecord && !isNewStatus ? existingRecord.lastSentAt : "";
+
+    if (attempts >= STATUS_EMAIL_MAX_ATTEMPTS) continue;
+    if (!isNewStatus && !STATUS_EMAIL_REMINDER_STATUSES.has(status)) continue;
+
+    if (!isNewStatus && STATUS_EMAIL_REMINDER_STATUSES.has(status)) {
+      if (!lastSentAt) continue;
+      const lastSentMs = Date.parse(lastSentAt);
+      if (!Number.isFinite(lastSentMs) || now - lastSentMs < intervalMs) {
+        continue;
+      }
+    }
+
+    let confirmationUrl = "";
+    let cancelUrl = "";
+    let changes: ConfirmationChange[] = [];
+    if (status === "PENDING_CONFIRMATION") {
+      const token = await getOrderConfirmationTokenByRequestId(env, requestId);
+      if (!token) continue;
+      const record = await getOrderConfirmationRecord(env, token);
+      if (!record || record.status !== "pending") continue;
+      confirmationUrl = buildOrderConfirmationPageUrl(env, token);
+      changes = record.changes || [];
+    }
+    if (status === "INVOICE_EXPIRED") {
+      const cancelRecord = await ensureOrderCancelRecord(env, requestId, email, name, productName);
+      cancelUrl = buildOrderCancelPageUrl(env, cancelRecord.token);
+    }
+
+    const paymentUrl = resolveOrderPaymentUrl(env, requestId, email, "");
+    const emailPayload = buildOrderStatusEmail({
+      status,
+      requestId,
+      name,
+      email,
+      productName,
+      confirmationUrl,
+      paymentUrl,
+      cancelUrl,
+      changes,
+    });
+    if (!emailPayload) continue;
+
+    try {
+      await sendEmail(env, {
+        to: [email],
+        sender: "Heerawalla <atelier@heerawalla.com>",
+        replyTo: getCustomerReplyTo(),
+        subject: emailPayload.subject,
+        textBody: emailPayload.textBody,
+        htmlBody: emailPayload.htmlBody,
+      });
+      const nextAttempts = attempts + 1;
+      const sentAt = new Date().toISOString();
+      await storeOrderStatusEmailRecord(env, requestId, status, {
+        status,
+        statusUpdatedAt,
+        lastSentAt: sentAt,
+        attempts: nextAttempts,
+      });
+      const noteType = isNewStatus ? "Status email sent" : "Reminder sent";
+      await appendOrderNote(
+        env,
+        requestId,
+        `${noteType}: ${status} (attempt ${nextAttempts}/${STATUS_EMAIL_MAX_ATTEMPTS}) on ${sentAt}.`
+      );
+      if (useResend && resendThrottleMs > 0) {
+        await sleep(resendThrottleMs);
+      }
+    } catch (error) {
+      const errorMessage = String(error);
+      logWarn("order_status_email_failed", { requestId, status, error: errorMessage });
+      if (useResend && isResendRateLimitError(errorMessage)) {
+        break;
+      }
+    }
+  }
+}
+
+async function recordOrderStatusEmailSent(
+  env: Env,
+  requestId: string,
+  status: string,
+  statusUpdatedAtOverride?: string
+) {
+  if (!env.HEERAWALLA_ACKS) return;
+  const normalizedStatus = normalizeOrderStatus(status);
+  if (!normalizedStatus || STATUS_EMAIL_SKIP_STATUSES.has(normalizedStatus)) return;
+  let statusUpdatedAt = getString(statusUpdatedAtOverride);
+  if (!statusUpdatedAt) {
+    const lookup = await findSheetRowByRequestId(env, "order", requestId);
+    const statusUpdatedIdx = lookup?.headerIndex.get("status_updated_at") ?? -1;
+    const createdAtIdx = lookup?.headerIndex.get("created_at") ?? -1;
+    const row = lookup?.row || [];
+    statusUpdatedAt =
+      (statusUpdatedIdx >= 0 ? getString(row[statusUpdatedIdx]) : "") ||
+      (createdAtIdx >= 0 ? getString(row[createdAtIdx]) : "") ||
+      "";
+  }
+  const existing = await getOrderStatusEmailRecord(env, requestId, normalizedStatus);
+  const sameStatus = existing && existing.statusUpdatedAt === statusUpdatedAt;
+  const attempts = sameStatus ? existing.attempts : 0;
+  const sentAt = new Date().toISOString();
+  const nextAttempts = attempts + 1;
+  await storeOrderStatusEmailRecord(env, requestId, normalizedStatus, {
+    status: normalizedStatus,
+    statusUpdatedAt,
+    lastSentAt: sentAt,
+    attempts: nextAttempts,
+  });
+  await appendOrderNote(
+    env,
+    requestId,
+    `Status email sent: ${normalizedStatus} (attempt ${nextAttempts}/${STATUS_EMAIL_MAX_ATTEMPTS}) on ${sentAt}.`
+  );
 }
 
 async function safeJson(request: Request) {
@@ -5346,20 +6173,49 @@ type OrderConfirmationRecord = {
   createdAt: string;
   confirmedAt?: string;
   canceledAt?: string;
+  cancellationReason?: string;
+  cancellationNote?: string;
   expiresAt?: string;
   paymentUrl?: string;
 };
 
+type OrderCancelRecord = {
+  token: string;
+  requestId: string;
+  email?: string;
+  name?: string;
+  productName?: string;
+  status: "pending" | "canceled";
+  createdAt: string;
+  canceledAt?: string;
+  cancellationReason?: string;
+  cancellationNote?: string;
+  expiresAt?: string;
+};
+
 const ORDER_CONFIRMATION_KEY_PREFIX = "order:confirm:";
+const ORDER_CANCEL_KEY_PREFIX = "order:cancel:";
 
 function buildOrderConfirmationKey(token: string) {
   const normalized = token.trim();
   return normalized ? `${ORDER_CONFIRMATION_KEY_PREFIX}${normalized}` : "";
 }
 
+function buildOrderCancelKey(token: string) {
+  const normalized = token.trim();
+  return normalized ? `${ORDER_CANCEL_KEY_PREFIX}${normalized}` : "";
+}
+
 function buildOrderConfirmationPageUrl(env: Env, token: string) {
   const base = (env.ORDER_CONFIRMATION_PAGE_URL || ORDER_CONFIRMATION_PAGE_URL).trim();
   if (!base) return `https://www.heerawalla.com/order_confirmation?token=${encodeURIComponent(token)}`;
+  const trimmed = base.endsWith("/") ? base.slice(0, -1) : base;
+  return `${trimmed}?token=${encodeURIComponent(token)}`;
+}
+
+function buildOrderCancelPageUrl(env: Env, token: string) {
+  const base = (env.ORDER_CANCEL_PAGE_URL || ORDER_CANCEL_PAGE_URL).trim();
+  if (!base) return `https://www.heerawalla.com/order_cancel?token=${encodeURIComponent(token)}`;
   const trimmed = base.endsWith("/") ? base.slice(0, -1) : base;
   return `${trimmed}?token=${encodeURIComponent(token)}`;
 }
@@ -5405,6 +6261,26 @@ async function getOrderConfirmationRecord(env: Env, token: string) {
   if (!value) return null;
   try {
     return JSON.parse(value) as OrderConfirmationRecord;
+  } catch {
+    return null;
+  }
+}
+
+async function storeOrderCancelRecord(env: Env, record: OrderCancelRecord) {
+  if (!env.HEERAWALLA_ACKS) return;
+  const key = buildOrderCancelKey(record.token);
+  if (!key) return;
+  await env.HEERAWALLA_ACKS.put(key, JSON.stringify(record), { expirationTtl: ORDER_CANCEL_TTL });
+}
+
+async function getOrderCancelRecord(env: Env, token: string) {
+  if (!env.HEERAWALLA_ACKS) return null;
+  const key = buildOrderCancelKey(token);
+  if (!key) return null;
+  const value = await env.HEERAWALLA_ACKS.get(key);
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as OrderCancelRecord;
   } catch {
     return null;
   }

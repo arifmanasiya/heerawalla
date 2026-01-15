@@ -42,6 +42,9 @@ OPS_ALLOWLIST = "production@heerawalla.com"
 VIEWER_ALLOWLIST = ""
 ORDER_CONFIRMATION_PAGE_URL = "https://www.heerawalla.com/order_confirmation"
 ORDER_CONFIRMATION_PAYMENT_URL = "https://www.heerawalla.com/pay?requestId={requestId}&token={token}"
+ORDER_CANCEL_PAGE_URL = "https://www.heerawalla.com/order_cancel"
+STATUS_EMAIL_INTERVAL_HOURS = "48"
+SEND_STATUS_UPDATES = "true"
 
 # Secrets are configured via `wrangler secret put` or in the Cloudflare dashboard.
 

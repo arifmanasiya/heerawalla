@@ -42,6 +42,9 @@ export interface Env {
   VIEWER_ALLOWLIST?: string;
   ORDER_CONFIRMATION_PAGE_URL?: string;
   ORDER_CONFIRMATION_PAYMENT_URL?: string;
+  ORDER_CANCEL_PAGE_URL?: string;
+  STATUS_EMAIL_INTERVAL_HOURS?: string;
+  SEND_STATUS_UPDATES?: string | boolean;
 }
 
 export const ACK_SUBJECT_PREFIX = "Heerawalla - Your request has been received";
@@ -433,6 +436,10 @@ export const ORDER_CONFIRMATION_CONFIRM_PATH = "/orders/confirmation/confirm";
 export const ORDER_CONFIRMATION_CANCEL_PATH = "/orders/confirmation/cancel";
 export const ORDER_CONFIRMATION_PAGE_URL = "https://www.heerawalla.com/order_confirmation";
 export const ORDER_CONFIRMATION_TTL = 60 * 60 * 24 * 7;
+export const ORDER_CANCEL_PATH = "/orders/cancel";
+export const ORDER_CANCEL_CONFIRM_PATH = "/orders/cancel/confirm";
+export const ORDER_CANCEL_PAGE_URL = "https://www.heerawalla.com/order_cancel";
+export const ORDER_CANCEL_TTL = 60 * 60 * 24 * 7;
 export const SUBSCRIBE_PATH = "/subscribe";
 export const UNSUBSCRIBE_PATH = "/unsubscribe";
 export const REQUEST_ORIGIN_TTL = 60 * 60 * 24 * 180;
