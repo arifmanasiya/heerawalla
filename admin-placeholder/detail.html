@@ -95,6 +95,55 @@
               <button class="btn btn-ghost" data-notes-save type="button">Save notes</button>
             </div>
           </div>
+
+          <div class="drawer-section" data-order-details-section>
+            <h3>Fulfillment details</h3>
+            <div class="edit-grid">
+              <label class="field">
+                <span>Shipping carrier</span>
+                <input type="text" data-order-details-field="shipping_carrier" placeholder="FedEx" />
+              </label>
+              <label class="field">
+                <span>Tracking number</span>
+                <input type="text" data-order-details-field="tracking_number" placeholder="1234567890" />
+              </label>
+              <label class="field">
+                <span>Tracking URL</span>
+                <input type="url" data-order-details-field="tracking_url" placeholder="https://carrier.com/track" />
+              </label>
+              <label class="field">
+                <span>Shipping status</span>
+                <input type="text" data-order-details-field="shipping_status" placeholder="Shipped" />
+              </label>
+              <label class="field">
+                <span>Delivery ETA</span>
+                <input type="text" data-order-details-field="delivery_eta" placeholder="YYYY-MM-DD" />
+              </label>
+            </div>
+            <label class="field">
+              <span>Shipping notes</span>
+              <textarea rows="3" data-order-details-field="shipping_notes" placeholder="Signature required, insured delivery."></textarea>
+            </label>
+            <label class="field">
+              <span>Certificates (Type: Number per line)</span>
+              <textarea rows="3" data-order-details-field="certificates" placeholder="GIA: 123456&#10;IGI: 987654"></textarea>
+            </label>
+            <label class="field">
+              <span>Care details</span>
+              <textarea rows="3" data-order-details-field="care_details" placeholder="Wipe with soft cloth, store separately."></textarea>
+            </label>
+            <label class="field">
+              <span>Warranty details</span>
+              <textarea rows="3" data-order-details-field="warranty_details" placeholder="1-year workmanship warranty."></textarea>
+            </label>
+            <label class="field">
+              <span>Service details</span>
+              <textarea rows="3" data-order-details-field="service_details" placeholder="Annual inspection available by appointment."></textarea>
+            </label>
+            <div class="drawer-actions-row">
+              <button class="btn btn-ghost" data-details-save type="button">Save fulfillment details</button>
+            </div>
+          </div>
         </div>
       </section>
     </div>

@@ -1,0 +1,204 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import { loadSiteConfig, getConfigValue } from "../lib/config";
+
+const config = await loadSiteConfig();
+const authenticityApiBase = getConfigValue(
+  config,
+  "order_authenticity_api_base",
+  "https://admin-api.heerawalla.com"
+);
+const ordersEmail = getConfigValue(config, "orders_email", "orders@heerawalla.com");
+---
+
+<BaseLayout
+  title="Authenticity Verification | Heerawalla"
+  description="Verify the authenticity of your Heerawalla jewelry with your order number and contact details."
+>
+  <Header />
+
+  <main class="container py-12 space-y-12">
+    <section class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] items-start">
+      <div class="space-y-4">
+        <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Authenticity verification</p>
+        <h1 class="font-display text-4xl sm:text-5xl tracking-tight text-ink">Verify your Heerawalla piece</h1>
+        <p class="text-sm text-slate-600 max-w-xl">
+          Enter your order number and the email or phone number used at checkout. We will confirm the authenticity of
+          your Heerawalla jewelry instantly.
+        </p>
+
+        <div
+          class="border border-slate-200 bg-white p-6 space-y-5"
+          data-authenticity
+          data-authenticity-api={authenticityApiBase}
+        >
+          <p class="text-sm text-slate-600" data-auth-status>
+            Provide your order details to begin verification.
+          </p>
+          <form class="space-y-4" data-auth-form>
+            <label class="grid gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+              Order number
+              <input
+                class="rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                type="text"
+                name="order"
+                placeholder="HW-REQ:XXXXXX"
+                required
+              />
+            </label>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="grid gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+                Email (optional)
+                <input
+                  class="rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                  type="email"
+                  name="email"
+                  placeholder="you@email.com"
+                />
+              </label>
+              <label class="grid gap-2 text-xs uppercase tracking-[0.2em] text-slate-500">
+                Phone (optional)
+                <input
+                  class="rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                  type="tel"
+                  name="phone"
+                  placeholder="(555) 555-5555"
+                />
+              </label>
+            </div>
+            <button class="btn btn-primary" type="submit">Verify authenticity</button>
+            <p class="text-xs text-slate-500">
+              We only use your details to confirm authenticity. Your information is never shared.
+            </p>
+          </form>
+
+          <div class="hidden border-t border-slate-200 pt-4 space-y-3" data-auth-result>
+            <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Verification result</div>
+            <p class="text-sm font-medium text-ink" data-auth-result-title>Authenticity confirmed</p>
+            <div class="grid gap-2 text-sm text-slate-600" data-auth-details></div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="space-y-4">
+        <div class="card border border-slate-200 p-6 space-y-4">
+          <div class="text-xs uppercase tracking-[0.3em] text-slate-500">What you will need</div>
+          <ul class="text-sm text-slate-600 space-y-2">
+            <li>Order number from your Heerawalla confirmation.</li>
+            <li>Email or phone used at checkout.</li>
+            <li>Your jewelry piece for inspection.</li>
+          </ul>
+        </div>
+        <div class="border border-slate-200 bg-white p-5 text-sm text-slate-600 space-y-2">
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Need assistance?</p>
+          <p>
+            Reach us at <a class="underline text-ink" href={`mailto:${ordersEmail}`}>{ordersEmail}</a> for concierge
+            support.
+          </p>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <Footer />
+</BaseLayout>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('[data-authenticity]');
+    if (!root) return;
+    const statusEl = root.querySelector('[data-auth-status]');
+    const form = root.querySelector('[data-auth-form]');
+    const result = root.querySelector('[data-auth-result]');
+    const resultTitle = root.querySelector('[data-auth-result-title]');
+    const detailsEl = root.querySelector('[data-auth-details]');
+    const apiBase = root.getAttribute('data-authenticity-api') || '';
+
+    const setStatus = (message, tone) => {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.classList.remove('text-slate-600', 'text-rose-600', 'text-emerald-600');
+      if (tone === 'error') {
+        statusEl.classList.add('text-rose-600');
+      } else if (tone === 'success') {
+        statusEl.classList.add('text-emerald-600');
+      } else {
+        statusEl.classList.add('text-slate-600');
+      }
+    };
+
+    const escapeHtml = (value) =>
+      String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const showResult = (title, rows) => {
+      if (!result || !detailsEl || !resultTitle) return;
+      resultTitle.textContent = title;
+      detailsEl.innerHTML = rows
+        .map((row) => `<div><span class="text-[10px] uppercase tracking-[0.2em] text-slate-500">${escapeHtml(
+          row.label
+        )}</span>
+          <div class="text-sm text-ink">${escapeHtml(row.value)}</div></div>`)
+        .join('');
+      result.classList.remove('hidden');
+    };
+
+    const requestJson = async (path, options = {}) => {
+      if (!apiBase) throw new Error('missing_api');
+      const base = apiBase.replace(/\/$/, '');
+      const response = await fetch(`${base}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'request_failed');
+      }
+      return await response.json();
+    };
+
+    if (!form) return;
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (result) result.classList.add('hidden');
+      const formData = new FormData(form);
+      const requestId = String(formData.get('order') || '').trim();
+      const email = String(formData.get('email') || '').trim();
+      const phone = String(formData.get('phone') || '').trim();
+      if (!requestId || (!email && !phone)) {
+        setStatus('Enter your order number and either email or phone to continue.', 'error');
+        return;
+      }
+      setStatus('Verifying authenticity...', 'info');
+      try {
+        const data = await requestJson('/orders/verify', {
+          method: 'POST',
+          body: JSON.stringify({ requestId, email, phone }),
+        });
+        if (!data.ok) {
+          throw new Error('verification_failed');
+        }
+        const order = data.order || {};
+        const details = data.details || {};
+        const rows = [
+          { label: 'Order number', value: order.requestId || requestId },
+          { label: 'Piece', value: order.productName || 'Heerawalla order' },
+          { label: 'Status', value: order.status || 'Verified' },
+        ];
+        if (details.certificates) {
+          rows.push({ label: 'Certificates', value: details.certificates });
+        }
+        setStatus('Authenticity confirmed.', 'success');
+        showResult('Authenticity confirmed', rows);
+      } catch (error) {
+        setStatus('We could not verify this order. Please check your details or contact us.', 'error');
+      }
+    });
+  })();
+</script>

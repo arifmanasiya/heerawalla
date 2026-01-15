@@ -31,6 +31,9 @@ export interface Env {
   ORDER_SHEET_ID?: string;
   ORDER_SHEET_NAME?: string;
   ORDER_SHEET_RANGE?: string;
+  ORDER_DETAILS_SHEET_ID?: string;
+  ORDER_DETAILS_SHEET_NAME?: string;
+  ORDER_DETAILS_SHEET_RANGE?: string;
   QUOTE_SHEET_ID?: string;
   QUOTE_SHEET_NAME?: string;
   QUOTE_SHEET_RANGE?: string;
@@ -43,6 +46,7 @@ export interface Env {
   ORDER_CONFIRMATION_PAGE_URL?: string;
   ORDER_CONFIRMATION_PAYMENT_URL?: string;
   ORDER_CANCEL_PAGE_URL?: string;
+  ORDER_AUTHENTICITY_PAGE_URL?: string;
   STATUS_EMAIL_INTERVAL_HOURS?: string;
   SEND_STATUS_UPDATES?: string | boolean;
 }
@@ -85,6 +89,26 @@ export const ORDER_SHEET_HEADER = [
   "origin",
   "ip",
   "user_agent",
+];
+export const ORDER_DETAILS_SHEET_HEADER = [
+  "created_at",
+  "request_id",
+  "status",
+  "shipping_carrier",
+  "tracking_number",
+  "tracking_url",
+  "shipping_status",
+  "shipping_notes",
+  "shipped_at",
+  "delivery_eta",
+  "delivered_at",
+  "certificates",
+  "care_details",
+  "warranty_details",
+  "service_details",
+  "updated_at",
+  "updated_by",
+  "last_shipping_check_at",
 ];
 export const QUOTE_SHEET_HEADER = [
   "created_at",
@@ -436,10 +460,12 @@ export const ORDER_CONFIRMATION_CONFIRM_PATH = "/orders/confirmation/confirm";
 export const ORDER_CONFIRMATION_CANCEL_PATH = "/orders/confirmation/cancel";
 export const ORDER_CONFIRMATION_PAGE_URL = "https://www.heerawalla.com/order_confirmation";
 export const ORDER_CONFIRMATION_TTL = 60 * 60 * 24 * 7;
+export const ORDER_VERIFY_PATH = "/orders/verify";
 export const ORDER_CANCEL_PATH = "/orders/cancel";
 export const ORDER_CANCEL_CONFIRM_PATH = "/orders/cancel/confirm";
 export const ORDER_CANCEL_PAGE_URL = "https://www.heerawalla.com/order_cancel";
 export const ORDER_CANCEL_TTL = 60 * 60 * 24 * 7;
+export const ORDER_AUTHENTICITY_PAGE_URL = "https://www.heerawalla.com/authenticity";
 export const SUBSCRIBE_PATH = "/subscribe";
 export const UNSUBSCRIBE_PATH = "/unsubscribe";
 export const REQUEST_ORIGIN_TTL = 60 * 60 * 24 * 180;

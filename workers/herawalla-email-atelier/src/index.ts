@@ -5,6 +5,7 @@ import {
   QUOTE_ACK_SUBJECT,
   CONTACT_ACK_SUBJECT,
   ORDER_SHEET_HEADER,
+  ORDER_DETAILS_SHEET_HEADER,
   QUOTE_SHEET_HEADER,
   CONTACT_SHEET_HEADER,
   EMAIL_TEXT,
@@ -38,6 +39,7 @@ import {
   ORDER_CONFIRMATION_CANCEL_PATH,
   ORDER_CONFIRMATION_PAGE_URL,
   ORDER_CONFIRMATION_TTL,
+  ORDER_VERIFY_PATH,
   ORDER_CANCEL_PATH,
   ORDER_CANCEL_CONFIRM_PATH,
   ORDER_CANCEL_PAGE_URL,
@@ -63,6 +65,7 @@ import {
   REJECT_SUBJECT,
   REJECT_TEXT,
   REJECT_HTML,
+  ORDER_AUTHENTICITY_PAGE_URL,
 } from "./config";
 
 type CachedToken = { value: string; expiresAt: number } | null;
@@ -91,6 +94,11 @@ export default {
     const cancelResponse = await handleOrderCancellationRequest(request, env, url, allowedOrigin);
     if (cancelResponse) {
       return cancelResponse;
+    }
+
+    const verifyResponse = await handleOrderVerificationRequest(request, env, url, allowedOrigin);
+    if (verifyResponse) {
+      return verifyResponse;
     }
 
     if (url.pathname === CATALOG_PATH) {
@@ -1385,6 +1393,9 @@ export default {
     if (isEnabled(env.SEND_STATUS_UPDATES, true)) {
       tasks.push(processOrderStatusEmails(env));
     }
+    if (env.ORDER_DETAILS_SHEET_ID) {
+      tasks.push(processShippedOrderUpdates(env));
+    }
     if (tasks.length) {
       ctx.waitUntil(Promise.all(tasks));
     }
@@ -1802,6 +1813,21 @@ async function handleAdminRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
+    if (path === "/orders/details") {
+      const requestId =
+        url.searchParams.get("request_id") || url.searchParams.get("requestId") || "";
+      if (!requestId) {
+        return new Response(JSON.stringify({ ok: false, error: "missing_request_id" }), {
+          status: 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const details = await getOrderDetailsRecord(env, requestId);
+      return new Response(JSON.stringify({ ok: true, details: details || {} }), {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
     if (path === "/quotes") {
       const payload = await buildAdminList(env, "quote", url.searchParams);
       return new Response(JSON.stringify({ ok: true, ...payload }), {
@@ -1833,7 +1859,7 @@ async function handleAdminRequest(
           headers: buildCorsHeaders(allowedOrigin, true),
         });
       }
-      const result = await handleOrderAdminAction(env, payload);
+      const result = await handleOrderAdminAction(env, payload, adminEmail);
       return new Response(JSON.stringify(result), {
         status: result.ok ? 200 : 400,
         headers: buildCorsHeaders(allowedOrigin, true),
@@ -2199,6 +2225,99 @@ async function handleOrderCancellationRequest(
   });
 }
 
+async function handleOrderVerificationRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  allowedOrigin: string
+) {
+  if (!url.pathname.startsWith(ORDER_VERIFY_PATH)) return null;
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  if (!allowedOrigin) {
+    return new Response("Forbidden", { status: 403 });
+  }
+  if (url.pathname !== ORDER_VERIFY_PATH) {
+    return new Response("Not Found", { status: 404 });
+  }
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  const payload = await safeJson(request);
+  if (!isRecord(payload)) {
+    return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+      status: 400,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  const rawRequestId = getString(payload.requestId || payload.request_id || payload.orderId || payload.order_id);
+  const normalizedRequestId = normalizeRequestId(rawRequestId).replace(/^HW-REQ:/, "");
+  const email = getString(payload.email);
+  const phone = getString(payload.phone);
+  if (!normalizedRequestId || (!email && !phone)) {
+    return new Response(JSON.stringify({ ok: false, error: "missing_fields" }), {
+      status: 400,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+
+  const lookup = await findSheetRowByRequestId(env, "order", normalizedRequestId);
+  if (!lookup) {
+    return new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+      status: 404,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  const emailIdx = lookup.headerIndex.get("email") ?? -1;
+  const phoneIdx = lookup.headerIndex.get("phone") ?? -1;
+  const nameIdx = lookup.headerIndex.get("name") ?? -1;
+  const productIdx = lookup.headerIndex.get("product_name") ?? -1;
+  const statusIdx = lookup.headerIndex.get("status") ?? -1;
+  const createdIdx = lookup.headerIndex.get("created_at") ?? -1;
+  const orderEmail = emailIdx >= 0 ? normalizeEmailAddress(getString(lookup.row[emailIdx])) : "";
+  const orderPhone = phoneIdx >= 0 ? normalizePhone(getString(lookup.row[phoneIdx])) : "";
+  const emailMatch = email ? normalizeEmailAddress(email) === orderEmail : false;
+  const phoneMatch = phone ? normalizePhone(phone) === orderPhone : false;
+  if (!emailMatch && !phoneMatch) {
+    return new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+      status: 404,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+
+  const details = await getOrderDetailsRecord(env, normalizedRequestId);
+  const order = {
+    requestId: normalizedRequestId,
+    name: nameIdx >= 0 ? getString(lookup.row[nameIdx]) : "",
+    productName: productIdx >= 0 ? getString(lookup.row[productIdx]) : "",
+    status: statusIdx >= 0 ? getString(lookup.row[statusIdx]) : "",
+    createdAt: createdIdx >= 0 ? getString(lookup.row[createdIdx]) : "",
+  };
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      order,
+      details: details
+        ? {
+            certificates: getString(details.certificates),
+            deliveredAt: getString(details.delivered_at),
+          }
+        : {},
+    }),
+    {
+      status: 200,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    }
+  );
+}
+
 function getAdminEmail(request: Request, origin: string) {
   const accessEmail =
     request.headers.get("Cf-Access-Authenticated-User-Email") ||
@@ -2320,13 +2439,18 @@ function applyAdminSort(items: Array<Record<string, string>>, params: URLSearchP
   });
 }
 
-async function handleOrderAdminAction(env: Env, payload: Record<string, unknown>) {
+async function handleOrderAdminAction(
+  env: Env,
+  payload: Record<string, unknown>,
+  adminEmail: string
+) {
   const requestId = getString(payload.requestId || payload.request_id);
   if (!requestId) return { ok: false, error: "missing_request_id" };
   const action = getString(payload.action).toLowerCase();
   const requestedStatus = getString(payload.status).toUpperCase();
   const notes = getString(payload.notes);
   const updates = coerceUpdates(payload.fields, ORDER_UPDATE_FIELDS);
+  const detailUpdates = coerceUpdates(payload.details, ORDER_DETAILS_UPDATE_FIELDS);
   const lookup = await findSheetRowByRequestId(env, "order", requestId);
   if (!lookup) return { ok: false, error: "request_not_found" };
   const currentStatus = getOrderStatusFromRow(lookup);
@@ -2353,6 +2477,26 @@ async function handleOrderAdminAction(env: Env, payload: Record<string, unknown>
     nextStatus = "";
   }
 
+  const needsOrderDetails =
+    Object.keys(detailUpdates).length > 0 || nextStatus === "SHIPPED" || nextStatus === "DELIVERED";
+  let existingDetails: OrderDetailsRecord | null = null;
+  if (needsOrderDetails) {
+    existingDetails = await getOrderDetailsRecord(env, requestId);
+  }
+
+  if (nextStatus === "SHIPPED") {
+    const missing = REQUIRED_SHIPPING_DETAILS_FIELDS.filter((field) => {
+      if (detailUpdates[field]) return false;
+      const existingValue = existingDetails
+        ? getString(existingDetails[field as keyof OrderDetailsRecord])
+        : "";
+      return !existingValue;
+    });
+    if (missing.length) {
+      return { ok: false, error: "missing_shipping_details", fields: missing };
+    }
+  }
+
   const notesIdx = lookup.headerIndex.get("notes");
   const existingNotes = notesIdx === undefined ? "" : getString(lookup.row[notesIdx]);
   const statusChanged = Boolean(nextStatus);
@@ -2360,6 +2504,35 @@ async function handleOrderAdminAction(env: Env, payload: Record<string, unknown>
   const baseNotes = notes || existingNotes;
   const combinedNotes = appendNote(baseNotes, auditNote);
   const notesToSave = combinedNotes && (statusChanged || notes) ? combinedNotes : "";
+
+  if (needsOrderDetails) {
+    const detailsToSave: Record<string, string> = { ...detailUpdates };
+    const now = new Date().toISOString();
+    if (nextStatus === "SHIPPED") {
+      if (!detailsToSave.shipping_status) {
+        detailsToSave.shipping_status =
+          getString(existingDetails?.shipping_status) || "Shipped";
+      }
+      if (!detailsToSave.shipped_at && !getString(existingDetails?.shipped_at)) {
+        detailsToSave.shipped_at = now;
+      }
+    }
+    if (nextStatus === "DELIVERED") {
+      if (!detailsToSave.shipping_status) {
+        detailsToSave.shipping_status =
+          getString(existingDetails?.shipping_status) || "Delivered";
+      }
+      if (!detailsToSave.delivered_at && !getString(existingDetails?.delivered_at)) {
+        detailsToSave.delivered_at = now;
+      }
+    }
+    const detailsStatus = nextStatus || currentStatus;
+    try {
+      await upsertOrderDetailsRecord(env, requestId, detailsToSave, detailsStatus, adminEmail);
+    } catch (error) {
+      return { ok: false, error: "order_details_failed", detail: String(error) };
+    }
+  }
 
   return await updateAdminRow(env, "order", requestId, nextStatus, notesToSave, updates);
 }
@@ -2470,6 +2643,28 @@ const ORDER_UPDATE_FIELDS = [
   "state",
   "postal_code",
   "country",
+] as const;
+
+const ORDER_DETAILS_UPDATE_FIELDS = [
+  "shipping_carrier",
+  "tracking_number",
+  "tracking_url",
+  "shipping_status",
+  "shipping_notes",
+  "delivery_eta",
+  "certificates",
+  "care_details",
+  "warranty_details",
+  "service_details",
+] as const;
+
+const REQUIRED_SHIPPING_DETAILS_FIELDS = [
+  "shipping_carrier",
+  "tracking_number",
+  "certificates",
+  "care_details",
+  "warranty_details",
+  "service_details",
 ] as const;
 
 const QUOTE_UPDATE_FIELDS = [
@@ -2700,6 +2895,99 @@ async function findSheetRowByRequestId(
     }
   }
   return null;
+}
+
+function mapSheetRowToRecord(header: string[], row: Array<unknown>) {
+  const record: Record<string, string> = {};
+  header.forEach((key, idx) => {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey) return;
+    record[normalizedKey] = getString(row[idx]);
+  });
+  return record;
+}
+
+async function findOrderDetailsRowByRequestId(
+  env: Env,
+  requestId: string
+): Promise<SheetRowLookup | null> {
+  const config = getOrderDetailsSheetConfig(env);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : ORDER_DETAILS_SHEET_HEADER;
+  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  const requestIdx = headerIndex.get("request_id") ?? -1;
+  if (requestIdx < 0) return null;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const normalizedTarget = normalizeRequestId(requestId);
+  for (let i = 0; i < rows.length; i += 1) {
+    const candidate = normalizeRequestId(getString(rows[i]?.[requestIdx]));
+    if (candidate && candidate === normalizedTarget) {
+      return { config, headerIndex, rowNumber: i + 2, row: rows[i] };
+    }
+  }
+  return null;
+}
+
+async function getOrderDetailsRecord(env: Env, requestId: string): Promise<OrderDetailsRecord | null> {
+  try {
+    const lookup = await findOrderDetailsRowByRequestId(env, requestId);
+    if (!lookup) return null;
+    const header = Array.from(lookup.headerIndex.keys());
+    const record = mapSheetRowToRecord(header, lookup.row);
+    return record as OrderDetailsRecord;
+  } catch {
+    return null;
+  }
+}
+
+async function loadOrderDetailsMap(env: Env) {
+  const map = new Map<string, OrderDetailsRecord>();
+  const config = getOrderDetailsSheetConfig(env);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : ORDER_DETAILS_SHEET_HEADER;
+  const requestIdx = header.findIndex((value) => String(value || "").trim() === "request_id");
+  if (requestIdx < 0) return map;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  rows.forEach((row) => {
+    const requestId = getString(row[requestIdx]);
+    if (!requestId) return;
+    map.set(normalizeRequestId(requestId), mapSheetRowToRecord(header, row) as OrderDetailsRecord);
+  });
+  return map;
+}
+
+async function upsertOrderDetailsRecord(
+  env: Env,
+  requestId: string,
+  updates: Record<string, string>,
+  status: string,
+  updatedBy: string
+) {
+  const config = getOrderDetailsSheetConfig(env);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : ORDER_DETAILS_SHEET_HEADER;
+  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  const lookup = await findOrderDetailsRowByRequestId(env, requestId);
+  const now = new Date().toISOString();
+  const updatesToApply: Record<string, string> = { ...updates };
+  updatesToApply.updated_at = now;
+  if (updatedBy) updatesToApply.updated_by = updatedBy;
+  if (status) updatesToApply.status = status;
+
+  if (lookup) {
+    await updateSheetColumns(env, lookup.config, lookup.headerIndex, lookup.rowNumber, updatesToApply);
+    return;
+  }
+
+  const createdAt = now;
+  const normalizedRequestId = normalizeRequestId(requestId);
+  const rowValues = ORDER_DETAILS_SHEET_HEADER.map((key) => {
+    if (key === "created_at") return createdAt;
+    if (key === "request_id") return normalizedRequestId;
+    if (updatesToApply[key]) return updatesToApply[key];
+    return "";
+  });
+  await appendSheetRow(env, config, rowValues, ORDER_DETAILS_SHEET_HEADER);
 }
 
 async function appendOrderNote(env: Env, requestId: string, note: string) {
@@ -3089,6 +3377,18 @@ function getSheetConfig(env: Env, kind: "order" | "quote" | "contact"): SheetCon
   const resolvedSheetName = appendRange.includes("!")
     ? appendRange.split("!")[0]
     : sheetName;
+  const headerRange = `${resolvedSheetName}!A1:AZ1`;
+  return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
+}
+
+function getOrderDetailsSheetConfig(env: Env): SheetConfig {
+  const sheetId = (env.ORDER_DETAILS_SHEET_ID || "").trim();
+  if (!sheetId) {
+    throw new Error("order_details_sheet_missing");
+  }
+  const sheetName = (env.ORDER_DETAILS_SHEET_NAME || "").trim() || "order_details";
+  const appendRange = (env.ORDER_DETAILS_SHEET_RANGE || "").trim() || `${sheetName}!A1`;
+  const resolvedSheetName = appendRange.includes("!") ? appendRange.split("!")[0] : sheetName;
   const headerRange = `${resolvedSheetName}!A1:AZ1`;
   return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
 }
@@ -3688,6 +3988,7 @@ async function handleSubmitPayload(
 }
 
 const STATUS_EMAIL_MAX_ATTEMPTS = 3;
+const ORDER_SHIPPING_CHECK_INTERVAL_HOURS = 6;
 const ORDER_STATUS_EMAIL_TTL_SECONDS = 60 * 60 * 24 * 180;
 const STATUS_EMAIL_REMINDER_STATUSES = new Set(["PENDING_CONFIRMATION", "INVOICE_EXPIRED"]);
 const STATUS_EMAIL_SKIP_STATUSES = new Set(["NEW"]);
@@ -3842,6 +4143,58 @@ function buildStatusAuditNote(status: string) {
   return `Status updated to ${status}. Status email pending.`;
 }
 
+const ORDER_SHIPPING_SNAPSHOT_PREFIX = "order:shipping:update:";
+
+function buildShippingSnapshotKey(requestId: string) {
+  const normalized = normalizeRequestId(requestId);
+  return normalized ? `${ORDER_SHIPPING_SNAPSHOT_PREFIX}${normalized}` : "";
+}
+
+function normalizeShippingStatus(value: string) {
+  return getString(value).toUpperCase();
+}
+
+function isDeliveredShippingStatus(value: string) {
+  const normalized = normalizeShippingStatus(value);
+  return normalized === "DELIVERED" || normalized.includes("DELIVERED");
+}
+
+function buildShippingSnapshot(details: OrderDetailsRecord) {
+  const snapshot = {
+    status: normalizeShippingStatus(details.shipping_status || ""),
+    notes: getString(details.shipping_notes),
+    carrier: getString(details.shipping_carrier),
+    tracking: getString(details.tracking_number),
+  };
+  return JSON.stringify(snapshot);
+}
+
+function buildShippingUpdateNote(details: OrderDetailsRecord, checkedAt: string) {
+  const parts: string[] = [];
+  const status = getString(details.shipping_status);
+  if (status) parts.push(`Status: ${status}`);
+  const carrier = getString(details.shipping_carrier);
+  if (carrier) parts.push(`Carrier: ${carrier}`);
+  const tracking = getString(details.tracking_number);
+  if (tracking) parts.push(`Tracking: ${tracking}`);
+  const trackingUrl = getString(details.tracking_url);
+  if (trackingUrl) parts.push(`Tracking URL: ${trackingUrl}`);
+  const notes = getString(details.shipping_notes);
+  if (notes) parts.push(`Notes: ${notes}`);
+  if (!parts.length) return "";
+  return `Shipping update on ${checkedAt}: ${parts.join(" | ")}`;
+}
+
+async function shouldAppendShippingNote(env: Env, requestId: string, snapshot: string) {
+  if (!env.HEERAWALLA_ACKS) return true;
+  const key = buildShippingSnapshotKey(requestId);
+  if (!key) return true;
+  const existing = await env.HEERAWALLA_ACKS.get(key);
+  if (existing === snapshot) return false;
+  await env.HEERAWALLA_ACKS.put(key, snapshot);
+  return true;
+}
+
 function resolveOrderPaymentUrl(env: Env, requestId: string, email: string, token = "") {
   const template = getString(env.ORDER_CONFIRMATION_PAYMENT_URL);
   if (!template) return "";
@@ -3883,6 +4236,17 @@ function buildChangeSummaryHtml(changes: ConfirmationChange[]) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rows}</table>`;
 }
 
+function parseCertificateLines(value: string) {
+  return value
+    .split(/\r?\n|,/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function formatMultilineHtml(value: string) {
+  return escapeHtml(value).replace(/\r?\n/g, "<br>");
+}
+
 function buildOrderStatusEmail(payload: {
   status: string;
   requestId: string;
@@ -3893,6 +4257,8 @@ function buildOrderStatusEmail(payload: {
   paymentUrl?: string;
   cancelUrl?: string;
   changes?: ConfirmationChange[];
+  orderDetails?: OrderDetailsRecord | null;
+  authenticityUrl?: string;
 }) {
   const status = normalizeOrderStatus(payload.status);
   const reference = formatOrderReference(payload.requestId);
@@ -3901,6 +4267,8 @@ function buildOrderStatusEmail(payload: {
   const confirmationUrl = payload.confirmationUrl || "";
   const paymentUrl = payload.paymentUrl || "";
   const cancelUrl = payload.cancelUrl || "";
+  const orderDetails = payload.orderDetails || null;
+  const authenticityUrl = payload.authenticityUrl || "";
   const changeSummaryText = payload.changes ? buildChangeSummaryText(payload.changes) : "";
   const changeSummaryHtml = payload.changes ? buildChangeSummaryHtml(payload.changes) : "";
 
@@ -3908,6 +4276,22 @@ function buildOrderStatusEmail(payload: {
     `Request: ${reference}`,
     `Piece: ${productName}`,
   ];
+  const detailLines = [...baseDetails];
+
+  if (orderDetails) {
+    const carrier = getString(orderDetails.shipping_carrier);
+    const tracking = getString(orderDetails.tracking_number);
+    const trackingUrl = getString(orderDetails.tracking_url);
+    const shippingStatus = getString(orderDetails.shipping_status);
+    const deliveryEta = getString(orderDetails.delivery_eta);
+    const deliveredAt = getString(orderDetails.delivered_at);
+    if (carrier) detailLines.push(`Carrier: ${carrier}`);
+    if (tracking) detailLines.push(`Tracking: ${tracking}`);
+    if (trackingUrl) detailLines.push(`Tracking URL: ${trackingUrl}`);
+    if (shippingStatus) detailLines.push(`Shipment status: ${shippingStatus}`);
+    if (deliveryEta) detailLines.push(`Delivery ETA: ${deliveryEta}`);
+    if (deliveredAt) detailLines.push(`Delivered: ${deliveredAt}`);
+  }
 
   let subject = `Heerawalla - Order update [${reference}]`;
   let title = "Order update";
@@ -3976,14 +4360,80 @@ function buildOrderStatusEmail(payload: {
     case "SHIPPED":
       subject = `Heerawalla - Your order has shipped [${reference}]`;
       title = "Your order has shipped";
-      intro = `Your piece is on its way. We'll share tracking details as soon as they are available.`;
+      intro = `Your piece is on its way. Track shipment details below or reply if you need anything.`;
+      if (orderDetails) {
+        const trackingUrl = getString(orderDetails.tracking_url);
+        if (trackingUrl) {
+          ctaLabel = "Track shipment";
+          ctaUrl = trackingUrl;
+        }
+        const shippingNotes = getString(orderDetails.shipping_notes);
+        if (shippingNotes) {
+          extraText = `\nShipping notes:\n${shippingNotes}`;
+          extraHtml = `<p style="margin:16px 0 0 0;font-size:13px;line-height:1.6;color:#475569;"><strong>Shipping notes:</strong><br>${formatMultilineHtml(
+            shippingNotes
+          )}</p>`;
+        }
+      }
       detailIntro = "Shipment details";
       break;
     case "DELIVERED":
-      subject = `Heerawalla - Delivered [${reference}]`;
-      title = "Delivered";
-      intro = `We hope you love your Heerawalla piece. If anything needs attention, reply to this email and we'll help right away.`;
-      detailIntro = "Order summary";
+      subject = `Heerawalla - Welcome to the family [${reference}]`;
+      title = "Welcome to the Heerawalla family";
+      intro = `Your ${productName} has been delivered. We're honored to welcome you into the Heerawalla family & friends.`;
+      detailIntro = "Your order";
+      if (authenticityUrl) {
+        ctaLabel = "Verify authenticity";
+        ctaUrl = authenticityUrl;
+      }
+      if (orderDetails) {
+        const certificateLines = parseCertificateLines(getString(orderDetails.certificates));
+        const careDetails = getString(orderDetails.care_details);
+        const warrantyDetails = getString(orderDetails.warranty_details);
+        const serviceDetails = getString(orderDetails.service_details);
+        const sections: Array<{ title: string; body: string }> = [];
+        if (certificateLines.length) {
+          sections.push({
+            title: "Certificates",
+            body: certificateLines.map((line) => `- ${line}`).join("\n"),
+          });
+        }
+        if (careDetails) {
+          sections.push({ title: "Care instructions", body: careDetails });
+        }
+        if (warrantyDetails) {
+          sections.push({ title: "Warranty", body: warrantyDetails });
+        }
+        if (serviceDetails) {
+          sections.push({ title: "Service", body: serviceDetails });
+        }
+        if (sections.length) {
+          extraText = sections
+            .map((section) => `\n${section.title}:\n${section.body}`)
+            .join("");
+          extraHtml = sections
+            .map(
+              (section) => `<div style="margin-top:16px;">
+                <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">${escapeHtml(
+                  section.title
+                )}</div>
+                <div style="font-size:13px;line-height:1.6;color:#475569;">${formatMultilineHtml(
+                  section.body
+                )}</div>
+              </div>`
+            )
+            .join("");
+        }
+      }
+      if (authenticityUrl) {
+        const verifyText = `\nVerify authenticity: ${authenticityUrl}\nUse your order number and the email or phone on file.`;
+        extraText = `${extraText}${verifyText}`;
+        extraHtml = `${extraHtml}<p style="margin:16px 0 0 0;font-size:13px;line-height:1.6;color:#475569;">
+          Verify authenticity at <a href="${escapeHtml(
+            authenticityUrl
+          )}" style="color:#0f172a;text-decoration:underline;">Heerawalla.com/authenticity</a> using your order number and the email or phone on file.
+        </p>`;
+      }
       break;
     case "CANCELLED":
       subject = `Heerawalla - Order canceled [${reference}]`;
@@ -4002,7 +4452,7 @@ function buildOrderStatusEmail(payload: {
   const safeTitle = escapeHtml(title);
   const safeIntro = escapeHtml(intro);
   const safeDetailIntro = escapeHtml(detailIntro);
-  const detailRows = baseDetails
+  const detailRows = detailLines
     .map((line) => {
       const [label, value] = line.split(": ");
       return `<tr>
@@ -4078,7 +4528,7 @@ function buildOrderStatusEmail(payload: {
     intro,
     "",
     detailIntro,
-    ...baseDetails,
+    ...detailLines,
     extraText,
     ctaLabel && ctaUrl ? "" : "",
     ctaLabel && ctaUrl ? `${ctaLabel}: ${ctaUrl}` : "",
@@ -4156,6 +4606,7 @@ async function processOrderStatusEmails(env: Env) {
     let confirmationUrl = "";
     let cancelUrl = "";
     let changes: ConfirmationChange[] = [];
+    let orderDetails: OrderDetailsRecord | null = null;
     if (status === "PENDING_CONFIRMATION") {
       const token = await getOrderConfirmationTokenByRequestId(env, requestId);
       if (!token) continue;
@@ -4167,6 +4618,9 @@ async function processOrderStatusEmails(env: Env) {
     if (status === "INVOICE_EXPIRED") {
       const cancelRecord = await ensureOrderCancelRecord(env, requestId, email, name, productName);
       cancelUrl = buildOrderCancelPageUrl(env, cancelRecord.token);
+    }
+    if (status === "SHIPPED" || status === "DELIVERED") {
+      orderDetails = await getOrderDetailsRecord(env, requestId);
     }
 
     const paymentUrl = resolveOrderPaymentUrl(env, requestId, email, "");
@@ -4180,6 +4634,8 @@ async function processOrderStatusEmails(env: Env) {
       paymentUrl,
       cancelUrl,
       changes,
+      orderDetails,
+      authenticityUrl: status === "DELIVERED" ? buildOrderAuthenticityPageUrl(env) : "",
     });
     if (!emailPayload) continue;
 
@@ -4216,6 +4672,94 @@ async function processOrderStatusEmails(env: Env) {
         break;
       }
     }
+  }
+}
+
+async function processShippedOrderUpdates(env: Env) {
+  let detailsMap: Map<string, OrderDetailsRecord>;
+  try {
+    detailsMap = await loadOrderDetailsMap(env);
+  } catch (error) {
+    logWarn("shipping_details_load_failed", { error: String(error) });
+    return;
+  }
+  if (!detailsMap.size) return;
+
+  const config = getSheetConfig(env, "order");
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const headerRow = headerRows[0] || [];
+  if (!headerRow.length) return;
+
+  const headerIndex = new Map<string, number>();
+  headerRow.forEach((cell, idx) => {
+    headerIndex.set(String(cell || "").trim().toLowerCase(), idx);
+  });
+
+  const requestIdIdx = headerIndex.get("request_id") ?? -1;
+  const statusIdx = headerIndex.get("status") ?? -1;
+  const notesIdx = headerIndex.get("notes") ?? -1;
+  if ([requestIdIdx, statusIdx, notesIdx].some((idx) => idx < 0)) return;
+
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  if (!rows.length) return;
+
+  const intervalMs = ORDER_SHIPPING_CHECK_INTERVAL_HOURS * 60 * 60 * 1000;
+  const now = Date.now();
+  const checkedAt = new Date(now).toISOString();
+
+  for (const row of rows) {
+    const requestId = getString(row[requestIdIdx]);
+    if (!requestId) continue;
+    const status = normalizeOrderStatus(getString(row[statusIdx]));
+    if (status !== "SHIPPED") continue;
+    const details = detailsMap.get(normalizeRequestId(requestId));
+    if (!details) continue;
+
+    const lastCheckRaw = getString(details.last_shipping_check_at);
+    if (lastCheckRaw) {
+      const lastCheckMs = Date.parse(lastCheckRaw);
+      if (Number.isFinite(lastCheckMs) && now - lastCheckMs < intervalMs) {
+        continue;
+      }
+    }
+
+    const shippingSnapshot = buildShippingSnapshot(details);
+    const shouldAppend = await shouldAppendShippingNote(env, requestId, shippingSnapshot);
+    const shippingNote = shouldAppend ? buildShippingUpdateNote(details, checkedAt) : "";
+    const delivered = isDeliveredShippingStatus(details.shipping_status || "");
+
+    if (delivered) {
+      const existingNotes = getString(row[notesIdx]);
+      const combinedNotes = appendNote(
+        appendNote(existingNotes, shippingNote),
+        buildStatusAuditNote("DELIVERED")
+      );
+      await updateAdminRow(env, "order", requestId, "DELIVERED", combinedNotes, {});
+      await upsertOrderDetailsRecord(
+        env,
+        requestId,
+        {
+          delivered_at: getString(details.delivered_at) || checkedAt,
+          shipping_status: getString(details.shipping_status) || "Delivered",
+          last_shipping_check_at: checkedAt,
+        },
+        "DELIVERED",
+        "cron"
+      );
+      continue;
+    }
+
+    if (shippingNote) {
+      await appendOrderNote(env, requestId, shippingNote);
+    }
+
+    await upsertOrderDetailsRecord(
+      env,
+      requestId,
+      { last_shipping_check_at: checkedAt },
+      status,
+      "cron"
+    );
   }
 }
 
@@ -6193,6 +6737,27 @@ type OrderCancelRecord = {
   expiresAt?: string;
 };
 
+type OrderDetailsRecord = {
+  created_at?: string;
+  request_id?: string;
+  status?: string;
+  shipping_carrier?: string;
+  tracking_number?: string;
+  tracking_url?: string;
+  shipping_status?: string;
+  shipping_notes?: string;
+  shipped_at?: string;
+  delivery_eta?: string;
+  delivered_at?: string;
+  certificates?: string;
+  care_details?: string;
+  warranty_details?: string;
+  service_details?: string;
+  updated_at?: string;
+  updated_by?: string;
+  last_shipping_check_at?: string;
+};
+
 const ORDER_CONFIRMATION_KEY_PREFIX = "order:confirm:";
 const ORDER_CANCEL_KEY_PREFIX = "order:cancel:";
 
@@ -6218,6 +6783,12 @@ function buildOrderCancelPageUrl(env: Env, token: string) {
   if (!base) return `https://www.heerawalla.com/order_cancel?token=${encodeURIComponent(token)}`;
   const trimmed = base.endsWith("/") ? base.slice(0, -1) : base;
   return `${trimmed}?token=${encodeURIComponent(token)}`;
+}
+
+function buildOrderAuthenticityPageUrl(env: Env) {
+  const base = (env.ORDER_AUTHENTICITY_PAGE_URL || ORDER_AUTHENTICITY_PAGE_URL).trim();
+  if (!base) return "https://www.heerawalla.com/authenticity";
+  return base.endsWith("/") ? base.slice(0, -1) : base;
 }
 
 function generateOrderConfirmationToken() {

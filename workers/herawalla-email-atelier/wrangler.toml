@@ -1,6 +1,9 @@
 name = "herawalla-email-atelier"
 main = "src/index.ts"
 compatibility_date = "2025-01-11"
+routes = [
+  { pattern = "admin-api.heerawalla.com", zone_name = "heerawalla.com", custom_domain = true }
+]
 
 [observability]
 enabled = false
@@ -33,6 +36,8 @@ CATALOG_INSPIRATIONS_GID = "491031140"
 CATALOG_SITE_CONFIG_GID = "30223103"
 ORDER_SHEET_ID = "1Y63fs2Xoj6xGV9OXx8Ywnx7CplZBGxfQTwzgK2u1dnU"
 ORDER_SHEET_NAME = "orders"
+ORDER_DETAILS_SHEET_ID = "1LzFxg4EWm0WiW--xLnKuTEl97vLbHqK0nOcA2MZQMfk"
+ORDER_DETAILS_SHEET_NAME = "order_details"
 QUOTE_SHEET_ID = "19d7IhrZOx8Revel3UnuCL7RlAPVlgTcJUpPR-4m6dWg"
 QUOTE_SHEET_NAME = "quotes"
 CONTACTS_SHEET_ID = "16vRqJ_2Gpei9U10E1PgdvbcMeH4AtSSyvrje-x-DClc"
@@ -43,6 +48,7 @@ VIEWER_ALLOWLIST = ""
 ORDER_CONFIRMATION_PAGE_URL = "https://www.heerawalla.com/order_confirmation"
 ORDER_CONFIRMATION_PAYMENT_URL = "https://www.heerawalla.com/pay?requestId={requestId}&token={token}"
 ORDER_CANCEL_PAGE_URL = "https://www.heerawalla.com/order_cancel"
+ORDER_AUTHENTICITY_PAGE_URL = "https://www.heerawalla.com/authenticity"
 STATUS_EMAIL_INTERVAL_HOURS = "48"
 SEND_STATUS_UPDATES = "true"
 

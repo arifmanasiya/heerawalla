@@ -8,6 +8,7 @@
     originalValues: {},
     originalRaw: {},
     originalNotes: "",
+    orderDetails: {},
     pendingChanges: [],
     confirmation: null,
   };
@@ -66,6 +67,28 @@
     { key: "stone_weight", label: "Stone weight", normalize: normalizeNumber, format: formatStoneWeight },
   ];
 
+  const ORDER_DETAILS_FIELDS = [
+    "shipping_carrier",
+    "tracking_number",
+    "tracking_url",
+    "shipping_status",
+    "delivery_eta",
+    "shipping_notes",
+    "certificates",
+    "care_details",
+    "warranty_details",
+    "service_details",
+  ];
+
+  const REQUIRED_SHIPPING_DETAILS_FIELDS = [
+    "shipping_carrier",
+    "tracking_number",
+    "certificates",
+    "care_details",
+    "warranty_details",
+    "service_details",
+  ];
+
   const ORDER_STATUS_FLOW = {
     NEW: ["ACKNOWLEDGED", "CANCELLED"],
     ACKNOWLEDGED: ["PENDING_CONFIRMATION", "INVOICED", "CANCELLED"],
@@ -120,6 +143,9 @@
     actionSelect: document.querySelector("[data-action-select]"),
     actionRun: document.querySelector("[data-action-run]"),
     editFields: Array.from(document.querySelectorAll("[data-field]")),
+    orderDetailsSection: document.querySelector("[data-order-details-section]"),
+    orderDetailsFields: Array.from(document.querySelectorAll("[data-order-details-field]")),
+    detailsSave: document.querySelector("[data-details-save]"),
     primaryAction: document.querySelector("[data-primary-action]"),
     notesSave: document.querySelector("[data-notes-save]"),
     confirmModal: document.querySelector("[data-confirm-modal]"),
@@ -256,6 +282,35 @@
     });
   }
 
+  function applyOrderDetailsVisibility() {
+    if (!ui.orderDetailsSection) return;
+    const show = state.tab === "orders";
+    ui.orderDetailsSection.classList.toggle("is-hidden", !show);
+  }
+
+  function getOrderDetailsValue(key) {
+    const field = ui.orderDetailsFields.find((input) => input.dataset.orderDetailsField === key);
+    return field ? field.value.trim() : "";
+  }
+
+  function collectOrderDetailsUpdates() {
+    const details = {};
+    ORDER_DETAILS_FIELDS.forEach((key) => {
+      const value = getOrderDetailsValue(key);
+      if (value) details[key] = value;
+    });
+    return details;
+  }
+
+  function populateOrderDetails(details = {}) {
+    state.orderDetails = details || {};
+    ui.orderDetailsFields.forEach((field) => {
+      const key = field.dataset.orderDetailsField;
+      if (!key) return;
+      field.value = details[key] || "";
+    });
+  }
+
   function getActionConfig(action) {
     return ACTIONS[state.tab].find((entry) => entry.action === action);
   }
@@ -290,6 +345,12 @@
       ui.notesSave.disabled = !canEdit;
     }
     ui.editFields.forEach((field) => {
+      field.disabled = !canEdit;
+    });
+    if (ui.detailsSave) {
+      ui.detailsSave.disabled = !canEdit;
+    }
+    ui.orderDetailsFields.forEach((field) => {
       field.disabled = !canEdit;
     });
   }
@@ -608,6 +669,7 @@
     });
 
     applyEditVisibility();
+    applyOrderDetailsVisibility();
     renderActions();
     updateActionButtonState();
     updatePrimaryActionState();
@@ -642,6 +704,7 @@
         return;
       }
       populateDetail(item);
+      await loadOrderDetails(item.request_id);
       setSyncStatus("Loaded");
     } catch (error) {
       setSyncStatus("Error");
@@ -650,15 +713,39 @@
     }
   }
 
+  async function loadOrderDetails(requestId) {
+    if (!requestId || state.tab !== "orders") {
+      populateOrderDetails({});
+      return;
+    }
+    try {
+      const data = await apiFetch(`/orders/details?request_id=${encodeURIComponent(requestId)}`);
+      populateOrderDetails(data.details || {});
+    } catch (error) {
+      populateOrderDetails({});
+    }
+  }
+
   async function runAction(action) {
     if (!state.selectedItem || !state.selectedItem.request_id) {
       showToast("Missing request ID", "error");
       return;
     }
+    const details = state.tab === "orders" ? collectOrderDetailsUpdates() : {};
+    if (state.tab === "orders" && action === "mark_shipped") {
+      const missing = REQUIRED_SHIPPING_DETAILS_FIELDS.filter((field) => !details[field]);
+      if (missing.length) {
+        showToast("Add required fulfillment details before shipping.", "error");
+        return;
+      }
+    }
     const payload = {
       requestId: state.selectedItem.request_id,
       action,
     };
+    if (state.tab === "orders" && Object.keys(details).length) {
+      payload.details = details;
+    }
     const endpoint =
       state.tab === "orders"
         ? "/orders/action"
@@ -734,6 +821,33 @@
       await loadRecord(state.selectedItem.request_id);
     } else {
       showToast("Notes failed", "error");
+    }
+  }
+
+  async function saveOrderDetails() {
+    if (!state.selectedItem || !state.selectedItem.request_id) {
+      showToast("Missing request ID", "error");
+      return;
+    }
+    const details = collectOrderDetailsUpdates();
+    if (!Object.keys(details).length) {
+      showToast("No fulfillment details to save.", "error");
+      return;
+    }
+    const payload = {
+      requestId: state.selectedItem.request_id,
+      action: "edit",
+      details,
+    };
+    const result = await apiFetch("/orders/action", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (result.ok) {
+      showToast("Fulfillment details saved");
+      await loadOrderDetails(state.selectedItem.request_id);
+    } else {
+      showToast("Fulfillment save failed", "error");
     }
   }
 
@@ -883,6 +997,12 @@
     if (ui.notesSave) {
       ui.notesSave.addEventListener("click", () => {
         if (window.confirm("Save internal notes?")) saveNotes();
+      });
+    }
+
+    if (ui.detailsSave) {
+      ui.detailsSave.addEventListener("click", () => {
+        if (window.confirm("Save fulfillment details?")) saveOrderDetails();
       });
     }
 

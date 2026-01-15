@@ -16,6 +16,7 @@ calendar_api_base,"https://herawalla-email-atelier.arifmanasiya.workers.dev/cale
 atelier_api_base,"https://herawalla-email-atelier.arifmanasiya.workers.dev"
 order_confirmation_api_base,"https://admin-api.heerawalla.com"
 order_cancel_api_base,"https://admin-api.heerawalla.com"
+order_authenticity_api_base,"https://admin-api.heerawalla.com"
 consultation_fee_mode,"free"
 about_title,"About Heerawalla"
 about_description,"Heerawalla crafts minimal, luxurious jewelry with ethical sourcing and meticulous finishing."
