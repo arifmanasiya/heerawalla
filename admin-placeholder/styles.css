@@ -465,6 +465,11 @@ button:disabled {
   color: var(--success);
 }
 
+.badge[data-status="PENDING_CONFIRMATION"] {
+  border-color: #fde68a;
+  color: #b45309;
+}
+
 .badge[data-status="INVOICED"],
 .badge[data-status="QUOTED"] {
   border-color: #fde68a;

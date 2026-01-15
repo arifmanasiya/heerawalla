@@ -26,6 +26,7 @@
     orders: [
       "NEW",
       "ACKNOWLEDGED",
+      "PENDING_CONFIRMATION",
       "INVOICED",
       "INVOICE_PAID",
       "PROCESSING",
@@ -932,6 +933,7 @@
     const updatePayload = {
       requestId: state.selectedItem.request_id,
       action: "edit",
+      status: "PENDING_CONFIRMATION",
       notes,
       fields,
     };

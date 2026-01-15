@@ -1056,30 +1056,25 @@ export default {
           );
         }
 
-        const forwardResponse = await fetch(new Request(`${url.origin}${SUBMIT_PATH}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Origin: origin,
-          },
-          body: JSON.stringify(payload),
-        }));
-        const text = await forwardResponse.text();
+        const submitResponse = await handleSubmitPayload(env, payload, request, origin, allowedOrigin, {
+          skipTurnstile: true,
+        });
+        const text = await submitResponse.text();
         if (!text) {
           return new Response(JSON.stringify({ ok: true, orderStored: true }), {
-            status: forwardResponse.status,
+            status: submitResponse.status,
             headers: buildCorsHeaders(allowedOrigin, true),
           });
         }
         try {
           const data = JSON.parse(text);
           return new Response(JSON.stringify({ ...data, orderStored: true }), {
-            status: forwardResponse.status,
+            status: submitResponse.status,
             headers: buildCorsHeaders(allowedOrigin, true),
           });
         } catch {
           return new Response(text, {
-            status: forwardResponse.status,
+            status: submitResponse.status,
             headers: buildCorsHeaders(allowedOrigin, true),
           });
         }
@@ -1115,344 +1110,16 @@ export default {
         return new Response("Forbidden", { status: 403 });
       }
 
-      try {
-        const payload = await safeJson(request);
-        if (!isRecord(payload)) {
-          logWarn("submit_invalid_payload", { origin });
-          return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
-            status: 400,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-
-        const subject = getString(payload.subject);
-        const body = getString(payload.body);
-        const senderEmail = getString(payload.email);
-        const senderName = getString(payload.name);
-        const requestId = getString(payload.requestId);
-        const turnstileToken = getString(payload.turnstileToken);
-        const phone = getString(payload.phone);
-        const source = getString(payload.source) || "quote";
-        const productName = getString(payload.productName || payload.inspirationTitle);
-        const productUrl = getString(payload.productUrl || payload.inspirationUrl);
-        const designCode = getString(payload.designCode);
-        const metal = getString(payload.metal);
-        const stone = getString(payload.stone);
-        const stoneWeight = getString(payload.stoneWeight);
-        const size = getString(payload.size);
-        const addressLine1 = getString(payload.addressLine1 || payload.address_line1);
-        const addressLine2 = getString(payload.addressLine2 || payload.address_line2);
-        const city = getString(payload.city);
-        const state = getString(payload.state);
-        const postalCode = getString(payload.postalCode || payload.postal_code);
-        const country = getString(payload.country);
-        const normalizedRequestId = normalizeRequestId(requestId);
-        const status = "NEW";
-        let statusUpdatedAt = "";
-        const notes = "";
-        const lastError = "";
-        const price = getString(payload.price);
-        const timeline = normalizeTimeline(getString(payload.timeline));
-        const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
-          resolveAttribution(payload, request);
-        const pageUrl = getString(payload.pageUrl) || productUrl || referrer;
-
-        if (!subject || !body || !senderEmail || !normalizedRequestId) {
-          logWarn("submit_missing_fields", {
-            requestId,
-            hasSubject: Boolean(subject),
-            hasBody: Boolean(body),
-            hasEmail: Boolean(senderEmail),
-          });
-          return new Response(JSON.stringify({ ok: false, error: "missing_fields" }), {
-            status: 400,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-
-        if (!phone || !addressLine1 || !city || !state || !postalCode || !country) {
-          logWarn("submit_missing_address", { requestId });
-          return new Response(JSON.stringify({ ok: false, error: "missing_address" }), {
-            status: 400,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-        if (!isValidPhone(phone)) {
-          logWarn("submit_invalid_phone", { requestId, email: maskEmail(senderEmail) });
-          return new Response(JSON.stringify({ ok: false, error: "invalid_phone" }), {
-            status: 400,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-
-        if (!env.TURNSTILE_SECRET) {
-          logError("submit_turnstile_missing_secret", { requestId });
-          return new Response(JSON.stringify({ ok: false, error: "turnstile_not_configured" }), {
-            status: 500,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-
-        if (!turnstileToken) {
-          logWarn("submit_turnstile_missing", { requestId, email: maskEmail(senderEmail) });
-          return new Response(JSON.stringify({ ok: false, error: "turnstile_required" }), {
-            status: 400,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-
-        const clientIp = request.headers.get("CF-Connecting-IP") || undefined;
-        const turnstileOk = await verifyTurnstile(env.TURNSTILE_SECRET, turnstileToken, clientIp);
-        if (!turnstileOk) {
-          logWarn("submit_turnstile_failed", { requestId, email: maskEmail(senderEmail) });
-          return new Response(JSON.stringify({ ok: false, error: "turnstile_failed" }), {
-            status: 400,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-
-        if (!isValidEmail(senderEmail)) {
-          logWarn("submit_invalid_email", { requestId, email: maskEmail(senderEmail) });
-          return new Response(JSON.stringify({ ok: false, error: "invalid_email" }), {
-            status: 400,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-
-        const senderDomain = senderEmail.split("@")[1] || "";
-        const domainOk = await hasValidEmailDomain(senderDomain);
-        if (!domainOk) {
-          logWarn("submit_invalid_domain", { requestId, email: maskEmail(senderEmail) });
-          return new Response(JSON.stringify({ ok: false, error: "invalid_email_domain" }), {
-            status: 400,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-
-        const upperBody = body.toUpperCase();
-        const hasRequestId =
-          subject.toUpperCase().includes(REQUEST_ID_PREFIX) ||
-          body.includes(REQUEST_ID_LABEL) ||
-          upperBody.includes(normalizedRequestId);
-
-        if (!hasRequestId) {
-          logWarn("submit_missing_request_id", { requestId, email: maskEmail(senderEmail) });
-          return new Response(JSON.stringify({ ok: false, error: "missing_request_id" }), {
-            status: 400,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-
-        let requestKey = "";
-        if (env.HEERAWALLA_ACKS) {
-          requestKey = `req:${normalizedRequestId}`;
-          const alreadySubmitted = await env.HEERAWALLA_ACKS.get(requestKey);
-          if (alreadySubmitted) {
-            logInfo("submit_duplicate", { requestId, email: maskEmail(senderEmail) });
-            return new Response(JSON.stringify({ ok: true, duplicate: true }), {
-              status: 200,
-              headers: buildCorsHeaders(allowedOrigin, true),
-            });
-          }
-
-          const rateIp = request.headers.get("CF-Connecting-IP") || "unknown";
-          const bucket = new Date();
-          const hourKey = `${bucket.getUTCFullYear()}${String(bucket.getUTCMonth() + 1).padStart(2, "0")}${String(
-            bucket.getUTCDate()
-          ).padStart(2, "0")}${String(bucket.getUTCHours()).padStart(2, "0")}`;
-          const rateKey = `rl:${rateIp}:${hourKey}`;
-          const currentCount = Number(await env.HEERAWALLA_ACKS.get(rateKey)) || 0;
-          if (currentCount >= MAX_SUBMISSIONS_PER_HOUR) {
-            logWarn("submit_rate_limited", { requestId, email: maskEmail(senderEmail) });
-            return new Response(JSON.stringify({ ok: false, error: "rate_limited" }), {
-              status: 429,
-              headers: buildCorsHeaders(allowedOrigin, true),
-            });
-          }
-          await env.HEERAWALLA_ACKS.put(rateKey, String(currentCount + 1), { expirationTtl: 60 * 60 });
-          await env.HEERAWALLA_ACKS.put(requestKey, "1", { expirationTtl: 60 * 60 * 24 });
-        }
-
-        const shouldWriteQuoteSheet = source !== "order";
-        if (shouldWriteQuoteSheet) {
-          try {
-            const now = new Date().toISOString();
-            statusUpdatedAt = now;
-            const ip = request.headers.get("CF-Connecting-IP") || "";
-            const userAgent = request.headers.get("User-Agent") || "";
-            await appendQuoteRow(env, [
-              now,
-              normalizedRequestId,
-              status,
-              statusUpdatedAt,
-              notes,
-              lastError,
-              price,
-              timeline,
-              senderName,
-              senderEmail,
-              phone,
-              source,
-              productName,
-              productUrl,
-              designCode,
-              metal,
-              stone,
-              stoneWeight,
-              size,
-              addressLine1,
-              addressLine2,
-              city,
-              state,
-              postalCode,
-              country,
-              utmSource,
-              utmMedium,
-              utmCampaign,
-              utmTerm,
-              utmContent,
-              referrer,
-              origin,
-              ip,
-              userAgent,
-            ]);
-            logInfo("quote_sheet_written", { requestId: normalizedRequestId });
-            try {
-              await appendContactRow(env, [
-                now,
-                senderEmail,
-                senderName,
-                phone,
-                source,
-                normalizedRequestId,
-                "",
-                "",
-                pageUrl,
-                utmSource,
-                utmMedium,
-                utmCampaign,
-                utmTerm,
-                utmContent,
-                referrer,
-                addressLine1,
-                addressLine2,
-                city,
-                state,
-                postalCode,
-                country,
-                "subscribed",
-              ]);
-            } catch (error) {
-              logWarn("contact_sheet_failed", { requestId: normalizedRequestId, error: String(error) });
-            }
-          } catch (error) {
-            logError("quote_sheet_failed", { requestId: normalizedRequestId, error: String(error) });
-            return new Response(
-              JSON.stringify({ ok: false, error: "quote_store_failed", detail: String(error) }),
-              {
-                status: 500,
-                headers: buildCorsHeaders(allowedOrigin, true),
-              }
-            );
-          }
-        } else {
-          logInfo("quote_sheet_skipped", { requestId: normalizedRequestId, source });
-        }
-
-        const forwardTo = env.FORWARD_TO || "atelier.heerawalla@gmail.com";
-        const ackMode = getAckMode(env);
-        const shouldSendAck = isEnabled(env.SEND_ACK, true) && ackMode === "inline";
-        const shouldSendSubmit = isEnabled(env.SEND_SUBMIT, true);
-        if (!shouldSendSubmit) {
-          logWarn("submit_send_disabled", { requestId, email: maskEmail(senderEmail) });
-          return new Response(JSON.stringify({ ok: false, error: "send_disabled" }), {
-            status: 503,
-            headers: buildCorsHeaders(allowedOrigin, true),
-          });
-        }
-        try {
-          await storeRequestOrigin(env, normalizedRequestId, senderEmail, senderName);
-          await storeRequestSummary(env, normalizedRequestId, {
-            subject,
-            body,
-            email: senderEmail,
-            name: senderName,
-          });
-          logInfo("submit_forward_start", { requestId, email: maskEmail(senderEmail) });
-          await sendEmail(env, {
-            to: [forwardTo],
-            sender: "Heerawalla <atelier@heerawalla.com>",
-            replyTo: getInternalReplyTo(env),
-            subject,
-            textBody: body,
-            htmlBody: buildForwardHtml({
-              subject,
-              body,
-              senderEmail,
-              senderName,
-              requestId,
-            }),
-          });
-          logInfo("submit_forward_sent", { requestId, email: maskEmail(senderEmail) });
-
-          let shouldAck = shouldSendAck;
-          if (shouldAck && env.HEERAWALLA_ACKS) {
-            const ackKey = `ack:req:${normalizedRequestId}`;
-            const alreadyAcked = await env.HEERAWALLA_ACKS.get(ackKey);
-            if (alreadyAcked) {
-              shouldAck = false;
-              logInfo("submit_ack_skipped", { requestId, email: maskEmail(senderEmail) });
-            } else {
-              await env.HEERAWALLA_ACKS.put(ackKey, "1", { expirationTtl: 60 * 60 * 24 * 7 });
-            }
-          }
-
-          if (shouldAck) {
-            const ackPrefix = source === "order" ? ORDER_ACK_SUBJECT : QUOTE_ACK_SUBJECT;
-            const ackText = source === "order" ? ORDER_ACK_TEXT : EMAIL_TEXT;
-            const ackHtml = source === "order" ? ORDER_ACK_HTML : EMAIL_HTML;
-            logInfo("submit_ack_start", { requestId, email: maskEmail(senderEmail) });
-            await sendEmail(env, {
-              to: [senderEmail],
-              sender: "Heerawalla <no-reply@heerawalla.com>",
-              replyTo: "no-reply@heerawalla.com",
-              subject: buildAckSubject(normalizedRequestId, ackPrefix),
-              textBody: ackText,
-              htmlBody: ackHtml,
-              headers: autoReplyHeaders(),
-            });
-            logInfo("submit_ack_sent", { requestId, email: maskEmail(senderEmail) });
-          } else if (ackMode === "cron") {
-            logInfo("submit_ack_deferred", { requestId, email: maskEmail(senderEmail) });
-          }
-
-          await syncGoogleContact(env, {
-            email: senderEmail,
-            name: senderName,
-            source: "bespoke",
-            requestId: normalizedRequestId,
-            subscriptionStatus: "subscribed",
-          });
-        } catch (error) {
-          logError("submit_send_failed", { requestId, email: maskEmail(senderEmail) });
-          if (env.HEERAWALLA_ACKS && requestKey) {
-            await env.HEERAWALLA_ACKS.delete(requestKey);
-          }
-          throw error;
-        }
-
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: buildCorsHeaders(allowedOrigin, true),
-        });
-      } catch (error) {
-        const message = String(error);
-        logError("submit_error", { message });
-        return new Response(JSON.stringify({ ok: false, error: "send_failed", detail: message }), {
-          status: 500,
+      const payload = await safeJson(request);
+      if (!isRecord(payload)) {
+        logWarn("submit_invalid_payload", { origin });
+        return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+          status: 400,
           headers: buildCorsHeaders(allowedOrigin, true),
         });
       }
+
+      return await handleSubmitPayload(env, payload, request, origin, allowedOrigin);
     }
 
     if (url.pathname === SUBMIT_STATUS_PATH) {
@@ -3115,6 +2782,24 @@ async function fetchText(url: string) {
   return await response.text();
 }
 
+async function discardResponse(response: Response) {
+  if (!response.body) return;
+  try {
+    await response.body.cancel();
+  } catch {
+    // Ignore cancellation failures to avoid masking upstream errors.
+  }
+}
+
+function isResendRateLimitError(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes("resend_failed:429") || normalized.includes("rate_limit_exceeded");
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 type SheetConfig = {
   sheetId: string;
   sheetName: string;
@@ -3215,6 +2900,7 @@ async function appendSheetRow(
     const errorText = await response.text();
     throw new Error(`sheet_append_failed:${response.status}:${errorText}`);
   }
+  await discardResponse(response);
 }
 
 async function appendOrderRow(env: Env, values: Array<string | number>) {
@@ -3287,6 +2973,7 @@ async function updateSheetRow(
     const errorText = await response.text();
     throw new Error(`sheet_update_failed:${response.status}:${errorText}`);
   }
+  await discardResponse(response);
 }
 
 async function processAckQueues(env: Env) {
@@ -3323,6 +3010,8 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
   if (!rows.length) return;
 
   let processedCount = 0;
+  const useResend = Boolean(env.RESEND_API_KEY);
+  const resendThrottleMs = 600;
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i] || [];
     const statusRaw = String(row[statusIdx] || "").trim().toUpperCase();
@@ -3339,6 +3028,8 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
     const notesValue = String(row[notesIdx] || "");
     let lastErrorValue = "";
     let nextStatus = statusRaw;
+    let shouldThrottle = false;
+    let hitRateLimit = false;
     const now = new Date().toISOString();
 
     if (!requestId || !senderEmail) {
@@ -3365,12 +3056,15 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
             headers: autoReplyHeaders(),
           });
           nextStatus = "ACKNOWLEDGED";
+          shouldThrottle = useResend;
           if (env.HEERAWALLA_ACKS) {
             await env.HEERAWALLA_ACKS.put(ackKey, "1", { expirationTtl: 60 * 60 * 24 * 7 });
           }
           logInfo("ack_queue_sent", { kind, requestId: normalizedRequestId, email: maskEmail(senderEmail) });
         } catch (error) {
           lastErrorValue = String(error).slice(0, 200);
+          hitRateLimit = useResend && isResendRateLimitError(lastErrorValue);
+          shouldThrottle = useResend;
           logWarn("ack_queue_failed", { kind, requestId: normalizedRequestId, error: lastErrorValue });
         }
       }
@@ -3391,6 +3085,348 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
       logError("ack_queue_update_failed", { kind, requestId, error: String(error) });
     }
     processedCount += 1;
+    if (shouldThrottle && resendThrottleMs > 0) {
+      await sleep(resendThrottleMs);
+    }
+    if (hitRateLimit) {
+      logWarn("ack_queue_rate_limited", { kind });
+      break;
+    }
+  }
+}
+
+async function handleSubmitPayload(
+  env: Env,
+  payload: Record<string, unknown>,
+  request: Request,
+  origin: string,
+  allowedOrigin: string,
+  options?: { skipTurnstile?: boolean }
+) {
+  try {
+    const subject = getString(payload.subject);
+    const body = getString(payload.body);
+    const senderEmail = getString(payload.email);
+    const senderName = getString(payload.name);
+    const requestId = getString(payload.requestId);
+    const turnstileToken = getString(payload.turnstileToken);
+    const phone = getString(payload.phone);
+    const source = getString(payload.source) || "quote";
+    const productName = getString(payload.productName || payload.inspirationTitle);
+    const productUrl = getString(payload.productUrl || payload.inspirationUrl);
+    const designCode = getString(payload.designCode);
+    const metal = getString(payload.metal);
+    const stone = getString(payload.stone);
+    const stoneWeight = getString(payload.stoneWeight);
+    const size = getString(payload.size);
+    const addressLine1 = getString(payload.addressLine1 || payload.address_line1);
+    const addressLine2 = getString(payload.addressLine2 || payload.address_line2);
+    const city = getString(payload.city);
+    const state = getString(payload.state);
+    const postalCode = getString(payload.postalCode || payload.postal_code);
+    const country = getString(payload.country);
+    const normalizedRequestId = normalizeRequestId(requestId);
+    const status = "NEW";
+    let statusUpdatedAt = "";
+    const notes = "";
+    const lastError = "";
+    const price = getString(payload.price);
+    const timeline = normalizeTimeline(getString(payload.timeline));
+    const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
+      resolveAttribution(payload, request);
+    const pageUrl = getString(payload.pageUrl) || productUrl || referrer;
+
+    if (!subject || !body || !senderEmail || !normalizedRequestId) {
+      logWarn("submit_missing_fields", {
+        requestId,
+        hasSubject: Boolean(subject),
+        hasBody: Boolean(body),
+        hasEmail: Boolean(senderEmail),
+      });
+      return new Response(JSON.stringify({ ok: false, error: "missing_fields" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+
+    if (!phone || !addressLine1 || !city || !state || !postalCode || !country) {
+      logWarn("submit_missing_address", { requestId });
+      return new Response(JSON.stringify({ ok: false, error: "missing_address" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (!isValidPhone(phone)) {
+      logWarn("submit_invalid_phone", { requestId, email: maskEmail(senderEmail) });
+      return new Response(JSON.stringify({ ok: false, error: "invalid_phone" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+
+    if (!options?.skipTurnstile) {
+      if (!env.TURNSTILE_SECRET) {
+        logError("submit_turnstile_missing_secret", { requestId });
+        return new Response(JSON.stringify({ ok: false, error: "turnstile_not_configured" }), {
+          status: 500,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+
+      if (!turnstileToken) {
+        logWarn("submit_turnstile_missing", { requestId, email: maskEmail(senderEmail) });
+        return new Response(JSON.stringify({ ok: false, error: "turnstile_required" }), {
+          status: 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+
+      const clientIp = request.headers.get("CF-Connecting-IP") || undefined;
+      const turnstileOk = await verifyTurnstile(env.TURNSTILE_SECRET, turnstileToken, clientIp);
+      if (!turnstileOk) {
+        logWarn("submit_turnstile_failed", { requestId, email: maskEmail(senderEmail) });
+        return new Response(JSON.stringify({ ok: false, error: "turnstile_failed" }), {
+          status: 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+    }
+
+    if (!isValidEmail(senderEmail)) {
+      logWarn("submit_invalid_email", { requestId, email: maskEmail(senderEmail) });
+      return new Response(JSON.stringify({ ok: false, error: "invalid_email" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+
+    const senderDomain = senderEmail.split("@")[1] || "";
+    const domainOk = await hasValidEmailDomain(senderDomain);
+    if (!domainOk) {
+      logWarn("submit_invalid_domain", { requestId, email: maskEmail(senderEmail) });
+      return new Response(JSON.stringify({ ok: false, error: "invalid_email_domain" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+
+    const upperBody = body.toUpperCase();
+    const hasRequestId =
+      subject.toUpperCase().includes(REQUEST_ID_PREFIX) ||
+      body.includes(REQUEST_ID_LABEL) ||
+      upperBody.includes(normalizedRequestId);
+
+    if (!hasRequestId) {
+      logWarn("submit_missing_request_id", { requestId, email: maskEmail(senderEmail) });
+      return new Response(JSON.stringify({ ok: false, error: "missing_request_id" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+
+    let requestKey = "";
+    if (env.HEERAWALLA_ACKS) {
+      requestKey = `req:${normalizedRequestId}`;
+      const alreadySubmitted = await env.HEERAWALLA_ACKS.get(requestKey);
+      if (alreadySubmitted) {
+        logInfo("submit_duplicate", { requestId, email: maskEmail(senderEmail) });
+        return new Response(JSON.stringify({ ok: true, duplicate: true }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+
+      const rateIp = request.headers.get("CF-Connecting-IP") || "unknown";
+      const bucket = new Date();
+      const hourKey = `${bucket.getUTCFullYear()}${String(bucket.getUTCMonth() + 1).padStart(2, "0")}${String(
+        bucket.getUTCDate()
+      ).padStart(2, "0")}${String(bucket.getUTCHours()).padStart(2, "0")}`;
+      const rateKey = `rl:${rateIp}:${hourKey}`;
+      const currentCount = Number(await env.HEERAWALLA_ACKS.get(rateKey)) || 0;
+      if (currentCount >= MAX_SUBMISSIONS_PER_HOUR) {
+        logWarn("submit_rate_limited", { requestId, email: maskEmail(senderEmail) });
+        return new Response(JSON.stringify({ ok: false, error: "rate_limited" }), {
+          status: 429,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      await env.HEERAWALLA_ACKS.put(rateKey, String(currentCount + 1), { expirationTtl: 60 * 60 });
+      await env.HEERAWALLA_ACKS.put(requestKey, "1", { expirationTtl: 60 * 60 * 24 });
+    }
+
+    const shouldWriteQuoteSheet = source !== "order";
+    if (shouldWriteQuoteSheet) {
+      try {
+        const now = new Date().toISOString();
+        statusUpdatedAt = now;
+        const ip = request.headers.get("CF-Connecting-IP") || "";
+        const userAgent = request.headers.get("User-Agent") || "";
+        await appendQuoteRow(env, [
+          now,
+          normalizedRequestId,
+          status,
+          statusUpdatedAt,
+          notes,
+          lastError,
+          price,
+          timeline,
+          senderName,
+          senderEmail,
+          phone,
+          source,
+          productName,
+          productUrl,
+          designCode,
+          metal,
+          stone,
+          stoneWeight,
+          size,
+          addressLine1,
+          addressLine2,
+          city,
+          state,
+          postalCode,
+          country,
+          utmSource,
+          utmMedium,
+          utmCampaign,
+          utmTerm,
+          utmContent,
+          referrer,
+          origin,
+          ip,
+          userAgent,
+        ]);
+        logInfo("quote_sheet_written", { requestId: normalizedRequestId });
+        try {
+          await appendContactRow(env, [
+            now,
+            senderEmail,
+            senderName,
+            phone,
+            source,
+            normalizedRequestId,
+            "",
+            "",
+            pageUrl,
+            utmSource,
+            utmMedium,
+            utmCampaign,
+            utmTerm,
+            utmContent,
+            referrer,
+            addressLine1,
+            addressLine2,
+            city,
+            state,
+            postalCode,
+            country,
+            "subscribed",
+          ]);
+        } catch (error) {
+          logWarn("contact_sheet_failed", { requestId: normalizedRequestId, error: String(error) });
+        }
+      } catch (error) {
+        logError("quote_sheet_failed", { requestId: normalizedRequestId, error: String(error) });
+        return new Response(
+          JSON.stringify({ ok: false, error: "quote_store_failed", detail: String(error) }),
+          {
+            status: 500,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          }
+        );
+      }
+    } else {
+      logInfo("quote_sheet_skipped", { requestId: normalizedRequestId, source });
+    }
+
+    const forwardTo = env.FORWARD_TO || "atelier.heerawalla@gmail.com";
+    const ackMode = getAckMode(env);
+    const shouldSendAck = isEnabled(env.SEND_ACK, true) && ackMode === "inline";
+    const shouldSendSubmit = isEnabled(env.SEND_SUBMIT, true);
+    if (!shouldSendSubmit) {
+      logWarn("submit_send_disabled", { requestId, email: maskEmail(senderEmail) });
+      return new Response(JSON.stringify({ ok: false, error: "send_disabled" }), {
+        status: 503,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    try {
+      await storeRequestOrigin(env, normalizedRequestId, senderEmail, senderName);
+      await storeRequestSummary(env, normalizedRequestId, {
+        subject,
+        body,
+        email: senderEmail,
+        name: senderName,
+      });
+      logInfo("submit_forward_start", { requestId, email: maskEmail(senderEmail) });
+      await sendEmail(env, {
+        to: [forwardTo],
+        sender: "Heerawalla <atelier@heerawalla.com>",
+        replyTo: getInternalReplyTo(env),
+        subject,
+        textBody: body,
+        htmlBody: buildForwardHtml({
+          subject,
+          body,
+          senderEmail,
+          senderName,
+          requestId,
+        }),
+      });
+      logInfo("submit_forward_sent", { requestId, email: maskEmail(senderEmail) });
+
+      let shouldAck = shouldSendAck;
+      if (shouldAck && env.HEERAWALLA_ACKS) {
+        const ackKey = `ack:req:${normalizedRequestId}`;
+        const alreadyAcked = await env.HEERAWALLA_ACKS.get(ackKey);
+        if (alreadyAcked) {
+          shouldAck = false;
+          logInfo("submit_ack_skipped", { requestId, email: maskEmail(senderEmail) });
+        } else {
+          await env.HEERAWALLA_ACKS.put(ackKey, "1", { expirationTtl: 60 * 60 * 24 * 7 });
+        }
+      }
+
+      if (shouldAck) {
+        const ackPrefix = source === "order" ? ORDER_ACK_SUBJECT : QUOTE_ACK_SUBJECT;
+        const ackText = source === "order" ? ORDER_ACK_TEXT : EMAIL_TEXT;
+        const ackHtml = source === "order" ? ORDER_ACK_HTML : EMAIL_HTML;
+        logInfo("submit_ack_start", { requestId, email: maskEmail(senderEmail) });
+        await sendEmail(env, {
+          to: [senderEmail],
+          sender: "Heerawalla <no-reply@heerawalla.com>",
+          replyTo: "no-reply@heerawalla.com",
+          subject: buildAckSubject(normalizedRequestId, ackPrefix),
+          textBody: ackText,
+          htmlBody: ackHtml,
+          headers: autoReplyHeaders(),
+        });
+        logInfo("submit_ack_sent", { requestId, email: maskEmail(senderEmail) });
+      } else if (ackMode === "cron") {
+        logInfo("submit_ack_deferred", { requestId, email: maskEmail(senderEmail) });
+      }
+
+      // People sync is optional and not required for order/quote flows.
+    } catch (error) {
+      logError("submit_send_failed", { requestId, email: maskEmail(senderEmail) });
+      if (env.HEERAWALLA_ACKS && requestKey) {
+        await env.HEERAWALLA_ACKS.delete(requestKey);
+      }
+      throw error;
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  } catch (error) {
+    const message = String(error);
+    logError("submit_error", { message });
+    return new Response(JSON.stringify({ ok: false, error: "send_failed", detail: message }), {
+      status: 500,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
   }
 }
 
@@ -4068,6 +4104,7 @@ async function mergeContacts(token: string, primaryResourceName: string, otherRe
     const errorText = await response.text();
     throw new Error(`people_merge_failed:${response.status}:${errorText}`);
   }
+  await discardResponse(response);
 }
 
 function buildNameEntries(name: string) {
@@ -4313,6 +4350,7 @@ async function modifyContactGroupMembers(
     const errorText = await response.text();
     throw new Error(`people_group_modify_failed:${response.status}:${errorText}`);
   }
+  await discardResponse(response);
 }
 
 function requireSecret(value: string | undefined, name: string) {
@@ -4473,6 +4511,8 @@ async function cancelExistingBookings(
     );
     if (!response.ok) {
       failures.push(booking.id);
+    } else {
+      await discardResponse(response);
     }
   }
   if (failures.length) {
@@ -5103,6 +5143,7 @@ async function sendResend(
     const errorText = await response.text();
     throw new Error(`resend_failed:${response.status}:${errorText}`);
   }
+  await discardResponse(response);
 }
 
 function buildRawEmail({
