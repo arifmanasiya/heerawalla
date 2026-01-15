@@ -64,6 +64,7 @@ npm run dev
 npm run build
 ```
 Build will fail if required CSV columns are missing or data is invalid.
+If you are using remote CSVs, ensure `CSV_SOURCE=remote` and `SITE_CONFIG_CSV_URL` are available in `.env` or `.env.production`.
 
 ## CSV source mode (local vs Google Sheets)
 By default, the build reads local CSVs in `/data`. To switch to Google Sheets exports, set:
@@ -80,6 +81,10 @@ If you want product/inspiration grids to refresh on page load without rebuilding
 - `PUBLIC_CATALOG_MODE=hybrid` (set `ssr` to disable runtime refresh)
 
 When set, list pages and detail pages refresh catalog-driven pricing on page load. Set `PUBLIC_CATALOG_MODE=ssr` to disable runtime refresh everywhere.
+
+## TODO (later)
+- Add log sampling and an error-only log view in Cloudflare Workers Logs.
+- Add Cloudflare cache rules for product vs editorial images (longer TTL for product imagery).
 
 ## Deploy (GitHub Pages)
 - Workflow: `.github/workflows/deploy.yml`
@@ -122,6 +127,103 @@ Set these secrets on the worker (Wrangler or Cloudflare UI):
 - `CONTACTS_SHEET_NAME` (default `Contacts`) or `CONTACTS_SHEET_RANGE`
 
 After updating secrets, redeploy the worker.
+
+## Admin portal (business.heerawalla.com)
+The admin UI is designed to talk to private Worker endpoints under `/admin/*`. Access is controlled by Cloudflare Access allowlists.
+
+### Cloudflare Access (allowlist)
+1) Create an Access Application for `business.heerawalla.com`.
+2) Add an allowlist policy for admin emails.
+3) Optional: apply the same Access policy to your Worker route (or call the API only from the admin UI).
+
+### Worker env vars (admin roles)
+Set comma-separated allowlists:
+- `ADMIN_ALLOWLIST` (full access)
+- `OPS_ALLOWLIST` (edit orders/quotes; view contacts)
+- `VIEWER_ALLOWLIST` (read-only)
+
+### Admin API endpoints (v1)
+Read-only lists:
+- `GET /admin/me`
+- `GET /admin/orders`
+- `GET /admin/quotes`
+- `GET /admin/contacts` (read-only)
+
+Common query params:
+- `status`, `email`, `request_id`, `q`
+- `sort` (default `created_at`), `dir` (`asc|desc`)
+- `limit` (max 500), `offset`
+
+Actions (orders/quotes):
+- `POST /admin/orders/action`
+- `POST /admin/quotes/action`
+
+Body:
+```json
+{
+  "requestId": "HW-REQ:ABC123",
+  "action": "send_invoice",
+  "status": "INVOICED",
+  "notes": "Invoice sent via Stripe",
+  "fields": { "price": "2999", "timeline": "Standard" }
+}
+```
+
+Order actions: `send_invoice`, `mark_paid`, `mark_shipped`, `mark_delivered`, `cancel`, `acknowledge`  
+Quote actions: `submit_quote`, `convert_to_order`, `drop`, `acknowledge`
+
+Email endpoint:
+- `POST /admin/email`
+
+Body:
+```json
+{
+  "to": "customer@example.com",
+  "subject": "Your Heerawalla quote",
+  "textBody": "Plain text version",
+  "htmlBody": "<p>HTML version</p>"
+}
+```
+
+Notes:
+- Contacts can be updated by admin roles (status + notes).
+- Ensure the Sheets header contains `status`, `status_updated_at`, `notes`, and `last_error` for orders, quotes, and contacts.
+
+## Order confirmation flow (customer + admin)
+The order confirmation flow issues a one-time token, sends a confirmation email, and routes the customer to a secure confirmation page.
+
+### Worker env vars (confirmation)
+Set these in `workers/herawalla-email-atelier/wrangler.toml` or Cloudflare:
+- `ORDER_CONFIRMATION_PAGE_URL` (e.g., `https://www.heerawalla.com/order_confirmation`)
+- `ORDER_CONFIRMATION_PAYMENT_URL` (template supports `{requestId}`, `{token}`, `{email}`)
+
+### Site config (public confirmation page)
+Set this key in your site config CSV:
+- `order_confirmation_api_base=https://admin-api.heerawalla.com`
+
+### API endpoints
+Admin (requires Access):
+- `POST /admin/orders/confirm` (returns `confirmationUrl` + `token`)
+
+Customer (public, CORS-limited):
+- `GET /orders/confirmation?token=...`
+- `POST /orders/confirmation/confirm`
+- `POST /orders/confirmation/cancel`
+
+### Quick test
+```bash
+curl -X POST https://admin-api.heerawalla.com/admin/orders/confirm \
+  -H "Content-Type: application/json" \
+  -H "Origin: https://www.heerawalla.com" \
+  -d '{
+    "requestId":"HW-REQ:ABC123",
+    "changes":[{"key":"price","label":"Price","from":"$5,000","to":"$5,400"}],
+    "email":"client@example.com",
+    "name":"Client Name",
+    "productName":"Emerald Band"
+  }'
+```
+Open the returned `confirmationUrl` and confirm. If your `ORDER_CONFIRMATION_PAYMENT_URL` is set, the confirmation page will redirect automatically after confirmation.
 
 ## Project structure
 ```

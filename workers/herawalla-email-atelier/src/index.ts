@@ -2,12 +2,16 @@ import { EmailMessage } from "cloudflare:email";
 import type { Env } from "./config";
 import {
   ACK_SUBJECT_PREFIX,
+  QUOTE_ACK_SUBJECT,
   CONTACT_ACK_SUBJECT,
   ORDER_SHEET_HEADER,
   QUOTE_SHEET_HEADER,
   CONTACT_SHEET_HEADER,
   EMAIL_TEXT,
   EMAIL_HTML,
+  ORDER_ACK_SUBJECT,
+  ORDER_ACK_TEXT,
+  ORDER_ACK_HTML,
   CONTACT_ACK_TEXT,
   CONTACT_ACK_HTML,
   SUBSCRIBE_ACK_SUBJECT,
@@ -29,6 +33,11 @@ import {
   ORDER_PATH,
   SUBSCRIBE_PATH,
   UNSUBSCRIBE_PATH,
+  ORDER_CONFIRMATION_PATH,
+  ORDER_CONFIRMATION_CONFIRM_PATH,
+  ORDER_CONFIRMATION_CANCEL_PATH,
+  ORDER_CONFIRMATION_PAGE_URL,
+  ORDER_CONFIRMATION_TTL,
   REQUEST_ORIGIN_TTL,
   REQUEST_SUMMARY_TTL,
   REQUEST_SUMMARY_MAX_LINES,
@@ -45,6 +54,7 @@ import {
   CATALOG_PATH,
   CATALOG_CACHE_SECONDS,
   HOLIDAY_CALENDAR_ID,
+  ACK_QUEUE_BATCH_LIMIT,
   ALLOWED_ORIGINS,
   REJECT_SUBJECT,
   REJECT_TEXT,
@@ -59,6 +69,20 @@ export default {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "";
     const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : "";
+    const adminResponse = await handleAdminRequest(request, env, url, allowedOrigin, origin);
+    if (adminResponse) {
+      return adminResponse;
+    }
+
+    const confirmationResponse = await handleOrderConfirmationRequest(
+      request,
+      env,
+      url,
+      allowedOrigin
+    );
+    if (confirmationResponse) {
+      return confirmationResponse;
+    }
 
     if (url.pathname === CATALOG_PATH) {
       if (request.method === "OPTIONS") {
@@ -81,6 +105,22 @@ export default {
       if (cached) {
         return cached;
       }
+      const kvCacheKey = buildCatalogCacheKey(url);
+      if (env.HEERAWALLA_ACKS) {
+        const kvPayload = await env.HEERAWALLA_ACKS.get(kvCacheKey);
+        if (kvPayload) {
+          const response = new Response(kvPayload, {
+            status: 200,
+            headers: buildCatalogHeaders(),
+          });
+          response.headers.set(
+            "Cache-Control",
+            `public, max-age=${CATALOG_CACHE_SECONDS}, s-maxage=${CATALOG_CACHE_SECONDS}`
+          );
+          await cache.put(cacheKey, response.clone());
+          return response;
+        }
+      }
 
       try {
         const payload = await loadCatalogPayload(env, url.searchParams);
@@ -92,6 +132,13 @@ export default {
           "Cache-Control",
           `public, max-age=${CATALOG_CACHE_SECONDS}, s-maxage=${CATALOG_CACHE_SECONDS}`
         );
+        if (env.HEERAWALLA_ACKS) {
+          await env.HEERAWALLA_ACKS.put(
+            kvCacheKey,
+            JSON.stringify(payload),
+            { expirationTtl: CATALOG_CACHE_SECONDS }
+          );
+        }
         await cache.put(cacheKey, response.clone());
         return response;
       } catch (error) {
@@ -1361,14 +1408,17 @@ export default {
           }
 
           if (shouldAck) {
+            const ackPrefix = source === "order" ? ORDER_ACK_SUBJECT : QUOTE_ACK_SUBJECT;
+            const ackText = source === "order" ? ORDER_ACK_TEXT : EMAIL_TEXT;
+            const ackHtml = source === "order" ? ORDER_ACK_HTML : EMAIL_HTML;
             logInfo("submit_ack_start", { requestId, email: maskEmail(senderEmail) });
             await sendEmail(env, {
               to: [senderEmail],
               sender: "Heerawalla <no-reply@heerawalla.com>",
               replyTo: "no-reply@heerawalla.com",
-              subject: buildAckSubject(normalizedRequestId),
-              textBody: EMAIL_TEXT,
-              htmlBody: EMAIL_HTML,
+              subject: buildAckSubject(normalizedRequestId, ackPrefix),
+              textBody: ackText,
+              htmlBody: ackHtml,
               headers: autoReplyHeaders(),
             });
             logInfo("submit_ack_sent", { requestId, email: maskEmail(senderEmail) });
@@ -2006,6 +2056,8 @@ function buildCorsHeaders(origin: string, json = false) {
   };
   if (origin) {
     headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+    headers["Vary"] = "Origin";
   }
   if (json) {
     headers["Content-Type"] = "application/json";
@@ -2020,6 +2072,729 @@ function buildCatalogHeaders() {
     "Access-Control-Allow-Origin": "*",
     "Content-Type": "application/json",
   };
+}
+
+function buildCatalogCacheKey(url: URL) {
+  const params = url.searchParams.toString();
+  return params ? `catalog:${url.pathname}?${params}` : `catalog:${url.pathname}`;
+}
+
+async function handleAdminRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  allowedOrigin: string,
+  origin: string
+) {
+  if (!url.pathname.startsWith("/admin")) return null;
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+
+  const adminEmail = getAdminEmail(request, origin);
+  const role = getAdminRole(env, adminEmail);
+  if (!role) {
+    return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+      status: 403,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+
+  const path = url.pathname.replace(/^\/admin/, "") || "/";
+  if (request.method === "GET") {
+    if (path === "/" || path === "/me") {
+      return new Response(JSON.stringify({ ok: true, role, email: adminEmail }), {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/orders") {
+      const payload = await buildAdminList(env, "order", url.searchParams);
+      return new Response(JSON.stringify({ ok: true, ...payload }), {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/quotes") {
+      const payload = await buildAdminList(env, "quote", url.searchParams);
+      return new Response(JSON.stringify({ ok: true, ...payload }), {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/contacts") {
+      const payload = await buildAdminList(env, "contact", url.searchParams);
+      return new Response(JSON.stringify({ ok: true, ...payload }), {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+  }
+
+  if (request.method === "POST") {
+    const payload = await safeJson(request);
+    if (!isRecord(payload)) {
+      return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/orders/action") {
+      if (!canEditOrders(role)) {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const result = await handleOrderAdminAction(env, payload);
+      return new Response(JSON.stringify(result), {
+        status: result.ok ? 200 : 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/orders/confirm") {
+      if (!canEditOrders(role)) {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const result = await handleOrderConfirmationAdmin(env, payload);
+      return new Response(JSON.stringify(result), {
+        status: result.ok ? 200 : 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/quotes/action") {
+      if (!canEditQuotes(role)) {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const result = await handleQuoteAdminAction(env, payload);
+      return new Response(JSON.stringify(result), {
+        status: result.ok ? 200 : 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/contacts/action") {
+      if (!canEditContacts(role)) {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const result = await handleContactAdminAction(env, payload);
+      return new Response(JSON.stringify(result), {
+        status: result.ok ? 200 : 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/email") {
+      if (!canEditOrders(role)) {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const result = await handleAdminEmail(env, payload);
+      return new Response(JSON.stringify(result), {
+        status: result.ok ? 200 : 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+  }
+
+  return new Response(JSON.stringify({ ok: false, error: "admin_not_found" }), {
+    status: 404,
+    headers: buildCorsHeaders(allowedOrigin, true),
+  });
+}
+
+async function handleOrderConfirmationRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  allowedOrigin: string
+) {
+  if (!url.pathname.startsWith(ORDER_CONFIRMATION_PATH)) return null;
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  if (!allowedOrigin) {
+    return new Response("Forbidden", { status: 403 });
+  }
+  if (url.pathname === ORDER_CONFIRMATION_PATH && request.method === "GET") {
+    const token =
+      url.searchParams.get("token") ||
+      url.searchParams.get("t") ||
+      url.searchParams.get("confirmation") ||
+      "";
+    const normalizedToken = token.trim();
+    if (!normalizedToken) {
+      return new Response(JSON.stringify({ ok: false, error: "missing_token" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const record = await getOrderConfirmationRecord(env, normalizedToken);
+    if (!record) {
+      return new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+        status: 404,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        status: record.status,
+        requestId: record.requestId,
+        name: record.name || "",
+        productName: record.productName || "",
+        changes: record.changes || [],
+      }),
+      {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      }
+    );
+  }
+
+  if (url.pathname === ORDER_CONFIRMATION_CONFIRM_PATH && request.method === "POST") {
+    const payload = await safeJson(request);
+    if (!isRecord(payload)) {
+      return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const token = getString(payload.token || payload.confirmationToken);
+    if (!token) {
+      return new Response(JSON.stringify({ ok: false, error: "missing_token" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const record = await getOrderConfirmationRecord(env, token);
+    if (!record) {
+      return new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+        status: 404,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (record.status !== "pending") {
+      return new Response(JSON.stringify({ ok: false, error: "already_used", status: record.status }), {
+        status: 409,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const confirmedAt = new Date().toISOString();
+    const updatedRecord = { ...record, status: "confirmed", confirmedAt };
+    await storeOrderConfirmationRecord(env, updatedRecord);
+    await appendOrderNote(env, record.requestId, `Customer confirmed update on ${confirmedAt}.`);
+    const paymentUrl = resolveOrderConfirmationPaymentUrl(env, updatedRecord);
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        status: updatedRecord.status,
+        paymentUrl: paymentUrl || undefined,
+      }),
+      {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      }
+    );
+  }
+
+  if (url.pathname === ORDER_CONFIRMATION_CANCEL_PATH && request.method === "POST") {
+    const payload = await safeJson(request);
+    if (!isRecord(payload)) {
+      return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const token = getString(payload.token || payload.confirmationToken);
+    if (!token) {
+      return new Response(JSON.stringify({ ok: false, error: "missing_token" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const record = await getOrderConfirmationRecord(env, token);
+    if (!record) {
+      return new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+        status: 404,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (record.status !== "pending") {
+      return new Response(JSON.stringify({ ok: false, error: "already_used", status: record.status }), {
+        status: 409,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const canceledAt = new Date().toISOString();
+    const updatedRecord = { ...record, status: "canceled", canceledAt };
+    await storeOrderConfirmationRecord(env, updatedRecord);
+    await appendOrderNote(env, record.requestId, `Customer canceled update on ${canceledAt}.`);
+    return new Response(JSON.stringify({ ok: true, status: updatedRecord.status }), {
+      status: 200,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+
+  return new Response("Method Not Allowed", {
+    status: 405,
+    headers: buildCorsHeaders(allowedOrigin, true),
+  });
+}
+
+function getAdminEmail(request: Request, origin: string) {
+  const accessEmail =
+    request.headers.get("Cf-Access-Authenticated-User-Email") ||
+    request.headers.get("cf-access-authenticated-user-email") ||
+    "";
+  if (accessEmail) return normalizeEmailAddress(accessEmail);
+  const localOverride = request.headers.get("X-Admin-Email") || "";
+  if (localOverride && isLocalOrigin(origin)) {
+    return normalizeEmailAddress(localOverride);
+  }
+  return "";
+}
+
+function isLocalOrigin(origin: string) {
+  return origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1");
+}
+
+function parseAllowlist(value?: string) {
+  const list = new Set<string>();
+  if (!value) return list;
+  value
+    .split(",")
+    .map((entry) => normalizeEmailAddress(entry))
+    .filter(Boolean)
+    .forEach((entry) => list.add(entry));
+  return list;
+}
+
+function getAdminRole(env: Env, email: string) {
+  if (!email) return "";
+  if (parseAllowlist(env.ADMIN_ALLOWLIST).has(email)) return "admin";
+  if (parseAllowlist(env.OPS_ALLOWLIST).has(email)) return "ops";
+  if (parseAllowlist(env.VIEWER_ALLOWLIST).has(email)) return "viewer";
+  return "";
+}
+
+function canEditOrders(role: string) {
+  return role === "admin" || role === "ops";
+}
+
+function canEditQuotes(role: string) {
+  return role === "admin" || role === "ops";
+}
+
+function canEditContacts(role: string) {
+  return role === "admin";
+}
+
+async function buildAdminList(
+  env: Env,
+  kind: "order" | "quote" | "contact",
+  params: URLSearchParams
+) {
+  const config = getSheetConfig(env, kind);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const headerFallback =
+    kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const items = rows.map((row, index) => {
+    const entry: Record<string, string> = { row_number: String(index + 2) };
+    header.forEach((key, idx) => {
+      if (!key) return;
+      entry[key] = String(row[idx] ?? "");
+    });
+    return entry;
+  });
+
+  const filtered = applyAdminFilters(items, params);
+  const sorted = applyAdminSort(filtered, params);
+  const offset = Math.max(Number(params.get("offset") || 0), 0);
+  const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
+  const paged = sorted.slice(offset, offset + limit);
+
+  return { items: paged, total: sorted.length };
+}
+
+function applyAdminFilters(items: Array<Record<string, string>>, params: URLSearchParams) {
+  const status = (params.get("status") || "").trim().toUpperCase();
+  const q = (params.get("q") || "").trim().toLowerCase();
+  const email = (params.get("email") || "").trim().toLowerCase();
+  const requestId = (params.get("request_id") || "").trim().toLowerCase();
+
+  return items.filter((item) => {
+    if (status) {
+      const value = String(item.status || "").trim().toUpperCase();
+      if (value !== status) return false;
+    }
+    if (email) {
+      if (!String(item.email || "").toLowerCase().includes(email)) return false;
+    }
+    if (requestId) {
+      if (!String(item.request_id || "").toLowerCase().includes(requestId)) return false;
+    }
+    if (q) {
+      const haystack = [
+        item.request_id,
+        item.name,
+        item.email,
+        item.product_name,
+        item.design_code,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function applyAdminSort(items: Array<Record<string, string>>, params: URLSearchParams) {
+  const sortKey = (params.get("sort") || "created_at").trim();
+  const dir = (params.get("dir") || "desc").toLowerCase() === "asc" ? 1 : -1;
+  return items.slice().sort((a, b) => {
+    const left = a[sortKey] || "";
+    const right = b[sortKey] || "";
+    return left.localeCompare(right, undefined, { numeric: true }) * dir;
+  });
+}
+
+async function handleOrderAdminAction(env: Env, payload: Record<string, unknown>) {
+  const requestId = getString(payload.requestId || payload.request_id);
+  if (!requestId) return { ok: false, error: "missing_request_id" };
+  const action = getString(payload.action).toLowerCase();
+  const status = getString(payload.status).toUpperCase();
+  const notes = getString(payload.notes);
+  const updates = coerceUpdates(payload.fields, ORDER_UPDATE_FIELDS);
+  const nextStatus = resolveOrderStatus(action, status);
+  return await updateAdminRow(env, "order", requestId, nextStatus, notes, updates);
+}
+
+async function handleQuoteAdminAction(env: Env, payload: Record<string, unknown>) {
+  const requestId = getString(payload.requestId || payload.request_id);
+  if (!requestId) return { ok: false, error: "missing_request_id" };
+  const action = getString(payload.action).toLowerCase();
+  const status = getString(payload.status).toUpperCase();
+  const notes = getString(payload.notes);
+  const updates = coerceUpdates(payload.fields, QUOTE_UPDATE_FIELDS);
+  const nextStatus = resolveQuoteStatus(action, status);
+  return await updateAdminRow(env, "quote", requestId, nextStatus, notes, updates);
+}
+
+async function handleContactAdminAction(env: Env, payload: Record<string, unknown>) {
+  const requestId = getString(payload.requestId || payload.request_id);
+  if (!requestId) return { ok: false, error: "missing_request_id" };
+  const action = getString(payload.action).toLowerCase();
+  const status = getString(payload.status).toUpperCase();
+  const notes = getString(payload.notes);
+  const updates = coerceUpdates(payload.fields, CONTACT_UPDATE_FIELDS);
+  const nextStatus = resolveContactStatus(action, status);
+  return await updateAdminRow(env, "contact", requestId, nextStatus, notes, updates);
+}
+
+async function handleOrderConfirmationAdmin(env: Env, payload: Record<string, unknown>) {
+  if (!env.HEERAWALLA_ACKS) {
+    return { ok: false, error: "confirmation_store_unavailable" };
+  }
+  const requestId = getString(payload.requestId || payload.request_id);
+  if (!requestId) return { ok: false, error: "missing_request_id" };
+  const changes = normalizeOrderConfirmationChanges(payload.changes);
+  if (!changes.length) return { ok: false, error: "missing_changes" };
+  const email = getString(payload.email);
+  const name = getString(payload.name);
+  const productName = getString(payload.productName || payload.product_name);
+  const paymentUrl = getString(payload.paymentUrl || payload.payment_url);
+  const token = generateOrderConfirmationToken();
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + ORDER_CONFIRMATION_TTL * 1000).toISOString();
+  const record: OrderConfirmationRecord = {
+    token,
+    requestId: normalizeRequestId(requestId),
+    email,
+    name,
+    productName,
+    changes,
+    status: "pending",
+    createdAt,
+    expiresAt,
+    paymentUrl: paymentUrl || undefined,
+  };
+  await storeOrderConfirmationRecord(env, record);
+  const confirmationUrl = buildOrderConfirmationPageUrl(env, token);
+  return {
+    ok: true,
+    token,
+    confirmationUrl,
+    expiresAt,
+  };
+}
+
+async function handleAdminEmail(env: Env, payload: Record<string, unknown>) {
+  const to = getString(payload.to);
+  const subject = getString(payload.subject);
+  const textBody = getString(payload.textBody || payload.text);
+  const htmlBody = getString(payload.htmlBody || payload.html);
+  if (!to || !subject || (!textBody && !htmlBody)) {
+    return { ok: false, error: "missing_fields" };
+  }
+  if (!isValidEmail(to)) {
+    return { ok: false, error: "invalid_email" };
+  }
+  await sendEmail(env, {
+    to: [to],
+    sender: "Heerawalla <atelier@heerawalla.com>",
+    replyTo: getInternalReplyTo(env),
+    subject,
+    textBody: textBody || undefined,
+    htmlBody: htmlBody || undefined,
+  });
+  return { ok: true };
+}
+
+const ORDER_UPDATE_FIELDS = [
+  "name",
+  "email",
+  "phone",
+  "product_name",
+  "product_url",
+  "design_code",
+  "metal",
+  "stone",
+  "stone_weight",
+  "size",
+  "price",
+  "timeline",
+  "address_line1",
+  "address_line2",
+  "city",
+  "state",
+  "postal_code",
+  "country",
+] as const;
+
+const QUOTE_UPDATE_FIELDS = [
+  "name",
+  "email",
+  "phone",
+  "product_name",
+  "product_url",
+  "design_code",
+  "metal",
+  "stone",
+  "stone_weight",
+  "size",
+  "price",
+  "timeline",
+  "address_line1",
+  "address_line2",
+  "city",
+  "state",
+  "postal_code",
+  "country",
+] as const;
+
+const CONTACT_UPDATE_FIELDS = [
+  "name",
+  "email",
+  "phone",
+  "source",
+  "contact_preference",
+  "interests",
+  "page_url",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "referrer",
+  "address_line1",
+  "address_line2",
+  "city",
+  "state",
+  "postal_code",
+  "country",
+  "subscription_status",
+] as const;
+
+function coerceUpdates(
+  fields: unknown,
+  allowed: readonly string[]
+) {
+  const updates: Record<string, string> = {};
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) return updates;
+  Object.entries(fields).forEach(([key, value]) => {
+    if (!allowed.includes(key)) return;
+    updates[key] = getString(value);
+  });
+  return updates;
+}
+
+function resolveOrderStatus(action: string, status: string) {
+  if (status) return status;
+  switch (action) {
+    case "send_invoice":
+      return "INVOICED";
+    case "mark_paid":
+      return "INVOICE_PAID";
+    case "mark_shipped":
+      return "SHIPPED";
+    case "mark_delivered":
+      return "DELIVERED";
+    case "cancel":
+      return "CANCELLED";
+    case "acknowledge":
+      return "ACKNOWLEDGED";
+    default:
+      return "";
+  }
+}
+
+function resolveQuoteStatus(action: string, status: string) {
+  if (status) return status;
+  switch (action) {
+    case "submit_quote":
+      return "QUOTED";
+    case "convert_to_order":
+      return "CONVERTED";
+    case "drop":
+      return "DROPPED";
+    case "acknowledge":
+      return "ACKNOWLEDGED";
+    default:
+      return "";
+  }
+}
+
+function resolveContactStatus(action: string, status: string) {
+  if (status) return status;
+  switch (action) {
+    case "mark_pending":
+      return "PENDING";
+    case "mark_resolved":
+      return "RESOLVED";
+    default:
+      return "";
+  }
+}
+
+async function updateAdminRow(
+  env: Env,
+  kind: "order" | "quote" | "contact",
+  requestId: string,
+  status: string,
+  notes: string,
+  updates: Record<string, string>
+) {
+  const config = getSheetConfig(env, kind);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const headerFallback =
+    kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
+  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  const requestIdx = headerIndex.get("request_id") ?? -1;
+  if (requestIdx < 0) return { ok: false, error: "missing_request_id_column" };
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const normalizedTarget = normalizeRequestId(requestId);
+  let rowNumber = -1;
+  for (let i = 0; i < rows.length; i += 1) {
+    const candidate = normalizeRequestId(getString(rows[i]?.[requestIdx]));
+    if (candidate && candidate === normalizedTarget) {
+      rowNumber = i + 2;
+      break;
+    }
+  }
+  if (rowNumber < 0) return { ok: false, error: "request_not_found" };
+
+  const now = new Date().toISOString();
+  const updatesToApply: Record<string, string> = { ...updates };
+  if (status) updatesToApply.status = status;
+  updatesToApply.status_updated_at = now;
+  if (notes) updatesToApply.notes = notes;
+  updatesToApply.last_error = "";
+
+  await updateSheetColumns(env, config, headerIndex, rowNumber, updatesToApply);
+  return { ok: true, status: status || undefined };
+}
+
+async function updateSheetColumns(
+  env: Env,
+  config: SheetConfig,
+  headerIndex: Map<string, number>,
+  rowNumber: number,
+  updates: Record<string, string>
+) {
+  const tasks = Object.entries(updates).map(([key, value]) => {
+    const idx = headerIndex.get(key);
+    if (idx === undefined || idx < 0) return null;
+    return updateSheetRow(env, config, rowNumber, idx, idx, [value]);
+  });
+  await Promise.all(tasks.filter(Boolean) as Array<Promise<void>>);
+}
+
+type SheetRowLookup = {
+  config: SheetConfig;
+  headerIndex: Map<string, number>;
+  rowNumber: number;
+  row: Array<unknown>;
+};
+
+async function findSheetRowByRequestId(
+  env: Env,
+  kind: "order" | "quote" | "contact",
+  requestId: string
+): Promise<SheetRowLookup | null> {
+  const config = getSheetConfig(env, kind);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const headerFallback =
+    kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
+  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  const requestIdx = headerIndex.get("request_id") ?? -1;
+  if (requestIdx < 0) return null;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const normalizedTarget = normalizeRequestId(requestId);
+  for (let i = 0; i < rows.length; i += 1) {
+    const candidate = normalizeRequestId(getString(rows[i]?.[requestIdx]));
+    if (candidate && candidate === normalizedTarget) {
+      return { config, headerIndex, rowNumber: i + 2, row: rows[i] };
+    }
+  }
+  return null;
+}
+
+async function appendOrderNote(env: Env, requestId: string, note: string) {
+  if (!note) return;
+  try {
+    const lookup = await findSheetRowByRequestId(env, "order", requestId);
+    if (!lookup) return;
+    const notesIdx = lookup.headerIndex.get("notes");
+    if (notesIdx === undefined || notesIdx < 0) return;
+    const existingNotes = getString(lookup.row[notesIdx]);
+    const trimmed = existingNotes.trim();
+    const nextNotes = trimmed ? `${trimmed}\n\n${note}` : note;
+    await updateSheetRow(env, lookup.config, lookup.rowNumber, notesIdx, notesIdx, [nextNotes]);
+  } catch (error) {
+    logWarn("order_confirmation_note_failed", { requestId, error: String(error) });
+  }
 }
 
 const CATALOG_COLUMNS = [
@@ -2547,10 +3322,15 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
   const rows = await fetchSheetValues(env, config.sheetId, dataRange);
   if (!rows.length) return;
 
+  let processedCount = 0;
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i] || [];
     const statusRaw = String(row[statusIdx] || "").trim().toUpperCase();
     if (statusRaw !== "NEW") continue;
+    if (processedCount >= ACK_QUEUE_BATCH_LIMIT) {
+      logInfo("ack_queue_throttled", { kind, limit: ACK_QUEUE_BATCH_LIMIT });
+      break;
+    }
 
     const rowNumber = i + 2;
     const requestId = getString(row[requestIdIdx]);
@@ -2572,13 +3352,16 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
         nextStatus = "ACKNOWLEDGED";
       } else {
         try {
+          const ackPrefix = kind === "order" ? ORDER_ACK_SUBJECT : QUOTE_ACK_SUBJECT;
+          const ackText = kind === "order" ? ORDER_ACK_TEXT : EMAIL_TEXT;
+          const ackHtml = kind === "order" ? ORDER_ACK_HTML : EMAIL_HTML;
           await sendEmail(env, {
             to: [senderEmail],
             sender: "Heerawalla <no-reply@heerawalla.com>",
             replyTo: "no-reply@heerawalla.com",
-            subject: buildAckSubject(normalizedRequestId),
-            textBody: EMAIL_TEXT,
-            htmlBody: EMAIL_HTML,
+            subject: buildAckSubject(normalizedRequestId, ackPrefix),
+            textBody: ackText,
+            htmlBody: ackHtml,
             headers: autoReplyHeaders(),
           });
           nextStatus = "ACKNOWLEDGED";
@@ -2607,6 +3390,7 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
     } catch (error) {
       logError("ack_queue_update_failed", { kind, requestId, error: String(error) });
     }
+    processedCount += 1;
   }
 }
 
@@ -4457,10 +5241,10 @@ function getInternalSenders(env: Env) {
   return list;
 }
 
-function buildAckSubject(requestId: string) {
+function buildAckSubject(requestId: string, prefix = ACK_SUBJECT_PREFIX) {
   const normalizedId = normalizeRequestId(requestId);
-  if (!normalizedId) return ACK_SUBJECT_PREFIX;
-  return `${ACK_SUBJECT_PREFIX} [HW-REQ:${normalizedId}]`;
+  if (!normalizedId) return prefix;
+  return `${prefix} [HW-REQ:${normalizedId}]`;
 }
 
 function autoReplyHeaders() {
@@ -4502,6 +5286,98 @@ type RequestSummary = {
   email: string;
   name?: string;
 };
+
+type ConfirmationChange = {
+  key?: string;
+  label?: string;
+  from?: string;
+  to?: string;
+};
+
+type OrderConfirmationRecord = {
+  token: string;
+  requestId: string;
+  email?: string;
+  name?: string;
+  productName?: string;
+  changes: ConfirmationChange[];
+  status: "pending" | "confirmed" | "canceled";
+  createdAt: string;
+  confirmedAt?: string;
+  canceledAt?: string;
+  expiresAt?: string;
+  paymentUrl?: string;
+};
+
+const ORDER_CONFIRMATION_KEY_PREFIX = "order:confirm:";
+
+function buildOrderConfirmationKey(token: string) {
+  const normalized = token.trim();
+  return normalized ? `${ORDER_CONFIRMATION_KEY_PREFIX}${normalized}` : "";
+}
+
+function buildOrderConfirmationPageUrl(env: Env, token: string) {
+  const base = (env.ORDER_CONFIRMATION_PAGE_URL || ORDER_CONFIRMATION_PAGE_URL).trim();
+  if (!base) return `https://www.heerawalla.com/order_confirmation?token=${encodeURIComponent(token)}`;
+  const trimmed = base.endsWith("/") ? base.slice(0, -1) : base;
+  return `${trimmed}?token=${encodeURIComponent(token)}`;
+}
+
+function generateOrderConfirmationToken() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID().replace(/-/g, "");
+  }
+  const buffer = new Uint8Array(16);
+  crypto.getRandomValues(buffer);
+  return Array.from(buffer)
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function normalizeOrderConfirmationChanges(value: unknown): ConfirmationChange[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!isRecord(entry)) return null;
+      const key = getString(entry.key);
+      const label = getString(entry.label);
+      const from = getString(entry.from);
+      const to = getString(entry.to);
+      if (!key && !label && !from && !to) return null;
+      return { key: key || undefined, label: label || undefined, from: from || undefined, to: to || undefined };
+    })
+    .filter(Boolean) as ConfirmationChange[];
+}
+
+async function storeOrderConfirmationRecord(env: Env, record: OrderConfirmationRecord) {
+  if (!env.HEERAWALLA_ACKS) return;
+  const key = buildOrderConfirmationKey(record.token);
+  if (!key) return;
+  await env.HEERAWALLA_ACKS.put(key, JSON.stringify(record), { expirationTtl: ORDER_CONFIRMATION_TTL });
+}
+
+async function getOrderConfirmationRecord(env: Env, token: string) {
+  if (!env.HEERAWALLA_ACKS) return null;
+  const key = buildOrderConfirmationKey(token);
+  if (!key) return null;
+  const value = await env.HEERAWALLA_ACKS.get(key);
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as OrderConfirmationRecord;
+  } catch {
+    return null;
+  }
+}
+
+function resolveOrderConfirmationPaymentUrl(env: Env, record: OrderConfirmationRecord) {
+  if (record.paymentUrl) return record.paymentUrl;
+  const template = getString(env.ORDER_CONFIRMATION_PAYMENT_URL);
+  if (!template) return "";
+  return template
+    .replace(/\{requestId\}/g, record.requestId)
+    .replace(/\{token\}/g, record.token)
+    .replace(/\{email\}/g, record.email || "");
+}
 
 function buildSummaryKey(requestId: string) {
   const normalized = normalizeRequestId(requestId);

@@ -37,9 +37,15 @@ export interface Env {
   CONTACTS_SHEET_ID?: string;
   CONTACTS_SHEET_NAME?: string;
   CONTACTS_SHEET_RANGE?: string;
+  ADMIN_ALLOWLIST?: string;
+  OPS_ALLOWLIST?: string;
+  VIEWER_ALLOWLIST?: string;
+  ORDER_CONFIRMATION_PAGE_URL?: string;
+  ORDER_CONFIRMATION_PAYMENT_URL?: string;
 }
 
 export const ACK_SUBJECT_PREFIX = "Heerawalla - Your request has been received";
+export const QUOTE_ACK_SUBJECT = "Heerawalla - Quote request received";
 export const CONTACT_ACK_SUBJECT = "Heerawalla - Thanks for your message";
 export const ORDER_SHEET_HEADER = [
   "created_at",
@@ -136,13 +142,17 @@ export const CONTACT_SHEET_HEADER = [
   "postal_code",
   "country",
   "subscription_status",
+  "status",
+  "status_updated_at",
+  "notes",
+  "last_error",
 ];
 export const EMAIL_TEXT = [
   "Thank you for contacting Heerawalla.",
   "",
-  "We confirm receipt of your request. Our atelier will reply personally within 1-2 business days.",
+  "We confirm receipt of your quote request. A concierge will review your details and reply within 1-2 business days.",
   "",
-  "Next, our atelier will review your request and confirm details by reply. Once aligned, we will share a final estimate and timeline.",
+  "Once confirmed, we will share a formal price quote and an estimated timeline for your bespoke piece.",
   "",
   "Your request now enters a deliberate, best-in-class craftsmanship process - measured, personal, and worth the wait.",
   "",
@@ -152,7 +162,7 @@ export const EMAIL_TEXT = [
   "Heerawalla",
   "www.heerawalla.com",
   "",
-  "Privacy: We do not store your data beyond this email thread. This exchange remains private and direct.",
+  "Privacy: Your details are used solely to respond to this request and are never sold.",
 ].join("\n");
 
 export const EMAIL_HTML = `<!DOCTYPE html>
@@ -175,13 +185,13 @@ export const EMAIL_HTML = `<!DOCTYPE html>
                 Heerawalla
               </div>
               <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.4;font-weight:600;color:#0f172a;">
-                We have received your request
+                We have received your quote request
               </h1>
               <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;">
-                Thank you for contacting Heerawalla. Your request is now with our atelier, and you can expect a personal reply within 1-2 business days.
+                We confirm receipt of your quote request. A concierge will review your details and reply within 1-2 business days.
               </p>
               <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;">
-                Next, our atelier will review your request and confirm details by reply. Once aligned, we will share a final estimate and timeline.
+                Once confirmed, we will share a formal price quote and an estimated timeline for your bespoke piece.
               </p>
               <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;">
                 Your request now enters a deliberate, best-in-class craftsmanship process - measured, personal, and worth the wait.
@@ -204,7 +214,78 @@ export const EMAIL_HTML = `<!DOCTYPE html>
           You are receiving this message in response to your request.
         </p>
         <p style="margin:6px 0 0 0;font-size:11px;color:#94a3b8;">
-          Privacy: We do not store your data beyond this email thread. This exchange remains private and direct.
+          Privacy: Your details are used only to respond to this request and are never sold.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+export const ORDER_ACK_SUBJECT = "Heerawalla - Order request received";
+export const ORDER_ACK_TEXT = [
+  "Thank you for your order request with Heerawalla.",
+  "",
+  "We have received your order details. A concierge will confirm availability, sizing, and delivery address within 1-2 business days.",
+  "",
+  "No payment is required at this stage. We will email a secure payment link once details are confirmed. Your piece is reserved upon payment.",
+  "",
+  "If you need to update details, submit a new note at Heerawalla.com/contact and include your request ID.",
+  "",
+  "Warm regards,",
+  "Heerawalla",
+  "www.heerawalla.com",
+  "",
+  "Privacy: Your details are used solely to respond to this request and are never sold.",
+].join("\n");
+
+export const ORDER_ACK_HTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#f6f5f2;color:#0f172a;font-family:-apple-system, Segoe UI, Helvetica, Arial, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;">
+          <tr>
+            <td style="padding:36px 40px 28px 40px;">
+              <div style="margin:0 0 16px 0;">
+                <img src="https://www.heerawalla.com/images/engraving_mark.svg" width="36" height="36" alt="Heerawalla" style="display:block;">
+              </div>
+              <div style="font-size:12px;letter-spacing:0.32em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">
+                Heerawalla
+              </div>
+              <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.4;font-weight:600;color:#0f172a;">
+                We have received your order request
+              </h1>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;">
+                Thank you for your order request with Heerawalla. A concierge will confirm availability, sizing, and delivery address within 1-2 business days.
+              </p>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;">
+                No payment is required at this stage. We will email a secure payment link once details are confirmed. Your piece is reserved upon payment.
+              </p>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.7;color:#334155;">
+                If you need to update details, submit a new note at
+                <a href="https://www.heerawalla.com/contact" style="color:#0f172a;text-decoration:underline;">Heerawalla.com/contact</a>
+                and include your request ID.
+              </p>
+              <div style="height:1px;background:#e5e7eb;margin:0 0 18px 0;"></div>
+              <p style="margin:0 0 6px 0;font-size:14px;color:#0f172a;">Warm regards,</p>
+              <p style="margin:0 0 10px 0;font-size:14px;font-weight:600;color:#0f172a;">Heerawalla</p>
+              <p style="margin:0;font-size:12px;color:#64748b;">
+                <a href="https://www.heerawalla.com" style="color:#64748b;text-decoration:underline;">www.heerawalla.com</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:14px 0 0 0;font-size:11px;color:#94a3b8;">
+          You are receiving this message in response to your order request.
+        </p>
+        <p style="margin:6px 0 0 0;font-size:11px;color:#94a3b8;">
+          Privacy: Your details are used only to respond to this request and are never sold.
         </p>
       </td>
     </tr>
@@ -347,6 +428,11 @@ export const SUBMIT_PATH = "/submit";
 export const SUBMIT_STATUS_PATH = "/submit-status";
 export const CONTACT_SUBMIT_PATH = "/contact-submit";
 export const ORDER_PATH = "/order";
+export const ORDER_CONFIRMATION_PATH = "/orders/confirmation";
+export const ORDER_CONFIRMATION_CONFIRM_PATH = "/orders/confirmation/confirm";
+export const ORDER_CONFIRMATION_CANCEL_PATH = "/orders/confirmation/cancel";
+export const ORDER_CONFIRMATION_PAGE_URL = "https://www.heerawalla.com/order_confirmation";
+export const ORDER_CONFIRMATION_TTL = 60 * 60 * 24 * 7;
 export const SUBSCRIBE_PATH = "/subscribe";
 export const UNSUBSCRIBE_PATH = "/unsubscribe";
 export const REQUEST_ORIGIN_TTL = 60 * 60 * 24 * 180;
@@ -368,9 +454,11 @@ export const CALENDAR_WINDOWS = [
 export const CATALOG_PATH = "/catalog";
 export const CATALOG_CACHE_SECONDS = 600;
 export const HOLIDAY_CALENDAR_ID = "en.usa#holiday@group.v.calendar.google.com";
+export const ACK_QUEUE_BATCH_LIMIT = 10;
 export const ALLOWED_ORIGINS = [
   "https://www.heerawalla.com",
   "https://heerawalla.com",
+  "https://business.heerawalla.com",
   "https://arifmanasiya.github.io",
   "https://herawalla-email-atelier.arifmanasiya.workers.dev",
   "http://localhost:4321",

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Heerawalla Business Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Manrope:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-api-base="https://admin-api.heerawalla.com/admin">
+    <div class="page detail-page">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">Heerawalla</span>
+          <span class="brand-tag">Business Portal</span>
+        </div>
+        <div class="user">
+          <div class="user-meta">
+            <span class="role" data-user-role>Loading role</span>
+            <span class="email" data-user-email>Checking access...</span>
+          </div>
+          <a class="btn btn-ghost back-link" data-back-link href="/">Back to list</a>
+        </div>
+      </header>
+
+      <section class="status-bar detail-status">
+        <div class="status-item">
+          <span class="status-label">Record</span>
+          <span class="status-value" data-sync-line>Loading</span>
+        </div>
+      </section>
+
+      <section class="detail-shell">
+        <div class="drawer-panel detail-panel">
+          <div class="drawer-top">
+            <div>
+              <p class="drawer-eyebrow" data-detail-type>Order details</p>
+              <h2 data-detail-title>--</h2>
+              <p class="drawer-sub" data-detail-sub>--</p>
+              <p class="muted" data-detail-error></p>
+            </div>
+            <div class="corner-status">
+              <span class="badge" data-detail-status-corner>--</span>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <label class="field">
+              <span>Actions</span>
+              <select data-action-select></select>
+            </label>
+            <button class="btn btn-ghost" data-action-run type="button">Run action</button>
+          </div>
+
+          <div class="drawer-section">
+            <h3>Overview</h3>
+            <div class="detail-grid" data-detail-grid></div>
+          </div>
+
+          <div class="drawer-section">
+            <h3>Edit details</h3>
+            <div class="edit-grid">
+              <label class="field">
+                <span>Price</span>
+                <input type="text" data-field="price" placeholder="2999" />
+              </label>
+              <label class="field">
+                <span>Timeline</span>
+                <input type="text" data-field="timeline" placeholder="Standard or Rush" />
+              </label>
+              <label class="field">
+                <span>Metal</span>
+                <input type="text" data-field="metal" placeholder="18K White Gold" />
+              </label>
+              <label class="field">
+                <span>Stone</span>
+                <input type="text" data-field="stone" placeholder="Natural Diamond" />
+              </label>
+              <label class="field">
+                <span>Stone weight</span>
+                <input type="text" data-field="stone_weight" placeholder="1.5" />
+              </label>
+            </div>
+            <label class="field">
+              <span>Notes</span>
+              <textarea rows="4" data-field="notes" placeholder="Add internal notes"></textarea>
+            </label>
+            <div class="drawer-actions-row">
+              <button class="btn" data-primary-action type="button">Get Customer Confirmation</button>
+              <button class="btn btn-ghost" data-notes-save type="button">Save notes</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal" data-confirm-modal aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div>
+            <p class="drawer-eyebrow">Confirmation email</p>
+            <h2>Get Customer Confirmation</h2>
+          </div>
+          <button class="btn btn-ghost" data-confirm-close type="button">Close</button>
+        </div>
+        <div class="confirm-meta">
+          <div>
+            <span>To</span>
+            <p data-confirm-to>--</p>
+          </div>
+          <div>
+            <span>Subject</span>
+            <p data-confirm-subject>--</p>
+          </div>
+        </div>
+        <div class="confirm-preview" data-confirm-preview></div>
+        <div class="modal-actions">
+          <button class="btn" data-confirm-send type="button">Send confirmation</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" data-toast aria-live="polite"></div>
+
+    <script src="./detail.js" defer></script>
+  </body>
+</html>
