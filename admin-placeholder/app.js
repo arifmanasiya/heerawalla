@@ -37,7 +37,11 @@
       "CANCELLED",
     ],
     quotes: ["NEW", "ACKNOWLEDGED", "QUOTED", "CONVERTED", "DROPPED"],
-    contacts: ["NEW", "PENDING", "RESOLVED"],
+    tickets: ["NEW", "PENDING", "RESOLVED"],
+    contacts: [],
+    "price-chart": [],
+    "cost-chart": [],
+    "diamond-price-chart": [],
   };
 
   const LIST_COLUMNS = {
@@ -59,13 +63,48 @@
       { key: "timeline", label: "Timeline" },
       { key: "view", label: "" },
     ],
-    contacts: [
+    tickets: [
       { key: "created_at", label: "Created" },
       { key: "name", label: "Name" },
       { key: "email", label: "Email" },
       { key: "phone", label: "Phone" },
       { key: "interests", label: "Interests" },
       { key: "status", label: "Status" },
+      { key: "view", label: "" },
+    ],
+    contacts: [
+      { key: "created_at", label: "Created" },
+      { key: "name", label: "Name" },
+      { key: "email", label: "Email" },
+      { key: "phone", label: "Phone" },
+      { key: "type", label: "Type" },
+      { key: "subscribed", label: "Subscribed" },
+      { key: "sources", label: "Sources" },
+      { key: "view", label: "" },
+    ],
+    "price-chart": [
+      { key: "row_number", label: "Row" },
+      { key: "metal", label: "Metal" },
+      { key: "adjustment_type", label: "Adjustment" },
+      { key: "adjustment_value", label: "Value" },
+      { key: "notes", label: "Notes" },
+      { key: "view", label: "" },
+    ],
+    "cost-chart": [
+      { key: "row_number", label: "Row" },
+      { key: "key", label: "Key" },
+      { key: "value", label: "Value" },
+      { key: "unit", label: "Unit" },
+      { key: "notes", label: "Notes" },
+      { key: "view", label: "" },
+    ],
+    "diamond-price-chart": [
+      { key: "row_number", label: "Row" },
+      { key: "clarity", label: "Clarity" },
+      { key: "color", label: "Color" },
+      { key: "weight_min", label: "Min ct" },
+      { key: "weight_max", label: "Max ct" },
+      { key: "price_per_ct", label: "Price/ct" },
       { key: "view", label: "" },
     ],
   };
@@ -83,31 +122,78 @@
     ],
     quotes: [
       { action: "acknowledge", label: "Acknowledge", confirm: "Mark as acknowledged?" },
-      { action: "submit_quote", label: "Submit quote", confirm: "Mark as quoted?" },
+      { action: "submit_quote", label: "Send quote link", confirm: "Send quote link to customer?" },
       { action: "convert_to_order", label: "Convert to order", confirm: "Convert to order?" },
       { action: "drop", label: "Drop", confirm: "Drop this quote?" },
     ],
-    contacts: [
+    tickets: [
       { action: "mark_pending", label: "Mark pending", confirm: "Mark as pending?" },
       { action: "mark_resolved", label: "Mark resolved", confirm: "Mark as resolved?" },
     ],
+    contacts: [],
+    "price-chart": [],
+    "cost-chart": [],
+    "diamond-price-chart": [],
   };
 
   const EDIT_FIELDS = {
-    orders: ["price", "timeline", "metal", "stone", "stone_weight", "notes"],
-    quotes: ["price", "timeline", "metal", "stone", "stone_weight", "notes"],
-    contacts: ["notes"],
+    orders: [
+      "price",
+      "timeline",
+      "timeline_adjustment_weeks",
+      "metal",
+      "metal_weight",
+      "metal_weight_adjustment",
+      "stone",
+      "stone_weight",
+      "notes",
+    ],
+    quotes: [
+      "price",
+      "timeline",
+      "timeline_adjustment_weeks",
+      "metal",
+      "metal_weight",
+      "stone",
+      "stone_weight",
+      "diamond_breakdown",
+      "quote_metal_options",
+      "quote_option_1_clarity",
+      "quote_option_1_color",
+      "quote_option_1_price_18k",
+      "quote_option_2_clarity",
+      "quote_option_2_color",
+      "quote_option_2_price_18k",
+      "quote_option_3_clarity",
+      "quote_option_3_color",
+      "quote_option_3_price_18k",
+      "notes",
+    ],
+    tickets: ["notes"],
+    contacts: [],
+    "price-chart": ["metal", "adjustment_type", "adjustment_value", "notes"],
+    "cost-chart": ["key", "value", "unit", "notes"],
+    "diamond-price-chart": ["clarity", "color", "weight_min", "weight_max", "price_per_ct", "notes"],
   };
 
   const CONFIRM_FIELDS = [
     { key: "price", label: "Price", normalize: normalizePrice, format: formatPrice },
     { key: "timeline", label: "Timeline", normalize: normalizeTimelineValue, format: formatTimelineValue },
+    { key: "timeline_adjustment_weeks", label: "Timeline delay", normalize: normalizeNumber, format: formatDelayWeeks },
     { key: "metal", label: "Metal", normalize: normalizeText, format: formatPlain },
+    { key: "metal_weight", label: "Metal weight", normalize: normalizeNumber, format: formatGrams },
+    {
+      key: "metal_weight_adjustment",
+      label: "Metal weight adjustment",
+      normalize: normalizeNumber,
+      format: formatSignedGrams,
+    },
     { key: "stone", label: "Stone type", normalize: normalizeText, format: formatPlain },
     { key: "stone_weight", label: "Stone weight", normalize: normalizeNumber, format: formatStoneWeight },
   ];
 
   const ORDER_DETAILS_FIELDS = [
+    "shipping_method",
     "shipping_carrier",
     "tracking_number",
     "tracking_url",
@@ -155,6 +241,18 @@
     CANCELLED: ["send_invoice"],
   };
 
+  const TAB_LABELS = {
+    orders: "Order",
+    quotes: "Quote",
+    tickets: "Customer ticket",
+    contacts: "Contact",
+    "price-chart": "Price chart",
+    "cost-chart": "Cost chart",
+    "diamond-price-chart": "Diamond price chart",
+  };
+
+  const PRICING_TABS = new Set(["price-chart", "cost-chart", "diamond-price-chart"]);
+
   const normalizeStatus = (value) => {
     const normalized = String(value || "NEW").trim().toUpperCase();
     return normalized === "INVOICE_NOT_PAID" ? "INVOICE_EXPIRED" : normalized || "NEW";
@@ -162,12 +260,26 @@
 
   const getOrderStatusOptions = () => {
     const current = normalizeStatus(state.selectedItem?.status);
-    const allowed = new Set([current, ...(ORDER_STATUS_FLOW[current] || [])]);
-    if (current !== "PENDING_CONFIRMATION") {
-      allowed.delete("PENDING_CONFIRMATION");
-    }
-    return Array.from(allowed);
+    const allowed = ORDER_STATUS_FLOW[current] || [];
+    return allowed.filter((status) => status !== "PENDING_CONFIRMATION");
   };
+
+  function canEditCurrentTab() {
+    if (state.tab === "orders" || state.tab === "quotes") {
+      return state.role === "admin" || state.role === "ops";
+    }
+    if (state.tab === "tickets") {
+      return state.role === "admin";
+    }
+    if (
+      state.tab === "price-chart" ||
+      state.tab === "cost-chart" ||
+      state.tab === "diamond-price-chart"
+    ) {
+      return state.role === "admin";
+    }
+    return false;
+  }
 
   const ui = {
     syncLine: document.querySelector("[data-sync-line]"),
@@ -175,6 +287,9 @@
     userEmail: document.querySelector("[data-user-email]"),
     autoRefresh: document.querySelector("[data-auto-refresh]"),
     tabs: Array.from(document.querySelectorAll("[data-tab]")),
+    adminTabs: Array.from(document.querySelectorAll("[data-admin-only]")),
+    addRowWrap: document.querySelector("[data-add-row-wrap]"),
+    addRowButton: document.querySelector("[data-add-row]"),
     filters: Array.from(document.querySelectorAll("[data-filter]")),
     listHeader: document.querySelector("[data-list-header]"),
     list: document.querySelector("[data-list]"),
@@ -192,9 +307,16 @@
     statusSave: document.querySelector("[data-status-save]"),
     detailGrid: document.querySelector("[data-detail-grid]"),
     actionButtons: document.querySelector("[data-action-buttons]"),
+    editSection: document.querySelector("[data-edit-section]"),
+    quoteSection: document.querySelector("[data-quote-section]"),
+    quoteMetals: Array.from(document.querySelectorAll("[data-quote-metals] input[type=\"checkbox\"]")),
+    quoteMetalInput: document.querySelector("[data-field=\"quote_metal_options\"]"),
     editFields: Array.from(document.querySelectorAll("[data-field]")),
     orderDetailsSection: document.querySelector("[data-order-details-section]"),
     orderDetailsFields: Array.from(document.querySelectorAll("[data-order-details-field]")),
+    diamondBreakdown: document.querySelector("[data-diamond-breakdown]"),
+    diamondBreakdownRows: document.querySelector("[data-diamond-breakdown-rows]"),
+    diamondBreakdownAdd: document.querySelector("[data-diamond-breakdown-add]"),
     detailsSave: document.querySelector("[data-details-save]"),
     primaryAction: document.querySelector("[data-primary-action]"),
     notesSave: document.querySelector("[data-notes-save]"),
@@ -212,6 +334,7 @@
   let syncStatus = "Connecting";
   let lastSync = "";
   let autoRefresh = localStorage.getItem("adminAutoRefresh") !== "false";
+  let isSyncingBreakdown = false;
 
   function updateSyncLine() {
     if (!ui.syncLine) return;
@@ -317,6 +440,32 @@
     return `${number} ct`;
   }
 
+  function formatGrams(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const number = Number(raw);
+    if (Number.isNaN(number)) return raw;
+    return `${number} g`;
+  }
+
+  function formatSignedGrams(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const number = Number(raw);
+    if (Number.isNaN(number)) return raw;
+    const sign = number > 0 ? "+" : "";
+    return `${sign}${number} g`;
+  }
+
+  function formatDelayWeeks(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const number = Number(raw);
+    if (Number.isNaN(number)) return raw;
+    if (!number) return "No delay";
+    return `${number} week${number === 1 ? "" : "s"} delay`;
+  }
+
   function formatTimelineValue(value) {
     const normalized = normalizeTimelineValue(value);
     if (!normalized) return "";
@@ -325,11 +474,155 @@
     return value;
   }
 
+  function buildEtaLine(timelineValue, adjustmentValue) {
+    const base = formatTimelineValue(timelineValue) || "Standard";
+    const adjustment = Number(String(adjustmentValue || "").trim());
+    if (!Number.isNaN(adjustment) && adjustment > 0) {
+      return `Estimated delivery after payment: ${base} + ${adjustment} week${adjustment === 1 ? "" : "s"}.`;
+    }
+    return `Estimated delivery after payment: ${base}.`;
+  }
+
+  function getDiamondBreakdownField() {
+    return ui.editFields.find((field) => field.dataset.field === "diamond_breakdown");
+  }
+
+  function parseDiamondBreakdownValue(value) {
+    if (!value) return [];
+    return String(value)
+      .split(/\n|;|,/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => {
+        const match = entry.match(
+          /([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[x×]\s*([0-9]*\.?[0-9]+)/i
+        );
+        if (match) {
+          return { weight: match[1], count: match[2] };
+        }
+        const numbers = entry.match(/[0-9]*\.?[0-9]+/g) || [];
+        if (numbers.length >= 2) {
+          return { weight: numbers[0], count: numbers[1] };
+        }
+        if (numbers.length === 1) {
+          return { weight: numbers[0], count: "1" };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }
+
+  function formatDiamondBreakdown(rows) {
+    return rows
+      .map((row) => {
+        const weight = String(row.weight || "").trim();
+        const count = String(row.count || "").trim();
+        if (!weight || !count) return "";
+        return `${weight} x ${count}`;
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function getDiamondRowsFromDom() {
+    if (!ui.diamondBreakdownRows) return [];
+    return Array.from(ui.diamondBreakdownRows.querySelectorAll("[data-diamond-row]")).map(
+      (row) => {
+        const weight =
+          row.querySelector("[data-diamond-weight]")?.value?.trim() || "";
+        const count =
+          row.querySelector("[data-diamond-count]")?.value?.trim() || "";
+        return { weight, count };
+      }
+    );
+  }
+
+  function syncDiamondBreakdownField() {
+    if (isSyncingBreakdown) return;
+    const field = getDiamondBreakdownField();
+    if (!field) return;
+    const rows = getDiamondRowsFromDom();
+    isSyncingBreakdown = true;
+    field.value = formatDiamondBreakdown(rows);
+    isSyncingBreakdown = false;
+  }
+
+  function renderDiamondBreakdownRows(rows) {
+    if (!ui.diamondBreakdownRows) return;
+    if (!rows.length) {
+      ui.diamondBreakdownRows.innerHTML =
+        '<p class="muted">No diamond pieces yet. Add a row to begin.</p>';
+      return;
+    }
+    ui.diamondBreakdownRows.innerHTML = rows
+      .map(
+        (row, index) => `
+          <div class="diamond-row" data-diamond-row data-row-index="${index}">
+            <input type="text" data-diamond-weight placeholder="0.10" value="${escapeAttribute(
+              row.weight || ""
+            )}" />
+            <span>ct ×</span>
+            <input type="text" data-diamond-count placeholder="1" value="${escapeAttribute(
+              row.count || ""
+            )}" />
+            <button class="btn btn-ghost" type="button" data-diamond-remove>Remove</button>
+          </div>`
+      )
+      .join("");
+  }
+
+  function setDiamondBreakdownRowsFromField() {
+    const field = getDiamondBreakdownField();
+    if (!field) return;
+    const rows = parseDiamondBreakdownValue(field.value);
+    renderDiamondBreakdownRows(rows);
+  }
+
+  function toggleDiamondBreakdownVisibility() {
+    if (!ui.diamondBreakdown) return;
+    ui.diamondBreakdown.classList.toggle("is-hidden", state.tab !== "quotes");
+  }
+
   function getValue(item, key) {
     if (key === "created_at") return formatDate(item[key]);
     if (key === "price") return formatPrice(item[key]);
     if (key === "status") return item[key] || "--";
     return item[key] || "--";
+  }
+
+  function getTabEndpoint(tab) {
+    if (tab === "orders") return "/orders";
+    if (tab === "quotes") return "/quotes";
+    if (tab === "tickets") return "/contacts";
+    if (tab === "contacts") return "/contacts-unified";
+    if (tab === "price-chart") return "/price-chart";
+    if (tab === "cost-chart") return "/cost-chart";
+    if (tab === "diamond-price-chart") return "/diamond-price-chart";
+    return `/${tab}`;
+  }
+
+  function getActionEndpoint() {
+    if (state.tab === "orders") return "/orders/action";
+    if (state.tab === "quotes") return "/quotes/action";
+    if (state.tab === "tickets") return "/contacts/action";
+    if (state.tab === "price-chart") return "/price-chart/action";
+    if (state.tab === "cost-chart") return "/cost-chart/action";
+    if (state.tab === "diamond-price-chart") return "/diamond-price-chart/action";
+    return "";
+  }
+
+  function getItemKey(item) {
+    return item.request_id || item.email || item.row_number || "";
+  }
+
+  function getSelectedRecordId() {
+    if (!state.selectedItem) return "";
+    return (
+      state.selectedItem.request_id ||
+      state.selectedItem.email ||
+      state.selectedItem.row_number ||
+      ""
+    );
   }
 
   async function apiFetch(path, options = {}) {
@@ -355,11 +648,37 @@
       state.email = data.email || "";
       if (ui.userRole) ui.userRole.textContent = state.role || "Unknown";
       if (ui.userEmail) ui.userEmail.textContent = state.email || "Not authorized";
+      updateTabVisibility();
+      updateAddRowVisibility();
       setSyncStatus("Connected");
     } catch (error) {
       setSyncStatus("Access blocked");
       showToast("Access denied. Check Access policy.", "error");
     }
+  }
+
+  function updateTabVisibility() {
+    if (!ui.adminTabs.length) return;
+    const isAdmin = state.role === "admin";
+    ui.adminTabs.forEach((tab) => {
+      tab.classList.toggle("is-hidden", !isAdmin);
+    });
+    if (!isAdmin && ui.adminTabs.some((tab) => tab.classList.contains("is-active"))) {
+      const fallback = ui.tabs.find((tab) => tab.dataset.tab === "orders");
+      if (fallback) {
+        ui.tabs.forEach((tab) => tab.classList.remove("is-active"));
+        fallback.classList.add("is-active");
+        state.tab = "orders";
+        updateStatusOptions();
+      }
+    }
+  }
+
+  function updateAddRowVisibility() {
+    if (!ui.addRowWrap) return;
+    const isAdmin = state.role === "admin";
+    const show = isAdmin && PRICING_TABS.has(state.tab);
+    ui.addRowWrap.classList.toggle("is-hidden", !show);
   }
 
   function buildQuery() {
@@ -377,13 +696,13 @@
     state.isLoading = true;
     setSyncStatus("Syncing");
     try {
-      const data = await apiFetch(`/${state.tab}?${buildQuery()}`);
+      const data = await apiFetch(`${getTabEndpoint(state.tab)}?${buildQuery()}`);
       state.items = data.items || [];
       state.total = data.total || 0;
       renderList();
       if (state.selectedId) {
         const updated = state.items.find(
-          (entry) => (entry.request_id || entry.row_number) === state.selectedId
+          (entry) => getItemKey(entry) === state.selectedId
         );
         if (updated) {
           populateDrawer(updated);
@@ -442,7 +761,7 @@
       .join(" ");
     ui.list.innerHTML = state.items
       .map((item) => {
-        const key = item.request_id || item.row_number || "";
+        const key = getItemKey(item);
         const cells = columns
           .map((col) => {
             if (col.key === "view") {
@@ -464,60 +783,126 @@
 
   function updateStatusOptions() {
     if (!ui.statusSelect) return;
-    const statusOptions =
-      state.tab === "orders" && state.selectedItem ? getOrderStatusOptions() : STATUS_OPTIONS[state.tab];
-    ui.statusSelect.innerHTML = statusOptions
-      .map((status) => `<option value="${status}">${status}</option>`)
-      .join("");
+    const currentStatus = normalizeStatus(state.selectedItem?.status);
+    let statusOptions =
+      state.tab === "orders"
+        ? getOrderStatusOptions()
+        : (STATUS_OPTIONS[state.tab] || []).filter((status) => status !== currentStatus);
+    if (!statusOptions.length) {
+      ui.statusSelect.innerHTML = '<option value="">No status actions</option>';
+    } else {
+      ui.statusSelect.innerHTML = statusOptions
+        .map((status) => `<option value="${status}">${status}</option>`)
+        .join("");
+    }
     const statusFilter = ui.filters.find((el) => el.dataset.filter === "status");
     if (statusFilter) {
-      statusFilter.innerHTML = '<option value="">All statuses</option>' +
-        STATUS_OPTIONS[state.tab].map((status) => `<option value="${status}">${status}</option>`).join("");
+      const filterOptions = STATUS_OPTIONS[state.tab] || [];
+      statusFilter.innerHTML =
+        '<option value="">All statuses</option>' +
+        filterOptions.map((status) => `<option value="${status}">${status}</option>`).join("");
     }
   }
 
   function populateDrawer(item) {
-    const requestId = item.request_id || "Request";
+    const requestId = getItemKey(item) || "Record";
     state.selectedId = requestId;
     state.selectedItem = item;
     setOriginalValues(item);
     state.pendingChanges = [];
     state.confirmation = null;
-    const detailLabel = state.tab === "contacts" ? "Customer ticket" : state.tab.slice(0, -1);
+    const detailLabel = TAB_LABELS[state.tab] || state.tab;
     ui.detailType.textContent = `${detailLabel} details`;
-    ui.detailTitle.textContent = item.product_name || item.name || requestId;
+    ui.detailTitle.textContent =
+      item.product_name || item.name || item.key || item.metal || item.clarity || requestId;
     ui.detailSub.textContent = requestId;
-    ui.detailStatus.textContent = item.status || "NEW";
-    ui.detailStatus.dataset.status = item.status || "NEW";
+    const statusValue =
+      state.tab === "contacts" ||
+      state.tab === "price-chart" ||
+      state.tab === "cost-chart" ||
+      state.tab === "diamond-price-chart"
+        ? "--"
+        : item.status || "NEW";
+    ui.detailStatus.textContent = statusValue;
+    ui.detailStatus.dataset.status = statusValue;
     updateStatusOptions();
-    ui.statusSelect.value = item.status || "NEW";
+    if (ui.statusSelect && ui.statusSelect.options.length) {
+      ui.statusSelect.value = ui.statusSelect.options[0].value || "";
+    }
 
-    const detailFields = [
-      ["Request ID", item.request_id],
-      ["Created", formatDate(item.created_at)],
-      ["Status", item.status],
-      ["Name", item.name],
-      ["Email", item.email],
-      ["Phone", item.phone],
-      ["Product", item.product_name],
-      ["Product URL", item.product_url],
-      ["Design code", item.design_code],
-      ["Metal", item.metal],
-      ["Stone", item.stone],
-      ["Stone weight", item.stone_weight],
-      ["Size", item.size],
-      ["Price", item.price],
-      ["Timeline", item.timeline],
-      ["Address", item.address_line1],
-      ["City", item.city],
-      ["State", item.state],
-      ["Postal code", item.postal_code],
-      ["Country", item.country],
-      ["Interests", item.interests],
-      ["Contact preference", item.contact_preference],
-      ["Subscription", item.subscription_status],
-      ["Notes", item.notes],
-    ];
+    const detailFields =
+      state.tab === "contacts"
+        ? [
+            ["Created", formatDate(item.created_at)],
+            ["Name", item.name],
+            ["Email", item.email],
+            ["Phone", item.phone],
+            ["Type", item.type],
+            ["Subscribed", item.subscribed],
+            ["Sources", item.sources],
+            ["First seen", formatDate(item.first_seen_at)],
+            ["Last seen", formatDate(item.last_seen_at)],
+            ["Last source", item.last_source],
+            ["Unsubscribed at", formatDate(item.unsubscribed_at)],
+            ["Unsubscribed reason", item.unsubscribed_reason],
+            ["Updated", formatDate(item.updated_at)],
+          ]
+        : state.tab === "price-chart"
+        ? [
+            ["Row", item.row_number],
+            ["Metal", item.metal],
+            ["Adjustment type", item.adjustment_type],
+            ["Adjustment value", item.adjustment_value],
+            ["Notes", item.notes],
+          ]
+        : state.tab === "cost-chart"
+        ? [
+            ["Row", item.row_number],
+            ["Key", item.key],
+            ["Value", item.value],
+            ["Unit", item.unit],
+            ["Notes", item.notes],
+          ]
+        : state.tab === "diamond-price-chart"
+        ? [
+            ["Row", item.row_number],
+            ["Clarity", item.clarity],
+            ["Color", item.color],
+            ["Weight min", item.weight_min],
+            ["Weight max", item.weight_max],
+            ["Price per ct", item.price_per_ct],
+            ["Notes", item.notes],
+          ]
+        : [
+            ["Request ID", item.request_id],
+            ["Created", formatDate(item.created_at)],
+            ["Status", item.status],
+            ["Name", item.name],
+            ["Email", item.email],
+            ["Phone", item.phone],
+            ["Product", item.product_name],
+            ["Product URL", item.product_url],
+            ["Design code", item.design_code],
+            ["Metal", item.metal],
+            ["Metal weight", formatGrams(item.metal_weight)],
+            ["Metal weight adjustment", formatSignedGrams(item.metal_weight_adjustment)],
+            ["Stone", item.stone],
+            ["Stone weight", item.stone_weight],
+            ["Diamond breakdown", item.diamond_breakdown],
+            ["Size", item.size],
+            ["Price", item.price],
+            ["Timeline", item.timeline],
+            ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
+            ["Address", item.address_line1],
+            ["City", item.city],
+            ["State", item.state],
+            ["Postal code", item.postal_code],
+            ["Country", item.country],
+            ["Interests", item.interests],
+            ["Contact preference", item.contact_preference],
+            ["Subscription", item.subscription_status],
+            ["Notes", item.notes],
+          ];
     ui.detailGrid.innerHTML = detailFields
       .filter(([, value]) => value)
       .map(([label, value]) => `<div><span>${label}</span>${value}</div>`)
@@ -532,9 +917,12 @@
       }
       field.value = item[key] || "";
     });
+    setQuoteMetalSelection(item.quote_metal_options || "");
+    setDiamondBreakdownRowsFromField();
 
     applyEditVisibility();
     applyOrderDetailsVisibility();
+    applyQuoteVisibility();
     renderActions();
     updatePrimaryActionState();
     loadOrderDetails(requestId);
@@ -548,12 +936,45 @@
       const show = allowed.has(key);
       if (wrapper) wrapper.classList.toggle("is-hidden", !show);
     });
+    if (ui.editSection) {
+      ui.editSection.classList.toggle("is-hidden", allowed.size === 0);
+    }
+    applyQuoteVisibility();
   }
 
   function applyOrderDetailsVisibility() {
     if (!ui.orderDetailsSection) return;
     const show = state.tab === "orders";
     ui.orderDetailsSection.classList.toggle("is-hidden", !show);
+  }
+
+  function applyQuoteVisibility() {
+    if (!ui.quoteSection) return;
+    ui.quoteSection.classList.toggle("is-hidden", state.tab !== "quotes");
+    toggleDiamondBreakdownVisibility();
+  }
+
+  function syncQuoteMetalInput() {
+    if (!ui.quoteMetalInput) return;
+    const selected = ui.quoteMetals
+      .filter((input) => input.checked)
+      .map((input) => input.value);
+    ui.quoteMetalInput.value = selected.join(", ");
+  }
+
+  function setQuoteMetalSelection(value) {
+    if (!ui.quoteMetalInput) return;
+    const selected = String(value || "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (!selected.length) {
+      selected.push("18K");
+    }
+    ui.quoteMetalInput.value = selected.join(", ");
+    ui.quoteMetals.forEach((input) => {
+      input.checked = selected.includes(input.value);
+    });
   }
 
   function getOrderDetailsValue(key) {
@@ -575,7 +996,8 @@
     ui.orderDetailsFields.forEach((field) => {
       const key = field.dataset.orderDetailsField;
       if (!key) return;
-      field.value = details[key] || "";
+      const fallback = key === "shipping_method" ? "Express" : "";
+      field.value = details[key] || fallback;
     });
   }
 
@@ -617,6 +1039,7 @@
 
   function collectEditableUpdates() {
     const fields = {};
+    syncQuoteMetalInput();
     ui.editFields.forEach((field) => {
       const key = field.dataset.field;
       if (!key) return;
@@ -633,17 +1056,26 @@
   }
 
   function updatePrimaryActionState() {
-    const canEdit = state.role === "admin" || (state.role === "ops" && state.tab !== "contacts");
+    const canEdit = canEditCurrentTab();
     const notesChanged = getNotesValue() !== state.originalNotes.trim();
     if (ui.notesSave) {
-      ui.notesSave.disabled = !canEdit || !notesChanged;
+      if (PRICING_TABS.has(state.tab)) {
+        ui.notesSave.style.display = "none";
+      } else {
+        ui.notesSave.style.display = "";
+        ui.notesSave.disabled = !canEdit || !notesChanged;
+      }
     }
 
     if (!ui.primaryAction) return;
+    ui.primaryAction.style.display = state.tab === "contacts" ? "none" : "";
     if (state.tab !== "orders") {
-      ui.primaryAction.textContent = "Save updates";
       const fields = collectEditableUpdates();
+      if (PRICING_TABS.has(state.tab)) {
+        fields.notes = getNotesValue();
+      }
       const hasChanges = Object.keys(fields).length > 0;
+      ui.primaryAction.textContent = "Save updates";
       ui.primaryAction.disabled = !canEdit || !hasChanges;
       return;
     }
@@ -694,6 +1126,10 @@
     const requestId = item.request_id || "";
     const name = item.name || "there";
     const product = item.product_name || "your order";
+    const timelineValue = getEditValue("timeline") || item.timeline || "";
+    const adjustmentValue =
+      getEditValue("timeline_adjustment_weeks") || item.timeline_adjustment_weeks || "";
+    const etaLine = buildEtaLine(timelineValue, adjustmentValue);
     const subject = requestId
       ? `Heerawalla - Confirm order update (${requestId})`
       : "Heerawalla - Confirm order update";
@@ -705,6 +1141,8 @@
       `We reviewed your order for ${product}. Please confirm the updated details below (previous -> updated):`,
       "",
       ...textLines,
+      "",
+      etaLine,
       "",
       `Use your private confirmation link (Heerawalla.com/order_confirmation): ${confirmationUrl}`,
       "",
@@ -746,6 +1184,9 @@
                   ${emailRows}
                 </tbody>
               </table>
+              <p style="margin:0 0 18px 0;font-size:14px;line-height:1.7;color:#334155;">
+                ${escapeHtml(etaLine)}
+              </p>
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px 0;">
                 <tr>
                   <td style="background:#0f172a;border:1px solid #0f172a;">
@@ -786,6 +1227,7 @@
         <p class="confirm-sub">${escapeHtml(product)}${requestId ? ` (${escapeHtml(requestId)})` : ""}</p>
         <div class="confirm-list">${previewRows}</div>
         <a class="confirm-cta" href="${escapeAttribute(confirmationUrl)}" target="_blank" rel="noreferrer">Review and confirm</a>
+        <p class="confirm-foot">${escapeHtml(etaLine)}</p>
         <p class="confirm-foot">
           Private confirmation link lets the customer confirm or cancel before secure checkout.
         </p>
@@ -822,7 +1264,7 @@
   }
 
   function renderActions() {
-    const canEdit = state.role === "admin" || (state.role === "ops" && state.tab !== "contacts");
+    const canEdit = canEditCurrentTab();
     const actions =
       state.tab === "orders" && state.selectedItem
         ? ACTIONS.orders.filter((action) =>
@@ -835,7 +1277,14 @@
         return `<button class="btn btn-ghost" data-action="${action.action}" data-confirm="${action.confirm}" ${disabled}>${action.label}</button>`;
       })
       .join("");
-    ui.statusSave.disabled = !canEdit;
+    ui.actionButtons.style.display = actions.length ? "" : "none";
+    let hasStatusOptions = false;
+    if (ui.statusSelect) {
+      hasStatusOptions =
+        ui.statusSelect.options.length > 0 && ui.statusSelect.options[0].value !== "";
+      ui.statusSelect.disabled = !canEdit || !hasStatusOptions;
+    }
+    ui.statusSave.disabled = !canEdit || !hasStatusOptions;
     if (ui.primaryAction) {
       ui.primaryAction.disabled = !canEdit;
     }
@@ -865,8 +1314,9 @@
   }
 
   async function runAction(action) {
-    if (!state.selectedItem || !state.selectedItem.request_id) {
-      showToast("Missing request ID", "error");
+    const recordId = getSelectedRecordId();
+    if (!recordId) {
+      showToast("Missing record ID", "error");
       return;
     }
     const details = state.tab === "orders" ? collectOrderDetailsUpdates() : {};
@@ -877,19 +1327,27 @@
         return;
       }
     }
-    const payload = {
-      requestId: state.selectedItem.request_id,
-      action,
-    };
+    const payload = { action };
+    if (
+      state.tab === "price-chart" ||
+      state.tab === "cost-chart" ||
+      state.tab === "diamond-price-chart"
+    ) {
+      payload.rowNumber = recordId;
+    } else {
+      payload.requestId = recordId;
+    }
     if (state.tab === "orders" && Object.keys(details).length) {
       payload.details = details;
     }
-    const endpoint =
-      state.tab === "orders"
-        ? "/orders/action"
-        : state.tab === "quotes"
-        ? "/quotes/action"
-        : "/contacts/action";
+    if (state.tab === "quotes" && action === "submit_quote") {
+      payload.fields = collectEditableUpdates();
+    }
+    const endpoint = getActionEndpoint();
+    if (!endpoint) {
+      showToast("No actions available.", "error");
+      return;
+    }
     const result = await apiFetch(endpoint, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -903,24 +1361,32 @@
   }
 
   async function saveDetails() {
-    if (!state.selectedItem || !state.selectedItem.request_id) {
-      showToast("Missing request ID", "error");
+    const recordId = getSelectedRecordId();
+    if (!recordId) {
+      showToast("Missing record ID", "error");
       return;
     }
     const fields = collectEditableUpdates();
     const notes = getNotesValue();
-    const payload = {
-      requestId: state.selectedItem.request_id,
-      action: "edit",
-      notes,
-      fields,
-    };
-    const endpoint =
-      state.tab === "orders"
-        ? "/orders/action"
-        : state.tab === "quotes"
-        ? "/quotes/action"
-        : "/contacts/action";
+    if (PRICING_TABS.has(state.tab)) {
+      fields.notes = notes;
+    }
+    const payload = { action: "edit", fields };
+    if (
+      state.tab === "price-chart" ||
+      state.tab === "cost-chart" ||
+      state.tab === "diamond-price-chart"
+    ) {
+      payload.rowNumber = recordId;
+    } else {
+      payload.requestId = recordId;
+      payload.notes = notes;
+    }
+    const endpoint = getActionEndpoint();
+    if (!endpoint) {
+      showToast("No edits allowed.", "error");
+      return;
+    }
     const result = await apiFetch(endpoint, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -934,22 +1400,31 @@
   }
 
   async function saveNotes() {
-    if (!state.selectedItem || !state.selectedItem.request_id) {
-      showToast("Missing request ID", "error");
+    if (PRICING_TABS.has(state.tab)) {
+      showToast("Use Save updates for pricing notes.", "error");
+      return;
+    }
+    const recordId = getSelectedRecordId();
+    if (!recordId) {
+      showToast("Missing record ID", "error");
       return;
     }
     const notes = getNotesValue();
-    const payload = {
-      requestId: state.selectedItem.request_id,
-      action: "edit",
-      notes,
-    };
-    const endpoint =
-      state.tab === "orders"
-        ? "/orders/action"
-        : state.tab === "quotes"
-        ? "/quotes/action"
-        : "/contacts/action";
+    const payload = { action: "edit", notes };
+    if (
+      state.tab === "price-chart" ||
+      state.tab === "cost-chart" ||
+      state.tab === "diamond-price-chart"
+    ) {
+      payload.rowNumber = recordId;
+    } else {
+      payload.requestId = recordId;
+    }
+    const endpoint = getActionEndpoint();
+    if (!endpoint) {
+      showToast("No edits allowed.", "error");
+      return;
+    }
     const result = await apiFetch(endpoint, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -990,8 +1465,9 @@
   }
 
   async function saveStatus() {
-    if (!state.selectedItem || !state.selectedItem.request_id) {
-      showToast("Missing request ID", "error");
+    const recordId = getSelectedRecordId();
+    if (!recordId) {
+      showToast("Missing record ID", "error");
       return;
     }
     const status = ui.statusSelect.value;
@@ -1005,19 +1481,18 @@
       }
     }
     const payload = {
-      requestId: state.selectedItem.request_id,
+      requestId: recordId,
       action: "set_status",
       status,
     };
     if (state.tab === "orders" && Object.keys(details).length) {
       payload.details = details;
     }
-    const endpoint =
-      state.tab === "orders"
-        ? "/orders/action"
-        : state.tab === "quotes"
-        ? "/quotes/action"
-        : "/contacts/action";
+    const endpoint = getActionEndpoint();
+    if (!endpoint) {
+      showToast("No status updates available.", "error");
+      return;
+    }
     const result = await apiFetch(endpoint, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -1150,8 +1625,14 @@
         ui.tabs.forEach((button) => button.classList.remove("is-active"));
         tab.classList.add("is-active");
         state.tab = tab.dataset.tab;
+        if (!STATUS_OPTIONS[state.tab]?.length) {
+          state.filters.status = "";
+          const statusFilter = ui.filters.find((el) => el.dataset.filter === "status");
+          if (statusFilter) statusFilter.value = "";
+        }
         state.offset = 0;
         updateStatusOptions();
+        updateAddRowVisibility();
         loadList();
       });
     });
@@ -1209,6 +1690,12 @@
       }
     });
 
+    if (ui.addRowButton) {
+      ui.addRowButton.addEventListener("click", () => {
+        window.location.href = detailUrl("new");
+      });
+    }
+
     ui.drawerClose.addEventListener("click", closeDrawer);
     ui.drawer.addEventListener("click", (event) => {
       if (event.target === ui.drawer) closeDrawer();
@@ -1229,6 +1716,55 @@
         updatePrimaryActionState();
       });
     });
+    ui.quoteMetals.forEach((input) => {
+      input.addEventListener("change", () => {
+        syncQuoteMetalInput();
+        updatePrimaryActionState();
+      });
+    });
+
+    if (ui.diamondBreakdownAdd) {
+      ui.diamondBreakdownAdd.addEventListener("click", () => {
+        const current = getDiamondRowsFromDom();
+        current.push({ weight: "", count: "" });
+        renderDiamondBreakdownRows(current);
+      });
+    }
+
+    if (ui.diamondBreakdownRows) {
+      ui.diamondBreakdownRows.addEventListener("input", (event) => {
+        if (!(event.target instanceof HTMLInputElement)) return;
+        if (
+          !event.target.hasAttribute("data-diamond-weight") &&
+          !event.target.hasAttribute("data-diamond-count")
+        ) {
+          return;
+        }
+        syncDiamondBreakdownField();
+        updatePrimaryActionState();
+      });
+      ui.diamondBreakdownRows.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (!target.hasAttribute("data-diamond-remove")) return;
+        const row = target.closest("[data-diamond-row]");
+        if (row) row.remove();
+        syncDiamondBreakdownField();
+        updatePrimaryActionState();
+        if (!ui.diamondBreakdownRows.querySelector("[data-diamond-row]")) {
+          renderDiamondBreakdownRows([]);
+        }
+      });
+    }
+
+    const diamondField = getDiamondBreakdownField();
+    if (diamondField) {
+      diamondField.addEventListener("input", () => {
+        if (isSyncingBreakdown) return;
+        setDiamondBreakdownRowsFromField();
+        updatePrimaryActionState();
+      });
+    }
 
     if (ui.primaryAction) {
       ui.primaryAction.addEventListener("click", () => {
@@ -1281,6 +1817,9 @@
       ui.tabs.forEach((button) => {
         button.classList.toggle("is-active", button.dataset.tab === state.tab);
       });
+      if (!STATUS_OPTIONS[state.tab]?.length) {
+        state.filters.status = "";
+      }
     }
     updateStatusOptions();
     bindEvents();

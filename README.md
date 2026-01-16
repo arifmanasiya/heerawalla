@@ -101,9 +101,10 @@ When set, list pages and detail pages refresh catalog-driven pricing on page loa
 ```bash
 npm run deploy -- -m "comment"
 ```
-- Commits/pushes changes, then waits for GitHub Actions to finish.
+- Syncs worker vars from Cloudflare, commits/pushes changes, then waits for GitHub Actions to finish.
 - Validation checks run after deploy unless you pass `--no-verify`.
 - Set `GH_HEERAWALLA_TOKEN` (or `GH_TOKEN`) locally to allow workflow verification.
+- Skip Cloudflare sync with `--no-sync`.
 - Optional verification overrides:
   - `VERIFY_WORKER_URL` (defaults to `https://admin-api.heerawalla.com/health`)
   - `VERIFY_ADMIN_URL` (defaults to `https://business.heerawalla.com`)

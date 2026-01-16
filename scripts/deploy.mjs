@@ -5,10 +5,22 @@ import path from "node:path";
 const args = process.argv.slice(2);
 const commitMessage = readCommitMessage(args);
 const shouldVerify = !args.includes("--no-verify");
+const shouldSync = !args.includes("--no-sync");
 
 if (args.includes("--help") || args.includes("-h")) {
   printHelp();
   process.exit(0);
+}
+
+if (shouldSync) {
+  const hasCfToken = Boolean((process.env.CLOUDFLARE_API_TOKEN || "").trim());
+  const hasCfAccount = Boolean((process.env.CLOUDFLARE_ACCOUNT_ID || "").trim());
+  if (hasCfToken && hasCfAccount) {
+    console.log("Syncing Cloudflare worker vars...");
+    run("node", ["scripts/sync-worker-vars.mjs"]);
+  } else {
+    console.warn("CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not set. Skipping sync.");
+  }
 }
 
 const hasChanges = Boolean(runOutput("git", ["status", "--porcelain"]));
@@ -346,5 +358,5 @@ function sleep(ms) {
 }
 
 function printHelp() {
-  console.log("Usage: npm run deploy -- [-m \"message\"] [--no-verify]");
+  console.log("Usage: npm run deploy -- [-m \"message\"] [--no-verify] [--no-sync]");
 }

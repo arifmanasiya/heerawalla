@@ -302,6 +302,12 @@ body {
   box-shadow: var(--shadow-soft);
 }
 
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: -8px 0 20px;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -588,6 +594,88 @@ button:disabled {
   text-transform: uppercase;
   letter-spacing: 0.2em;
   margin: 0 0 12px;
+}
+
+.quote-options {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-tint);
+}
+
+.diamond-breakdown {
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  background: var(--surface-tint);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.diamond-breakdown-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
+.diamond-breakdown-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.diamond-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.diamond-row .btn-ghost {
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+.diamond-row span {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.option-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.option-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
+.quote-options-grid {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.quote-option-card {
+  border: 1px solid var(--line);
+  padding: 12px;
+  background: var(--surface);
 }
 
 .detail-grid {

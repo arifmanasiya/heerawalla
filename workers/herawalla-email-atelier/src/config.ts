@@ -46,6 +46,15 @@ export interface Env {
   UNIFIED_CONTACTS_SHEET_ID?: string;
   UNIFIED_CONTACTS_SHEET_NAME?: string;
   UNIFIED_CONTACTS_SHEET_RANGE?: string;
+  PRICE_CHART_SHEET_ID?: string;
+  PRICE_CHART_SHEET_NAME?: string;
+  PRICE_CHART_SHEET_RANGE?: string;
+  COST_CHART_SHEET_ID?: string;
+  COST_CHART_SHEET_NAME?: string;
+  COST_CHART_SHEET_RANGE?: string;
+  DIAMOND_PRICE_CHART_SHEET_ID?: string;
+  DIAMOND_PRICE_CHART_SHEET_NAME?: string;
+  DIAMOND_PRICE_CHART_SHEET_RANGE?: string;
   ADMIN_ALLOWLIST?: string;
   OPS_ALLOWLIST?: string;
   VIEWER_ALLOWLIST?: string;
@@ -53,6 +62,8 @@ export interface Env {
   ORDER_CONFIRMATION_PAYMENT_URL?: string;
   ORDER_CANCEL_PAGE_URL?: string;
   ORDER_AUTHENTICITY_PAGE_URL?: string;
+  QUOTE_PAGE_URL?: string;
+  QUOTE_PAYMENT_URL?: string;
   STATUS_EMAIL_INTERVAL_HOURS?: string;
   SEND_STATUS_UPDATES?: string | boolean;
 }
@@ -95,11 +106,15 @@ export const ORDER_SHEET_HEADER = [
   "origin",
   "ip",
   "user_agent",
+  "metal_weight",
+  "metal_weight_adjustment",
+  "timeline_adjustment_weeks",
 ];
 export const ORDER_DETAILS_SHEET_HEADER = [
   "created_at",
   "request_id",
   "status",
+  "shipping_method",
   "shipping_carrier",
   "tracking_number",
   "tracking_url",
@@ -125,6 +140,7 @@ export const QUOTE_SHEET_HEADER = [
   "last_error",
   "price",
   "timeline",
+  "timeline_adjustment_weeks",
   "name",
   "email",
   "phone",
@@ -133,8 +149,10 @@ export const QUOTE_SHEET_HEADER = [
   "product_url",
   "design_code",
   "metal",
+  "metal_weight",
   "stone",
   "stone_weight",
+  "diamond_breakdown",
   "size",
   "address_line1",
   "address_line2",
@@ -151,6 +169,22 @@ export const QUOTE_SHEET_HEADER = [
   "origin",
   "ip",
   "user_agent",
+  "quote_metal_options",
+  "quote_option_1_clarity",
+  "quote_option_1_color",
+  "quote_option_1_price_18k",
+  "quote_option_2_clarity",
+  "quote_option_2_color",
+  "quote_option_2_price_18k",
+  "quote_option_3_clarity",
+  "quote_option_3_color",
+  "quote_option_3_price_18k",
+  "quote_token",
+  "quote_expires_at",
+  "quote_sent_at",
+  "quote_selected_metal",
+  "quote_selected_option",
+  "quote_selected_price",
 ];
 export const CONTACT_SHEET_HEADER = [
   "created_at",
@@ -179,6 +213,16 @@ export const CONTACT_SHEET_HEADER = [
   "status_updated_at",
   "notes",
   "last_error",
+];
+export const PRICE_CHART_HEADER = ["metal", "adjustment_type", "adjustment_value", "notes"];
+export const COST_CHART_HEADER = ["key", "value", "unit", "notes"];
+export const DIAMOND_PRICE_CHART_HEADER = [
+  "clarity",
+  "color",
+  "weight_min",
+  "weight_max",
+  "price_per_ct",
+  "notes",
 ];
 export const UNIFIED_CONTACTS_SHEET_HEADER = [
   "created_at",
@@ -487,6 +531,11 @@ export const ORDER_CANCEL_CONFIRM_PATH = "/orders/cancel/confirm";
 export const ORDER_CANCEL_PAGE_URL = "https://www.heerawalla.com/order_cancel";
 export const ORDER_CANCEL_TTL = 60 * 60 * 24 * 7;
 export const ORDER_AUTHENTICITY_PAGE_URL = "https://www.heerawalla.com/authenticity";
+export const QUOTE_CONFIRMATION_PATH = "/quotes/confirmation";
+export const QUOTE_CONFIRMATION_ACCEPT_PATH = "/quotes/confirmation/accept";
+export const QUOTE_PAGE_URL = "https://www.heerawalla.com/quote";
+export const QUOTE_PAYMENT_URL = "https://www.heerawalla.com/pay?requestId={requestId}&token={token}";
+export const QUOTE_CONFIRMATION_TTL = 60 * 60 * 72;
 export const SUBSCRIBE_PATH = "/subscribe";
 export const UNSUBSCRIBE_PATH = "/unsubscribe";
 export const REQUEST_ORIGIN_TTL = 60 * 60 * 24 * 180;

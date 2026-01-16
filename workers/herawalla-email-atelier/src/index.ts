@@ -9,6 +9,9 @@ import {
   QUOTE_SHEET_HEADER,
   CONTACT_SHEET_HEADER,
   UNIFIED_CONTACTS_SHEET_HEADER,
+  PRICE_CHART_HEADER,
+  COST_CHART_HEADER,
+  DIAMOND_PRICE_CHART_HEADER,
   EMAIL_TEXT,
   EMAIL_HTML,
   ORDER_ACK_SUBJECT,
@@ -45,6 +48,11 @@ import {
   ORDER_CANCEL_CONFIRM_PATH,
   ORDER_CANCEL_PAGE_URL,
   ORDER_CANCEL_TTL,
+  QUOTE_CONFIRMATION_PATH,
+  QUOTE_CONFIRMATION_ACCEPT_PATH,
+  QUOTE_PAGE_URL,
+  QUOTE_PAYMENT_URL,
+  QUOTE_CONFIRMATION_TTL,
   REQUEST_ORIGIN_TTL,
   REQUEST_SUMMARY_TTL,
   REQUEST_SUMMARY_MAX_LINES,
@@ -90,6 +98,11 @@ export default {
     );
     if (confirmationResponse) {
       return confirmationResponse;
+    }
+
+    const quoteResponse = await handleQuoteConfirmationRequest(request, env, url, allowedOrigin);
+    if (quoteResponse) {
+      return quoteResponse;
     }
 
     const cancelResponse = await handleOrderCancellationRequest(request, env, url, allowedOrigin);
@@ -909,6 +922,13 @@ export default {
         const lastError = "";
         const price = getString(payload.price);
         const timeline = normalizeTimeline(getString(payload.timeline));
+        const metalWeight = getString(payload.metalWeight || payload.metal_weight);
+        const metalWeightAdjustment = getString(
+          payload.metalWeightAdjustment || payload.metal_weight_adjustment
+        );
+        const timelineAdjustmentWeeks = getString(
+          payload.timelineAdjustmentWeeks || payload.timeline_adjustment_weeks
+        );
         const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
           resolveAttribution(payload, request);
         const pageUrl = getString(payload.pageUrl) || productUrl || referrer;
@@ -1007,6 +1027,9 @@ export default {
             origin,
             ip,
             userAgent,
+            metalWeight,
+            metalWeightAdjustment,
+            timelineAdjustmentWeeks,
           ]);
           logInfo("order_sheet_written", { requestId });
           try {
@@ -1759,13 +1782,13 @@ async function handleAdminRequest(
   }
 
   const path = url.pathname.replace(/^\/admin/, "") || "/";
-  if (request.method === "GET") {
-    if (path === "/" || path === "/me") {
-      return new Response(JSON.stringify({ ok: true, role, email: adminEmail }), {
-        status: 200,
-        headers: buildCorsHeaders(allowedOrigin, true),
-      });
-    }
+    if (request.method === "GET") {
+      if (path === "/" || path === "/me") {
+        return new Response(JSON.stringify({ ok: true, role, email: adminEmail }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
     if (path === "/orders") {
       const payload = await buildAdminList(env, "order", url.searchParams);
       return new Response(JSON.stringify({ ok: true, ...payload }), {
@@ -1802,7 +1825,53 @@ async function handleAdminRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
-  }
+      if (path === "/contacts-unified") {
+        const payload = await buildUnifiedContactsList(env, url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/price-chart") {
+        if (!canEditPricing(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const payload = await buildPricingList(env, "price_chart", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/cost-chart") {
+        if (!canEditPricing(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const payload = await buildPricingList(env, "cost_chart", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/diamond-price-chart") {
+        if (!canEditPricing(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const payload = await buildPricingList(env, "diamond_price_chart", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+    }
 
   if (request.method === "POST") {
     const payload = await safeJson(request);
@@ -1864,20 +1933,59 @@ async function handleAdminRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
-    if (path === "/email") {
-      if (!canEditOrders(role)) {
-        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
-          status: 403,
+      if (path === "/email") {
+        if (!canEditOrders(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleAdminEmail(env, payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
           headers: buildCorsHeaders(allowedOrigin, true),
         });
       }
-      const result = await handleAdminEmail(env, payload);
-      return new Response(JSON.stringify(result), {
-        status: result.ok ? 200 : 400,
-        headers: buildCorsHeaders(allowedOrigin, true),
-      });
+      if (path === "/price-chart/action") {
+        if (!canEditPricing(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handlePricingAdminAction(env, "price_chart", payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/cost-chart/action") {
+        if (!canEditPricing(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handlePricingAdminAction(env, "cost_chart", payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/diamond-price-chart/action") {
+        if (!canEditPricing(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handlePricingAdminAction(env, "diamond_price_chart", payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
     }
-  }
 
   return new Response(JSON.stringify({ ok: false, error: "admin_not_found" }), {
     status: 404,
@@ -2039,6 +2147,157 @@ async function handleOrderConfirmationRequest(
       status: 200,
       headers: buildCorsHeaders(allowedOrigin, true),
     });
+  }
+
+  return new Response("Method Not Allowed", {
+    status: 405,
+    headers: buildCorsHeaders(allowedOrigin, true),
+  });
+}
+
+async function handleQuoteConfirmationRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  allowedOrigin: string
+) {
+  if (!url.pathname.startsWith(QUOTE_CONFIRMATION_PATH)) return null;
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  if (!allowedOrigin) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  if (url.pathname === QUOTE_CONFIRMATION_PATH && request.method === "GET") {
+    const token =
+      url.searchParams.get("token") ||
+      url.searchParams.get("t") ||
+      url.searchParams.get("quote") ||
+      "";
+    const normalizedToken = token.trim();
+    if (!normalizedToken) {
+      return new Response(JSON.stringify({ ok: false, error: "missing_token" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const record = await getQuoteConfirmationRecord(env, normalizedToken);
+    if (!record) {
+      return new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+        status: 404,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        status: record.status,
+        requestId: record.requestId,
+        name: record.name || "",
+        productName: record.productName || "",
+        metals: record.metals || [],
+        options: record.options || [],
+        expiresAt: record.expiresAt || "",
+        selectedMetal: record.selectedMetal || "",
+        selectedOption: record.selectedOption ?? null,
+        selectedPrice: record.selectedPrice ?? null,
+      }),
+      {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      }
+    );
+  }
+
+  if (url.pathname === QUOTE_CONFIRMATION_ACCEPT_PATH && request.method === "POST") {
+    const payload = await safeJson(request);
+    if (!isRecord(payload)) {
+      return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const token = getString(payload.token);
+    const metal = normalizeMetalOption(getString(payload.metal || payload.selectedMetal));
+    const optionIndex = Number(payload.optionIndex ?? payload.option ?? payload.selectedOption);
+    if (!token) {
+      return new Response(JSON.stringify({ ok: false, error: "missing_token" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    const record = await getQuoteConfirmationRecord(env, token);
+    if (!record) {
+      return new Response(JSON.stringify({ ok: false, error: "not_found" }), {
+        status: 404,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (record.status !== "pending") {
+      return new Response(JSON.stringify({ ok: false, error: "already_used", status: record.status }), {
+        status: 409,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= record.options.length) {
+      return new Response(JSON.stringify({ ok: false, error: "invalid_option" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (metal && !record.metals.includes(metal)) {
+      return new Response(JSON.stringify({ ok: false, error: "invalid_metal" }), {
+        status: 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+
+    const option = record.options[optionIndex];
+    const selectedMetal = metal || record.metals[0] || "18K";
+    const selectedPrice = option.prices[selectedMetal] ?? option.price18k;
+    const acceptedAt = new Date().toISOString();
+    const updatedRecord: QuoteConfirmationRecord = {
+      ...record,
+      status: "accepted",
+      selectedMetal,
+      selectedOption: optionIndex,
+      selectedPrice,
+      acceptedAt,
+    };
+    await storeQuoteConfirmationRecord(env, updatedRecord);
+
+    try {
+      await updateAdminRow(env, "quote", record.requestId, "CONVERTED", "", {
+        quote_selected_metal: selectedMetal,
+        quote_selected_option: String(optionIndex + 1),
+        quote_selected_price: String(selectedPrice),
+      });
+    } catch (error) {
+      logWarn("quote_accept_update_failed", { requestId: record.requestId, error: String(error) });
+    }
+
+    const paymentUrl = resolveQuotePaymentUrl(
+      env,
+      record.requestId,
+      record.token,
+      selectedMetal,
+      String(optionIndex + 1)
+    );
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        status: updatedRecord.status,
+        paymentUrl: paymentUrl || undefined,
+      }),
+      {
+        status: 200,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      }
+    );
   }
 
   return new Response("Method Not Allowed", {
@@ -2326,15 +2585,21 @@ function canEditContacts(role: string) {
   return role === "admin";
 }
 
+function canEditPricing(role: string) {
+  return role === "admin";
+}
+
 async function buildAdminList(
   env: Env,
   kind: "order" | "quote" | "contact",
   params: URLSearchParams
 ) {
   const config = getSheetConfig(env, kind);
-  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const headerFallback =
     kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, headerFallback, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
   const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
   const items = rows.map((row, index) => {
@@ -2347,6 +2612,73 @@ async function buildAdminList(
   });
 
   const filtered = applyAdminFilters(items, params);
+  const sorted = applyAdminSort(filtered, params);
+  const offset = Math.max(Number(params.get("offset") || 0), 0);
+  const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
+  const paged = sorted.slice(offset, offset + limit);
+
+  return { items: paged, total: sorted.length };
+}
+
+async function buildPricingList(
+  env: Env,
+  kind: "price_chart" | "cost_chart" | "diamond_price_chart",
+  params: URLSearchParams
+) {
+  const config = getPricingSheetConfig(env, kind);
+  if (!config) {
+    return { items: [], total: 0 };
+  }
+  const headerFallback =
+    kind === "price_chart"
+      ? PRICE_CHART_HEADER
+      : kind === "cost_chart"
+      ? COST_CHART_HEADER
+      : DIAMOND_PRICE_CHART_HEADER;
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, headerFallback, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const items = rows.map((row, index) => {
+    const entry: Record<string, string> = { row_number: String(index + 2) };
+    header.forEach((key, idx) => {
+      if (!key) return;
+      entry[key] = String(row[idx] ?? "");
+    });
+    return entry;
+  });
+
+  const filtered = applyPricingFilters(items, params);
+  const sorted = applyAdminSort(filtered, params);
+  const offset = Math.max(Number(params.get("offset") || 0), 0);
+  const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
+  const paged = sorted.slice(offset, offset + limit);
+
+  return { items: paged, total: sorted.length };
+}
+
+async function buildUnifiedContactsList(env: Env, params: URLSearchParams) {
+  const config = getUnifiedContactsSheetConfig(env);
+  if (!config) {
+    return { items: [], total: 0 };
+  }
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, UNIFIED_CONTACTS_SHEET_HEADER, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header =
+    headerRows[0] && headerRows[0].length ? headerRows[0] : UNIFIED_CONTACTS_SHEET_HEADER;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const items = rows.map((row, index) => {
+    const entry: Record<string, string> = { row_number: String(index + 2) };
+    header.forEach((key, idx) => {
+      if (!key) return;
+      entry[key] = String(row[idx] ?? "");
+    });
+    return entry;
+  });
+
+  const filtered = applyUnifiedContactsFilters(items, params);
   const sorted = applyAdminSort(filtered, params);
   const offset = Math.max(Number(params.get("offset") || 0), 0);
   const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
@@ -2389,6 +2721,64 @@ function applyAdminFilters(items: Array<Record<string, string>>, params: URLSear
   });
 }
 
+function applyPricingFilters(items: Array<Record<string, string>>, params: URLSearchParams) {
+  const q = (params.get("q") || "").trim().toLowerCase();
+  const rowNumber = (params.get("row_number") || params.get("row") || "").trim();
+  return items.filter((item) => {
+    if (rowNumber && String(item.row_number || "").trim() !== rowNumber) return false;
+    if (q) {
+      const haystack = Object.values(item)
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function normalizeBooleanFilter(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (["true", "yes", "1"].includes(normalized)) return "true";
+  if (["false", "no", "0"].includes(normalized)) return "false";
+  return "";
+}
+
+function applyUnifiedContactsFilters(items: Array<Record<string, string>>, params: URLSearchParams) {
+  const q = (params.get("q") || "").trim().toLowerCase();
+  const email = (params.get("email") || "").trim().toLowerCase();
+  const type = (params.get("type") || "").trim().toLowerCase();
+  const subscribed = normalizeBooleanFilter(params.get("subscribed") || "");
+
+  return items.filter((item) => {
+    if (email) {
+      if (!String(item.email || "").toLowerCase().includes(email)) return false;
+    }
+    if (type) {
+      if (!String(item.type || "").toLowerCase().includes(type)) return false;
+    }
+    if (subscribed) {
+      const itemValue = normalizeBooleanFilter(String(item.subscribed || ""));
+      if (itemValue !== subscribed) return false;
+    }
+    if (q) {
+      const haystack = [
+        item.name,
+        item.email,
+        item.phone,
+        item.type,
+        item.sources,
+        item.last_source,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
 function applyAdminSort(items: Array<Record<string, string>>, params: URLSearchParams) {
   const sortKey = (params.get("sort") || "created_at").trim();
   const dir = (params.get("dir") || "desc").toLowerCase() === "asc" ? 1 : -1;
@@ -2397,6 +2787,420 @@ function applyAdminSort(items: Array<Record<string, string>>, params: URLSearchP
     const right = b[sortKey] || "";
     return left.localeCompare(right, undefined, { numeric: true }) * dir;
   });
+}
+
+type PriceAdjustment = { type: "percent" | "flat"; value: number };
+
+function normalizeAdjustmentType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.includes("flat") || normalized.includes("fixed") || normalized.includes("amount")) {
+    return "flat";
+  }
+  return "percent";
+}
+
+function parseAdjustmentValue(rawValue: string, adjustmentType: "percent" | "flat") {
+  if (!rawValue) return 0;
+  const cleaned = rawValue.replace(/[^0-9.+-]/g, "");
+  const numeric = Number(cleaned);
+  if (Number.isNaN(numeric)) return 0;
+  if (adjustmentType === "percent") {
+    if (Math.abs(numeric) > 1) return numeric / 100;
+  }
+  return numeric;
+}
+
+function normalizeMetalOption(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const normalized = trimmed.toLowerCase();
+  if (normalized.startsWith("14")) return "14K";
+  if (normalized.startsWith("18")) return "18K";
+  if (normalized.includes("plat")) return "Platinum";
+  return trimmed;
+}
+
+function parseMetalOptions(value: string) {
+  const metals = value
+    .split(",")
+    .map((entry) => normalizeMetalOption(entry))
+    .filter(Boolean);
+  const unique = Array.from(new Set(metals));
+  if (!unique.length) return ["18K"];
+  return unique;
+}
+
+function parsePriceValue(value: string) {
+  if (!value) return NaN;
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  const numeric = Number(cleaned);
+  return Number.isNaN(numeric) ? NaN : numeric;
+}
+
+function parseNumberValue(value: string) {
+  if (!value) return NaN;
+  const cleaned = value.replace(/[^0-9.+-]/g, "");
+  const numeric = Number(cleaned);
+  return Number.isNaN(numeric) ? NaN : numeric;
+}
+
+function parsePercentValue(value: string) {
+  if (!value) return 0;
+  const numeric = parseNumberValue(value);
+  if (!Number.isFinite(numeric)) return 0;
+  if (value.includes("%") || Math.abs(numeric) > 1) {
+    return numeric / 100;
+  }
+  return numeric;
+}
+
+function applyPriceAdjustment(base: number, adjustment?: PriceAdjustment) {
+  if (!adjustment || !adjustment.value) return base;
+  if (adjustment.type === "flat") return base + adjustment.value;
+  return base * (1 + adjustment.value);
+}
+
+async function loadPriceChartAdjustments(env: Env): Promise<Record<string, PriceAdjustment>> {
+  const config = getPriceChartSheetConfig(env);
+  if (!config) return {};
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, PRICE_CHART_HEADER, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : PRICE_CHART_HEADER;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const adjustments: Record<string, PriceAdjustment> = {};
+  rows.forEach((row) => {
+    const record = mapSheetRowToRecord(header, row);
+    const metal = normalizeMetalOption(record.metal || "");
+    if (!metal) return;
+    const adjustmentType = normalizeAdjustmentType(record.adjustment_type || "");
+    const value = parseAdjustmentValue(record.adjustment_value || "", adjustmentType);
+    adjustments[metal] = { type: adjustmentType, value };
+  });
+  return adjustments;
+}
+
+type CostChartValues = Record<string, string>;
+type DiamondPriceEntry = {
+  clarity: string;
+  color: string;
+  weightMin: number;
+  weightMax: number;
+  pricePerCt: number;
+};
+
+function normalizeCostKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function normalizeDiamondToken(value: string) {
+  return value.trim().toUpperCase();
+}
+
+function isDiamondWildcard(value: string) {
+  const normalized = normalizeDiamondToken(value);
+  return !normalized || normalized === "ANY" || normalized === "ALL";
+}
+
+async function loadCostChartValues(env: Env): Promise<CostChartValues> {
+  const config = getCostChartSheetConfig(env);
+  if (!config) return {};
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, COST_CHART_HEADER, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : COST_CHART_HEADER;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const values: CostChartValues = {};
+  rows.forEach((row) => {
+    const record = mapSheetRowToRecord(header, row);
+    const key = normalizeCostKey(record.key || "");
+    if (!key) return;
+    values[key] = record.value || "";
+  });
+  return values;
+}
+
+async function loadDiamondPriceChart(env: Env): Promise<DiamondPriceEntry[]> {
+  const config = getDiamondPriceChartSheetConfig(env);
+  if (!config) return [];
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, DIAMOND_PRICE_CHART_HEADER, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header =
+    headerRows[0] && headerRows[0].length ? headerRows[0] : DIAMOND_PRICE_CHART_HEADER;
+  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const entries: DiamondPriceEntry[] = [];
+  rows.forEach((row) => {
+    const record = mapSheetRowToRecord(header, row);
+    const pricePerCt = parseNumberValue(record.price_per_ct || "");
+    if (!Number.isFinite(pricePerCt) || pricePerCt <= 0) return;
+    const weightMin = parseNumberValue(record.weight_min || "");
+    const weightMaxRaw = parseNumberValue(record.weight_max || "");
+    if (!Number.isFinite(weightMin) || weightMin < 0) return;
+    const weightMax = Number.isFinite(weightMaxRaw) && weightMaxRaw > 0 ? weightMaxRaw : Infinity;
+    entries.push({
+      clarity: normalizeDiamondToken(record.clarity || ""),
+      color: normalizeDiamondToken(record.color || ""),
+      weightMin,
+      weightMax,
+      pricePerCt,
+    });
+  });
+  return entries;
+}
+
+function getCostNumber(values: CostChartValues, keys: string[], fallback = 0) {
+  for (const key of keys) {
+    const normalized = normalizeCostKey(key);
+    if (values[normalized] !== undefined) {
+      const numeric = parseNumberValue(values[normalized]);
+      if (Number.isFinite(numeric)) return numeric;
+    }
+  }
+  return fallback;
+}
+
+function getCostPercent(values: CostChartValues, keys: string[], fallback = 0) {
+  for (const key of keys) {
+    const normalized = normalizeCostKey(key);
+    if (values[normalized] !== undefined) {
+      return parsePercentValue(values[normalized]);
+    }
+  }
+  return fallback;
+}
+
+type DiamondPiece = { weight: number; count: number };
+
+function parseDiamondBreakdown(input: string): DiamondPiece[] {
+  if (!input) return [];
+  return input
+    .split(/\n|;|,/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[x×]\s*([0-9]*\.?[0-9]+)/i);
+      if (match) {
+        const weight = Number(match[1]);
+        const count = Number(match[2]);
+        return { weight, count };
+      }
+      const numbers = line.match(/[0-9]*\.?[0-9]+/g) || [];
+      if (numbers.length >= 2) {
+        const first = Number(numbers[0]);
+        const second = Number(numbers[1]);
+        const weight = first <= second ? first : second;
+        const count = first <= second ? second : first;
+        return { weight, count };
+      }
+      if (numbers.length === 1) {
+        const weight = Number(numbers[0]);
+        return { weight, count: 1 };
+      }
+      return { weight: 0, count: 0 };
+    })
+    .filter((entry) => Number.isFinite(entry.weight) && entry.weight > 0 && Number.isFinite(entry.count) && entry.count > 0);
+}
+
+function findDiamondPricePerCt(
+  entries: DiamondPriceEntry[],
+  clarity: string,
+  color: string,
+  weight: number
+) {
+  const normalizedClarity = normalizeDiamondToken(clarity || "");
+  const normalizedColor = normalizeDiamondToken(color || "");
+  let best: { entry: DiamondPriceEntry; score: number; range: number } | null = null;
+  for (const entry of entries) {
+    if (weight < entry.weightMin || weight > entry.weightMax) continue;
+    if (!isDiamondWildcard(entry.clarity) && entry.clarity !== normalizedClarity) continue;
+    if (!isDiamondWildcard(entry.color) && entry.color !== normalizedColor) continue;
+    let score = 0;
+    if (!isDiamondWildcard(entry.clarity)) score += 2;
+    if (!isDiamondWildcard(entry.color)) score += 1;
+    const range = entry.weightMax - entry.weightMin;
+    if (!best || score > best.score || (score === best.score && range < best.range)) {
+      best = { entry, score, range };
+    }
+  }
+  return best ? best.entry.pricePerCt : null;
+}
+
+function computeOptionPriceFromCosts(
+  record: Record<string, string>,
+  clarity: string,
+  color: string,
+  costValues: CostChartValues,
+  diamondPrices: DiamondPriceEntry[]
+) {
+  const metalWeight = parseNumberValue(record.metal_weight || "");
+  if (!Number.isFinite(metalWeight) || metalWeight <= 0) {
+    return { ok: false, error: "missing_metal_weight" } as const;
+  }
+
+  const breakdown = parseDiamondBreakdown(record.diamond_breakdown || "");
+  const fallbackStoneWeight = parseNumberValue(record.stone_weight || "");
+  const pieces = breakdown.length
+    ? breakdown
+    : Number.isFinite(fallbackStoneWeight) && fallbackStoneWeight > 0
+    ? [{ weight: fallbackStoneWeight, count: 1 }]
+    : [];
+
+  const goldPricePerGram = getCostNumber(costValues, ["gold_price_per_gram_usd"]);
+  let metalCostPerGram = getCostNumber(costValues, [
+    "metal_cost_18k_per_gram",
+    "metal_cost_per_gram_18k",
+    "metal_cost_per_gram",
+  ]);
+  if ((!Number.isFinite(metalCostPerGram) || metalCostPerGram <= 0) && goldPricePerGram > 0) {
+    metalCostPerGram = goldPricePerGram * 0.75;
+  }
+  if (!Number.isFinite(metalCostPerGram) || metalCostPerGram <= 0) {
+    return { ok: false, error: "missing_metal_cost" } as const;
+  }
+  const metalCost = metalCostPerGram * metalWeight;
+
+  let diamondCost = 0;
+  if (pieces.length) {
+    for (const piece of pieces) {
+      const pricePerCt = findDiamondPricePerCt(diamondPrices, clarity, color, piece.weight);
+      if (!pricePerCt) {
+        return { ok: false, error: "diamond_price_missing" } as const;
+      }
+      diamondCost += pricePerCt * piece.weight * piece.count;
+    }
+  }
+
+  const totalDiamondWeight = pieces.reduce((sum, piece) => sum + piece.weight * piece.count, 0);
+  const totalDiamondPieces = pieces.reduce((sum, piece) => sum + piece.count, 0);
+
+  const laborFlat = getCostNumber(costValues, ["labor_flat", "labor_cost_flat"]);
+  const laborPerGram = getCostNumber(costValues, ["labor_cost_per_gram_usd", "labor_per_gram", "labor_cost_per_gram"]);
+  const laborPerCt = getCostNumber(costValues, ["labor_per_ct", "labor_cost_per_ct"]);
+  const laborPerPiece = getCostNumber(costValues, ["labor_per_piece_usd", "labor_per_piece", "labor_cost_per_piece"]);
+  const laborMarginPct = getCostPercent(costValues, ["labor_margin_per_gram_pct", "labor_margin_percent"]);
+  const laborCostBase =
+    laborFlat + laborPerGram * metalWeight + laborPerCt * totalDiamondWeight + laborPerPiece * totalDiamondPieces;
+  const laborCost = laborCostBase * (1 + laborMarginPct);
+
+  const materialCost = metalCost + diamondCost;
+  const tariffPercent = getCostPercent(costValues, ["tariff_percent", "tariff_rate"]);
+  const tariffCost = materialCost * tariffPercent;
+  const dollarRiskPct = getCostPercent(costValues, ["dollar_risk_pct", "risk_percent"]);
+  const riskCost = (materialCost + laborCost) * dollarRiskPct;
+
+  const shippingCost = getCostNumber(costValues, ["shipping_cost_usd", "shipping_cost", "shipping_fee"]);
+  const timeCostFlat = getCostNumber(costValues, ["time_cost_flat_usd", "time_cost_flat", "time_cost"]);
+  const timeCostPerWeek = getCostNumber(costValues, ["time_cost_per_week_usd", "time_cost_per_week", "time_cost_weekly"]);
+  const timelineAdjustment = parseNumberValue(record.timeline_adjustment_weeks || "");
+  const timelineWeeks = Number.isFinite(timelineAdjustment) && timelineAdjustment > 0 ? timelineAdjustment : 0;
+  const timeCost = timeCostFlat + timeCostPerWeek * timelineWeeks;
+
+  const rushFeePercent = getCostPercent(costValues, ["rush_fee_percent", "rush_percent"]);
+  const rushFeeFlat = getCostNumber(costValues, ["rush_fee_flat_usd", "rush_fee_flat", "rush_fee"]);
+  const timelineValue = (record.timeline || "").toLowerCase();
+  const rushFee =
+    timelineValue.includes("rush") ? materialCost * rushFeePercent + rushFeeFlat : 0;
+
+  const baseCost =
+    materialCost + laborCost + tariffCost + shippingCost + timeCost + riskCost + rushFee;
+  const pricePremium = getCostPercent(costValues, ["price_premium_pct", "price_premium_percent"]);
+  const profitProduction = getCostPercent(costValues, [
+    "profit_margin_production_pct",
+    "profit_margin_percent",
+    "profit_margin",
+  ]);
+  const profitSales = getCostPercent(costValues, ["profit_margin_sales_pct"]);
+  const priceWithMargin = baseCost * (1 + pricePremium + profitProduction + profitSales);
+
+  const friendsDiscount = getCostPercent(costValues, [
+    "friends_and_family_discount_pct",
+    "friends_and_familty_discount_pct",
+  ]);
+  const welcomeDiscount = getCostPercent(costValues, ["welcome_discount_pct"]);
+  const offerDiscount = getCostPercent(costValues, ["offer_code_discount_pct"]);
+  const discountPercent = Math.max(friendsDiscount, welcomeDiscount, offerDiscount);
+  const maxDiscountPercent = getCostPercent(costValues, ["max_discount_pct", "max_discount_percent", "max_discount"]);
+  const appliedDiscount =
+    maxDiscountPercent > 0 ? Math.min(discountPercent, maxDiscountPercent) : discountPercent;
+  const finalPrice = priceWithMargin * (1 - appliedDiscount);
+
+  return { ok: true, price: Math.round(finalPrice) } as const;
+}
+
+function buildQuoteOptions(
+  record: Record<string, string>,
+  metals: string[],
+  adjustments: Record<string, PriceAdjustment>
+) {
+  const options: QuoteOption[] = [];
+  for (let i = 1; i <= 3; i += 1) {
+    const clarity = record[`quote_option_${i}_clarity`] || "";
+    const color = record[`quote_option_${i}_color`] || "";
+    const priceRaw = record[`quote_option_${i}_price_18k`] || "";
+    const price18k = parsePriceValue(priceRaw);
+    if (!Number.isFinite(price18k)) continue;
+    const prices: Record<string, number> = {};
+    metals.forEach((metal) => {
+      const normalized = normalizeMetalOption(metal);
+      const base = price18k;
+      if (normalized === "14K") {
+        prices[normalized] = Math.round(applyPriceAdjustment(base, adjustments["14K"]));
+      } else if (normalized === "Platinum") {
+        prices[normalized] = Math.round(applyPriceAdjustment(base, adjustments["Platinum"]));
+      } else {
+        prices[normalized] = Math.round(base);
+      }
+    });
+    options.push({
+      clarity,
+      color,
+      price18k: Math.round(price18k),
+      prices,
+    });
+  }
+  return options;
+}
+
+async function computeQuoteOptionPrices(
+  env: Env,
+  record: Record<string, string>
+): Promise<{ ok: true; fields: Record<string, string> } | { ok: false; error: string }> {
+  const fields: Record<string, string> = {};
+  let needsPricing = false;
+  for (let i = 1; i <= 3; i += 1) {
+    const priceRaw = record[`quote_option_${i}_price_18k`] || "";
+    const clarity = record[`quote_option_${i}_clarity`] || "";
+    const color = record[`quote_option_${i}_color`] || "";
+    if (priceRaw) continue;
+    if (!clarity && !color) continue;
+    needsPricing = true;
+  }
+
+  if (!needsPricing) {
+    return { ok: true, fields };
+  }
+
+  const costValues = await loadCostChartValues(env);
+  const diamondPrices = await loadDiamondPriceChart(env);
+  for (let i = 1; i <= 3; i += 1) {
+    const priceRaw = record[`quote_option_${i}_price_18k`] || "";
+    const clarity = record[`quote_option_${i}_clarity`] || "";
+    const color = record[`quote_option_${i}_color`] || "";
+    if (priceRaw) continue;
+    if (!clarity && !color) continue;
+    const result = computeOptionPriceFromCosts(record, clarity, color, costValues, diamondPrices);
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
+    fields[`quote_option_${i}_price_18k`] = String(result.price);
+  }
+
+  return { ok: true, fields };
 }
 
 async function handleOrderAdminAction(
@@ -2504,8 +3308,106 @@ async function handleQuoteAdminAction(env: Env, payload: Record<string, unknown>
   const status = getString(payload.status).toUpperCase();
   const notes = getString(payload.notes);
   const updates = coerceUpdates(payload.fields, QUOTE_UPDATE_FIELDS);
+  if (action === "submit_quote") {
+    return await submitQuoteAdmin(env, requestId, updates, notes);
+  }
   const nextStatus = resolveQuoteStatus(action, status);
   return await updateAdminRow(env, "quote", requestId, nextStatus, notes, updates);
+}
+
+type QuoteOption = {
+  clarity: string;
+  color: string;
+  price18k: number;
+  prices: Record<string, number>;
+};
+
+type QuoteConfirmationRecord = {
+  token: string;
+  requestId: string;
+  email?: string;
+  name?: string;
+  productName?: string;
+  status: "pending" | "accepted";
+  createdAt: string;
+  expiresAt?: string;
+  metals: string[];
+  options: QuoteOption[];
+  selectedMetal?: string;
+  selectedOption?: number;
+  selectedPrice?: number;
+  acceptedAt?: string;
+};
+
+async function submitQuoteAdmin(
+  env: Env,
+  requestId: string,
+  updates: Record<string, string>,
+  notes: string
+) {
+  if (!env.HEERAWALLA_ACKS) {
+    return { ok: false, error: "kv_missing" };
+  }
+  const lookup = await findSheetRowByRequestId(env, "quote", requestId);
+  if (!lookup) return { ok: false, error: "request_not_found" };
+  const header = Array.from(lookup.headerIndex.keys());
+  const record = mapSheetRowToRecord(header, lookup.row);
+  const mergedBase = { ...record, ...updates };
+  const computed = await computeQuoteOptionPrices(env, mergedBase);
+  if (!computed.ok) {
+    return { ok: false, error: computed.error };
+  }
+  const merged = { ...mergedBase, ...computed.fields };
+  const metals = parseMetalOptions(merged.quote_metal_options || "");
+  const adjustments = await loadPriceChartAdjustments(env);
+  const options = buildQuoteOptions(merged, metals, adjustments);
+  if (!options.length) {
+    return { ok: false, error: "quote_options_missing" };
+  }
+
+  const token = generateQuoteConfirmationToken();
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + QUOTE_CONFIRMATION_TTL * 1000).toISOString();
+  const quoteRecord: QuoteConfirmationRecord = {
+    token,
+    requestId: normalizeRequestId(requestId),
+    email: merged.email || record.email,
+    name: merged.name || record.name,
+    productName: merged.product_name || record.product_name,
+    status: "pending",
+    createdAt: now,
+    expiresAt,
+    metals,
+    options,
+  };
+  if (!quoteRecord.email) {
+    return { ok: false, error: "missing_email" };
+  }
+
+  await storeQuoteConfirmationRecord(env, quoteRecord);
+  const quoteUrl = buildQuotePageUrl(env, token);
+  const emailPayload = buildQuoteEmail(quoteRecord, quoteUrl);
+  try {
+    await sendEmail(env, {
+      to: [quoteRecord.email || ""],
+      sender: "Heerawalla <atelier@heerawalla.com>",
+      replyTo: getCustomerReplyTo(),
+      subject: emailPayload.subject,
+      textBody: emailPayload.textBody,
+      htmlBody: emailPayload.htmlBody,
+    });
+  } catch (error) {
+    return { ok: false, error: "quote_email_failed", detail: String(error) };
+  }
+
+  const updatePayload = {
+    ...updates,
+    ...computed.fields,
+    quote_token: token,
+    quote_expires_at: expiresAt,
+    quote_sent_at: now,
+  };
+  return await updateAdminRow(env, "quote", requestId, "QUOTED", notes, updatePayload);
 }
 
 async function handleContactAdminAction(env: Env, payload: Record<string, unknown>) {
@@ -2517,6 +3419,30 @@ async function handleContactAdminAction(env: Env, payload: Record<string, unknow
   const updates = coerceUpdates(payload.fields, CONTACT_UPDATE_FIELDS);
   const nextStatus = resolveContactStatus(action, status);
   return await updateAdminRow(env, "contact", requestId, nextStatus, notes, updates);
+}
+
+async function handlePricingAdminAction(
+  env: Env,
+  kind: "price_chart" | "cost_chart" | "diamond_price_chart",
+  payload: Record<string, unknown>
+) {
+  const action = getString(payload.action).toLowerCase();
+  const updates =
+    kind === "price_chart"
+      ? coerceUpdates(payload.fields, PRICE_CHART_UPDATE_FIELDS)
+      : kind === "cost_chart"
+      ? coerceUpdates(payload.fields, COST_CHART_UPDATE_FIELDS)
+      : coerceUpdates(payload.fields, DIAMOND_PRICE_CHART_UPDATE_FIELDS);
+  if (action === "add_row" || action === "add") {
+    await appendPricingRow(env, kind, updates);
+    return { ok: true };
+  }
+  const rowNumber = Number(getString(payload.rowNumber || payload.row_number || ""));
+  if (!rowNumber || rowNumber < 2) {
+    return { ok: false, error: "missing_row_number" };
+  }
+  await updatePricingRow(env, kind, rowNumber, updates);
+  return { ok: true };
 }
 
 async function handleOrderConfirmationAdmin(env: Env, payload: Record<string, unknown>) {
@@ -2592,11 +3518,14 @@ const ORDER_UPDATE_FIELDS = [
   "product_url",
   "design_code",
   "metal",
+  "metal_weight",
+  "metal_weight_adjustment",
   "stone",
   "stone_weight",
   "size",
   "price",
   "timeline",
+  "timeline_adjustment_weeks",
   "address_line1",
   "address_line2",
   "city",
@@ -2606,6 +3535,7 @@ const ORDER_UPDATE_FIELDS = [
 ] as const;
 
 const ORDER_DETAILS_UPDATE_FIELDS = [
+  "shipping_method",
   "shipping_carrier",
   "tracking_number",
   "tracking_url",
@@ -2635,17 +3565,47 @@ const QUOTE_UPDATE_FIELDS = [
   "product_url",
   "design_code",
   "metal",
+  "metal_weight",
   "stone",
   "stone_weight",
+  "diamond_breakdown",
   "size",
   "price",
   "timeline",
+  "timeline_adjustment_weeks",
   "address_line1",
   "address_line2",
   "city",
   "state",
   "postal_code",
   "country",
+  "quote_metal_options",
+  "quote_option_1_clarity",
+  "quote_option_1_color",
+  "quote_option_1_price_18k",
+  "quote_option_2_clarity",
+  "quote_option_2_color",
+  "quote_option_2_price_18k",
+  "quote_option_3_clarity",
+  "quote_option_3_color",
+  "quote_option_3_price_18k",
+  "quote_token",
+  "quote_expires_at",
+  "quote_sent_at",
+  "quote_selected_metal",
+  "quote_selected_option",
+  "quote_selected_price",
+] as const;
+
+const PRICE_CHART_UPDATE_FIELDS = ["metal", "adjustment_type", "adjustment_value", "notes"] as const;
+const COST_CHART_UPDATE_FIELDS = ["key", "value", "unit", "notes"] as const;
+const DIAMOND_PRICE_CHART_UPDATE_FIELDS = [
+  "clarity",
+  "color",
+  "weight_min",
+  "weight_max",
+  "price_per_ct",
+  "notes",
 ] as const;
 
 const CONTACT_UPDATE_FIELDS = [
@@ -2779,9 +3739,11 @@ async function updateAdminRow(
   updates: Record<string, string>
 ) {
   const config = getSheetConfig(env, kind);
-  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const headerFallback =
     kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, headerFallback, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
   const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
   const requestIdx = headerIndex.get("request_id") ?? -1;
@@ -2809,6 +3771,53 @@ async function updateAdminRow(
 
   await updateSheetColumns(env, config, headerIndex, rowNumber, updatesToApply);
   return { ok: true, status: status || undefined };
+}
+
+async function updatePricingRow(
+  env: Env,
+  kind: "price_chart" | "cost_chart" | "diamond_price_chart",
+  rowNumber: number,
+  updates: Record<string, string>
+) {
+  const config = getPricingSheetConfig(env, kind);
+  if (!config) {
+    throw new Error("pricing_sheet_missing");
+  }
+  const headerFallback =
+    kind === "price_chart"
+      ? PRICE_CHART_HEADER
+      : kind === "cost_chart"
+      ? COST_CHART_HEADER
+      : DIAMOND_PRICE_CHART_HEADER;
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, headerFallback, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
+  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  await updateSheetColumns(env, config, headerIndex, rowNumber, updates);
+}
+
+async function appendPricingRow(
+  env: Env,
+  kind: "price_chart" | "cost_chart" | "diamond_price_chart",
+  updates: Record<string, string>
+) {
+  const config = getPricingSheetConfig(env, kind);
+  if (!config) {
+    throw new Error("pricing_sheet_missing");
+  }
+  const headerFallback =
+    kind === "price_chart"
+      ? PRICE_CHART_HEADER
+      : kind === "cost_chart"
+      ? COST_CHART_HEADER
+      : DIAMOND_PRICE_CHART_HEADER;
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, headerFallback, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
+  const rowValues = header.map((key) => (key ? updates[key] || "" : ""));
+  await appendSheetRow(env, config, rowValues, header);
 }
 
 async function updateSheetColumns(
@@ -3341,6 +4350,15 @@ function getSheetConfig(env: Env, kind: "order" | "quote" | "contact"): SheetCon
   return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
 }
 
+function getPricingSheetConfig(
+  env: Env,
+  kind: "price_chart" | "cost_chart" | "diamond_price_chart"
+): SheetConfig | null {
+  if (kind === "price_chart") return getPriceChartSheetConfig(env);
+  if (kind === "cost_chart") return getCostChartSheetConfig(env);
+  return getDiamondPriceChartSheetConfig(env);
+}
+
 function getOrderDetailsSheetConfig(env: Env): SheetConfig {
   const sheetId = (env.ORDER_DETAILS_SHEET_ID || "").trim();
   if (!sheetId) {
@@ -3362,6 +4380,37 @@ function getUnifiedContactsSheetConfig(env: Env): SheetConfig | null {
   const appendRange =
     (env.UNIFIED_CONTACTS_SHEET_RANGE || env.CONTACTS_SHEET_RANGE || "").trim() ||
     `${sheetName}!A1`;
+  const resolvedSheetName = appendRange.includes("!") ? appendRange.split("!")[0] : sheetName;
+  const headerRange = `${resolvedSheetName}!A1:AZ1`;
+  return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
+}
+
+function getPriceChartSheetConfig(env: Env): SheetConfig | null {
+  const sheetId = (env.PRICE_CHART_SHEET_ID || "").trim();
+  if (!sheetId) return null;
+  const sheetName = (env.PRICE_CHART_SHEET_NAME || "").trim() || "price_chart";
+  const appendRange = (env.PRICE_CHART_SHEET_RANGE || "").trim() || `${sheetName}!A1`;
+  const resolvedSheetName = appendRange.includes("!") ? appendRange.split("!")[0] : sheetName;
+  const headerRange = `${resolvedSheetName}!A1:AZ1`;
+  return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
+}
+
+function getCostChartSheetConfig(env: Env): SheetConfig | null {
+  const sheetId = (env.COST_CHART_SHEET_ID || "").trim();
+  if (!sheetId) return null;
+  const sheetName = (env.COST_CHART_SHEET_NAME || "").trim() || "cost_chart";
+  const appendRange = (env.COST_CHART_SHEET_RANGE || "").trim() || `${sheetName}!A1`;
+  const resolvedSheetName = appendRange.includes("!") ? appendRange.split("!")[0] : sheetName;
+  const headerRange = `${resolvedSheetName}!A1:AZ1`;
+  return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
+}
+
+function getDiamondPriceChartSheetConfig(env: Env): SheetConfig | null {
+  const sheetId = (env.DIAMOND_PRICE_CHART_SHEET_ID || "").trim();
+  if (!sheetId) return null;
+  const sheetName = (env.DIAMOND_PRICE_CHART_SHEET_NAME || "").trim() || "diamonds_price_chart";
+  const appendRange =
+    (env.DIAMOND_PRICE_CHART_SHEET_RANGE || "").trim() || `${sheetName}!A1`;
   const resolvedSheetName = appendRange.includes("!") ? appendRange.split("!")[0] : sheetName;
   const headerRange = `${resolvedSheetName}!A1:AZ1`;
   return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
@@ -4234,6 +5283,22 @@ async function handleSubmitPayload(
           origin,
           ip,
           userAgent,
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
         ]);
         logInfo("quote_sheet_written", { requestId: normalizedRequestId });
         try {
@@ -4528,6 +5593,7 @@ function buildShippingSnapshot(details: OrderDetailsRecord) {
   const snapshot = {
     status: normalizeShippingStatus(details.shipping_status || ""),
     notes: getString(details.shipping_notes),
+    method: getString(details.shipping_method),
     carrier: getString(details.shipping_carrier),
     tracking: getString(details.tracking_number),
   };
@@ -4538,6 +5604,8 @@ function buildShippingUpdateNote(details: OrderDetailsRecord, checkedAt: string)
   const parts: string[] = [];
   const status = getString(details.shipping_status);
   if (status) parts.push(`Status: ${status}`);
+  const method = getString(details.shipping_method);
+  if (method) parts.push(`Method: ${method}`);
   const carrier = getString(details.shipping_carrier);
   if (carrier) parts.push(`Carrier: ${carrier}`);
   const tracking = getString(details.tracking_number);
@@ -4567,6 +5635,93 @@ function resolveOrderPaymentUrl(env: Env, requestId: string, email: string, toke
     .replace(/\{requestId\}/g, requestId)
     .replace(/\{token\}/g, token)
     .replace(/\{email\}/g, email || "");
+}
+
+function resolveQuotePaymentUrl(env: Env, requestId: string, token = "", metal = "", option = "") {
+  const template = getString(env.QUOTE_PAYMENT_URL || QUOTE_PAYMENT_URL);
+  if (!template) return "";
+  return template
+    .replace(/\{requestId\}/g, requestId)
+    .replace(/\{token\}/g, token)
+    .replace(/\{metal\}/g, metal)
+    .replace(/\{option\}/g, option);
+}
+
+function buildQuoteEmail(record: QuoteConfirmationRecord, quoteUrl: string) {
+  const requestId = record.requestId || "";
+  const name = record.name || "there";
+  const product = record.productName || "your piece";
+  const subject = requestId
+    ? `Heerawalla - Your personal quote is ready (${requestId})`
+    : "Heerawalla - Your personal quote is ready";
+  const textBody = [
+    `Hello ${name},`,
+    "",
+    `Your personal quote for ${product} is ready to review.`,
+    `Use your private link (valid for 72 hours): ${quoteUrl}`,
+    "",
+    "Your link is private and can be used once to begin purchase.",
+    "If you need changes, reply to this email and our concierge will assist.",
+    "",
+    "Warm regards,",
+    "Heerawalla",
+    "www.heerawalla.com",
+  ].join("\n");
+
+  const htmlBody = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="margin:0;padding:0;background:#f6f5f2;color:#0f172a;font-family:-apple-system, Segoe UI, Helvetica, Arial, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;">
+          <tr>
+            <td style="padding:36px 40px 28px 40px;">
+              <div style="margin:0 0 16px 0;">
+                <img src="https://www.heerawalla.com/images/engraving_mark.svg" width="36" height="36" alt="Heerawalla" style="display:block;">
+              </div>
+              <div style="font-size:12px;letter-spacing:0.32em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">
+                Heerawalla
+              </div>
+              <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.4;font-weight:600;color:#0f172a;">
+                Your personal quote is ready
+              </h1>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;">
+                Hello ${escapeHtml(name)}, your quote for ${escapeHtml(product)} is ready to review.
+              </p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px 0;">
+                <tr>
+                  <td style="background:#0f172a;border:1px solid #0f172a;">
+                    <a href="${escapeHtml(quoteUrl)}" style="display:inline-block;padding:12px 22px;font-size:12px;letter-spacing:0.2em;text-transform:uppercase;color:#ffffff;text-decoration:none;">View your quote</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 6px 0;font-size:13px;line-height:1.7;color:#475569;">
+                This private link is valid for 72 hours.
+              </p>
+              <p style="margin:0 0 24px 0;font-size:13px;line-height:1.7;color:#475569;">
+                If you need adjustments, reply to this email and our concierge will assist.
+              </p>
+              <div style="height:1px;background:#e5e7eb;margin:0 0 18px 0;"></div>
+              <p style="margin:0 0 6px 0;font-size:14px;color:#0f172a;">Warm regards,</p>
+              <p style="margin:0 0 10px 0;font-size:14px;font-weight:600;color:#0f172a;">Heerawalla</p>
+              <p style="margin:0;font-size:12px;color:#64748b;">
+                <a href="https://www.heerawalla.com" style="color:#64748b;text-decoration:underline;">www.heerawalla.com</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  return { subject, textBody, htmlBody };
 }
 
 function buildChangeSummaryText(changes: ConfirmationChange[]) {
@@ -7106,6 +8261,7 @@ type OrderDetailsRecord = {
   created_at?: string;
   request_id?: string;
   status?: string;
+  shipping_method?: string;
   shipping_carrier?: string;
   tracking_number?: string;
   tracking_url?: string;
@@ -7125,6 +8281,7 @@ type OrderDetailsRecord = {
 
 const ORDER_CONFIRMATION_KEY_PREFIX = "order:confirm:";
 const ORDER_CANCEL_KEY_PREFIX = "order:cancel:";
+const QUOTE_CONFIRMATION_KEY_PREFIX = "quote:confirm:";
 
 function buildOrderConfirmationKey(token: string) {
   const normalized = token.trim();
@@ -7134,6 +8291,11 @@ function buildOrderConfirmationKey(token: string) {
 function buildOrderCancelKey(token: string) {
   const normalized = token.trim();
   return normalized ? `${ORDER_CANCEL_KEY_PREFIX}${normalized}` : "";
+}
+
+function buildQuoteConfirmationKey(token: string) {
+  const normalized = token.trim();
+  return normalized ? `${QUOTE_CONFIRMATION_KEY_PREFIX}${normalized}` : "";
 }
 
 function buildOrderConfirmationPageUrl(env: Env, token: string) {
@@ -7156,7 +8318,25 @@ function buildOrderAuthenticityPageUrl(env: Env) {
   return base.endsWith("/") ? base.slice(0, -1) : base;
 }
 
+function buildQuotePageUrl(env: Env, token: string) {
+  const base = (env.QUOTE_PAGE_URL || QUOTE_PAGE_URL).trim();
+  if (!base) return `https://www.heerawalla.com/quote?token=${encodeURIComponent(token)}`;
+  const trimmed = base.endsWith("/") ? base.slice(0, -1) : base;
+  return `${trimmed}?token=${encodeURIComponent(token)}`;
+}
+
 function generateOrderConfirmationToken() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID().replace(/-/g, "");
+  }
+  const buffer = new Uint8Array(16);
+  crypto.getRandomValues(buffer);
+  return Array.from(buffer)
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function generateQuoteConfirmationToken() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID().replace(/-/g, "");
   }
@@ -7197,6 +8377,26 @@ async function getOrderConfirmationRecord(env: Env, token: string) {
   if (!value) return null;
   try {
     return JSON.parse(value) as OrderConfirmationRecord;
+  } catch {
+    return null;
+  }
+}
+
+async function storeQuoteConfirmationRecord(env: Env, record: QuoteConfirmationRecord) {
+  if (!env.HEERAWALLA_ACKS) return;
+  const key = buildQuoteConfirmationKey(record.token);
+  if (!key) return;
+  await env.HEERAWALLA_ACKS.put(key, JSON.stringify(record), { expirationTtl: QUOTE_CONFIRMATION_TTL });
+}
+
+async function getQuoteConfirmationRecord(env: Env, token: string) {
+  if (!env.HEERAWALLA_ACKS) return null;
+  const key = buildQuoteConfirmationKey(token);
+  if (!key) return null;
+  const value = await env.HEERAWALLA_ACKS.get(key);
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as QuoteConfirmationRecord;
   } catch {
     return null;
   }
