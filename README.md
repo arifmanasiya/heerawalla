@@ -110,6 +110,15 @@ npm run deploy -- -m "comment"
   - `VERIFY_SITE_URL` (set if you also want to validate the public site)
 - If the admin domain is behind Cloudflare Access, set `VERIFY_ADMIN_URL` to an accessible URL or use `--no-verify`.
 
+### Sync remote worker vars into wrangler.toml
+```bash
+export CLOUDFLARE_API_TOKEN=your_token
+export CLOUDFLARE_ACCOUNT_ID=your_account_id
+npm run sync:worker-vars
+```
+- Pulls plain-text vars + KV + send_email bindings from Cloudflare and updates `workers/herawalla-email-atelier/wrangler.toml`.
+- Uses the production environment by default; pass `--env <name>` to target another environment.
+
 ## Google Calendar + People API setup (Worker)
 The concierge booking and contact sync use Google APIs via the worker at `workers/herawalla-email-atelier`.
 
