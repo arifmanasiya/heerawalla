@@ -2600,11 +2600,19 @@ async function buildAdminList(
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, headerFallback, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const requiredKey = kind === "contact" ? "email" : "request_id";
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const items = rows.map((row, index) => {
-    const entry: Record<string, string> = { row_number: String(index + 2) };
-    header.forEach((key, idx) => {
+    const entry: Record<string, string> = {
+      row_number: String(index + headerConfig.rowStart),
+    };
+    headerConfig.header.forEach((key, idx) => {
       if (!key) return;
       entry[key] = String(row[idx] ?? "");
     });
@@ -2638,11 +2646,20 @@ async function buildPricingList(
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, headerFallback, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const requiredKey =
+    kind === "price_chart" ? "metal" : kind === "cost_chart" ? "key" : "price_per_ct";
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const items = rows.map((row, index) => {
-    const entry: Record<string, string> = { row_number: String(index + 2) };
-    header.forEach((key, idx) => {
+    const entry: Record<string, string> = {
+      row_number: String(index + headerConfig.rowStart),
+    };
+    headerConfig.header.forEach((key, idx) => {
       if (!key) return;
       entry[key] = String(row[idx] ?? "");
     });
@@ -2666,12 +2683,18 @@ async function buildUnifiedContactsList(env: Env, params: URLSearchParams) {
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, UNIFIED_CONTACTS_SHEET_HEADER, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header =
-    headerRows[0] && headerRows[0].length ? headerRows[0] : UNIFIED_CONTACTS_SHEET_HEADER;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, UNIFIED_CONTACTS_SHEET_HEADER, "email");
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const items = rows.map((row, index) => {
-    const entry: Record<string, string> = { row_number: String(index + 2) };
-    header.forEach((key, idx) => {
+    const entry: Record<string, string> = {
+      row_number: String(index + headerConfig.rowStart),
+    };
+    headerConfig.header.forEach((key, idx) => {
       if (!key) return;
       entry[key] = String(row[idx] ?? "");
     });
@@ -2742,6 +2765,28 @@ function normalizeBooleanFilter(value: string) {
   if (["true", "yes", "1"].includes(normalized)) return "true";
   if (["false", "no", "0"].includes(normalized)) return "false";
   return "";
+}
+
+function normalizeHeaderRow(row: string[]) {
+  return row.map((cell) => String(cell || "").trim().toLowerCase());
+}
+
+function headerHasKey(row: string[], key: string) {
+  const normalized = normalizeHeaderRow(row);
+  return normalized.includes(key.toLowerCase());
+}
+
+function resolveHeaderConfig<T extends string>(
+  headerRow: string[],
+  fallback: T[],
+  requiredKey: string
+) {
+  const hasHeader = headerRow.length > 0 && headerHasKey(headerRow, requiredKey);
+  return {
+    header: hasHeader ? headerRow : fallback,
+    rowStart: hasHeader ? 2 : 1,
+    hasHeader,
+  };
 }
 
 function applyUnifiedContactsFilters(items: Array<Record<string, string>>, params: URLSearchParams) {
@@ -2866,11 +2911,16 @@ async function loadPriceChartAdjustments(env: Env): Promise<Record<string, Price
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, PRICE_CHART_HEADER, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : PRICE_CHART_HEADER;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, PRICE_CHART_HEADER, "metal");
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const adjustments: Record<string, PriceAdjustment> = {};
   rows.forEach((row) => {
-    const record = mapSheetRowToRecord(header, row);
+    const record = mapSheetRowToRecord(headerConfig.header, row);
     const metal = normalizeMetalOption(record.metal || "");
     if (!metal) return;
     const adjustmentType = normalizeAdjustmentType(record.adjustment_type || "");
@@ -2912,11 +2962,16 @@ async function loadCostChartValues(env: Env): Promise<CostChartValues> {
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, COST_CHART_HEADER, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : COST_CHART_HEADER;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, COST_CHART_HEADER, "key");
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const values: CostChartValues = {};
   rows.forEach((row) => {
-    const record = mapSheetRowToRecord(header, row);
+    const record = mapSheetRowToRecord(headerConfig.header, row);
     const key = normalizeCostKey(record.key || "");
     if (!key) return;
     values[key] = record.value || "";
@@ -2930,12 +2985,16 @@ async function loadDiamondPriceChart(env: Env): Promise<DiamondPriceEntry[]> {
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, DIAMOND_PRICE_CHART_HEADER, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header =
-    headerRows[0] && headerRows[0].length ? headerRows[0] : DIAMOND_PRICE_CHART_HEADER;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, DIAMOND_PRICE_CHART_HEADER, "price_per_ct");
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const entries: DiamondPriceEntry[] = [];
   rows.forEach((row) => {
-    const record = mapSheetRowToRecord(header, row);
+    const record = mapSheetRowToRecord(headerConfig.header, row);
     const pricePerCt = parseNumberValue(record.price_per_ct || "");
     if (!Number.isFinite(pricePerCt) || pricePerCt <= 0) return;
     const weightMin = parseNumberValue(record.weight_min || "");
@@ -3744,17 +3803,25 @@ async function updateAdminRow(
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, headerFallback, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
-  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const requiredKey = kind === "contact" ? "email" : "request_id";
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
+  const headerIndex = new Map(
+    headerConfig.header.map((key, idx) => [String(key || ""), idx])
+  );
   const requestIdx = headerIndex.get("request_id") ?? -1;
   if (requestIdx < 0) return { ok: false, error: "missing_request_id_column" };
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const normalizedTarget = normalizeRequestId(requestId);
   let rowNumber = -1;
   for (let i = 0; i < rows.length; i += 1) {
     const candidate = normalizeRequestId(getString(rows[i]?.[requestIdx]));
     if (candidate && candidate === normalizedTarget) {
-      rowNumber = i + 2;
+      rowNumber = i + headerConfig.rowStart;
       break;
     }
   }
@@ -3792,8 +3859,11 @@ async function updatePricingRow(
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, headerFallback, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
-  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const requiredKey =
+    kind === "price_chart" ? "metal" : kind === "cost_chart" ? "key" : "price_per_ct";
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
+  const headerIndex = new Map(headerConfig.header.map((key, idx) => [String(key || ""), idx]));
   await updateSheetColumns(env, config, headerIndex, rowNumber, updates);
 }
 
@@ -3815,9 +3885,12 @@ async function appendPricingRow(
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, headerFallback, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
-  const rowValues = header.map((key) => (key ? updates[key] || "" : ""));
-  await appendSheetRow(env, config, rowValues, header);
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const requiredKey =
+    kind === "price_chart" ? "metal" : kind === "cost_chart" ? "key" : "price_per_ct";
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
+  const rowValues = headerConfig.header.map((key) => (key ? updates[key] || "" : ""));
+  await appendSheetRow(env, config, rowValues, headerConfig.header);
 }
 
 async function updateSheetColumns(
@@ -3851,16 +3924,29 @@ async function findSheetRowByRequestId(
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const headerFallback =
     kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
-  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const requiredKey = kind === "contact" ? "email" : "request_id";
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
+  const headerIndex = new Map(
+    headerConfig.header.map((key, idx) => [String(key || ""), idx])
+  );
   const requestIdx = headerIndex.get("request_id") ?? -1;
   if (requestIdx < 0) return null;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const normalizedTarget = normalizeRequestId(requestId);
   for (let i = 0; i < rows.length; i += 1) {
     const candidate = normalizeRequestId(getString(rows[i]?.[requestIdx]));
     if (candidate && candidate === normalizedTarget) {
-      return { config, headerIndex, rowNumber: i + 2, row: rows[i] };
+      return {
+        config,
+        headerIndex,
+        rowNumber: i + headerConfig.rowStart,
+        row: rows[i],
+      };
     }
   }
   return null;
@@ -3882,16 +3968,26 @@ async function findOrderDetailsRowByRequestId(
 ): Promise<SheetRowLookup | null> {
   const config = getOrderDetailsSheetConfig(env);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : ORDER_DETAILS_SHEET_HEADER;
-  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, ORDER_DETAILS_SHEET_HEADER, "request_id");
+  const headerIndex = new Map(headerConfig.header.map((key, idx) => [String(key || ""), idx]));
   const requestIdx = headerIndex.get("request_id") ?? -1;
   if (requestIdx < 0) return null;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const normalizedTarget = normalizeRequestId(requestId);
   for (let i = 0; i < rows.length; i += 1) {
     const candidate = normalizeRequestId(getString(rows[i]?.[requestIdx]));
     if (candidate && candidate === normalizedTarget) {
-      return { config, headerIndex, rowNumber: i + 2, row: rows[i] };
+      return {
+        config,
+        headerIndex,
+        rowNumber: i + headerConfig.rowStart,
+        row: rows[i],
+      };
     }
   }
   return null;
@@ -3913,14 +4009,24 @@ async function loadOrderDetailsMap(env: Env) {
   const map = new Map<string, OrderDetailsRecord>();
   const config = getOrderDetailsSheetConfig(env);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : ORDER_DETAILS_SHEET_HEADER;
-  const requestIdx = header.findIndex((value) => String(value || "").trim() === "request_id");
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, ORDER_DETAILS_SHEET_HEADER, "request_id");
+  const requestIdx = headerConfig.header.findIndex(
+    (value) => String(value || "").trim() === "request_id"
+  );
   if (requestIdx < 0) return map;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   rows.forEach((row) => {
     const requestId = getString(row[requestIdx]);
     if (!requestId) return;
-    map.set(normalizeRequestId(requestId), mapSheetRowToRecord(header, row) as OrderDetailsRecord);
+    map.set(
+      normalizeRequestId(requestId),
+      mapSheetRowToRecord(headerConfig.header, row) as OrderDetailsRecord
+    );
   });
   return map;
 }
@@ -3934,8 +4040,9 @@ async function upsertOrderDetailsRecord(
 ) {
   const config = getOrderDetailsSheetConfig(env);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : ORDER_DETAILS_SHEET_HEADER;
-  const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, ORDER_DETAILS_SHEET_HEADER, "request_id");
+  const headerIndex = new Map(headerConfig.header.map((key, idx) => [String(key || ""), idx]));
   const lookup = await findOrderDetailsRowByRequestId(env, requestId);
   const now = new Date().toISOString();
   const updatesToApply: Record<string, string> = { ...updates };
@@ -4420,9 +4527,10 @@ async function ensureSheetHeader(
   env: Env,
   config: SheetConfig,
   headerRow: string[],
-  cacheKey: string
+  cacheKey: string,
+  forceCheck = false
 ) {
-  if (env.HEERAWALLA_ACKS) {
+  if (!forceCheck && env.HEERAWALLA_ACKS) {
     const cached = await env.HEERAWALLA_ACKS.get(cacheKey);
     if (cached) return;
   }
@@ -4457,7 +4565,7 @@ async function appendSheetRow(
 ) {
   if (!skipHeaderCheck) {
     const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
-    await ensureSheetHeader(env, config, headerRow, cacheKey);
+    await ensureSheetHeader(env, config, headerRow, cacheKey, true);
   }
   const token = await getAccessToken(env);
   const appendUrl = new URL(
@@ -4717,19 +4825,28 @@ async function loadUnifiedContactsState(env: Env): Promise<UnifiedContactsState 
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}:unified`;
   await ensureSheetHeader(env, config, UNIFIED_CONTACTS_SHEET_HEADER, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const header =
-    headerRows[0] && headerRows[0].length ? headerRows[0] : UNIFIED_CONTACTS_SHEET_HEADER;
-  const headerIndex = new Map(header.map((key, idx) => [String(key || "").trim(), idx]));
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, UNIFIED_CONTACTS_SHEET_HEADER, "email");
+  const headerIndex = new Map(
+    headerConfig.header.map((key, idx) => [String(key || "").trim(), idx])
+  );
   const emailIdx = headerIndex.get("email") ?? -1;
   if (emailIdx < 0) return null;
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   const map = new Map<string, { rowNumber: number; record: Record<string, string> }>();
   rows.forEach((row, index) => {
     const email = normalizeEmailAddress(getString(row[emailIdx]));
     if (!email) return;
-    map.set(email, { rowNumber: index + 2, record: mapSheetRowToRecord(header, row) });
+    map.set(email, {
+      rowNumber: index + headerConfig.rowStart,
+      record: mapSheetRowToRecord(headerConfig.header, row),
+    });
   });
-  return { config, header, headerIndex, map };
+  return { config, header: headerConfig.header, headerIndex, map };
 }
 
 async function upsertUnifiedContact(env: Env, update: UnifiedContactUpdate) {
@@ -4818,9 +4935,10 @@ async function collectUnifiedContacts(
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const headerFallback =
     kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
-  const header = headerRows[0] && headerRows[0].length ? headerRows[0] : headerFallback;
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, "email");
   const headerIndex = new Map<string, number>();
-  header.forEach((cell, idx) => {
+  headerConfig.header.forEach((cell, idx) => {
     headerIndex.set(String(cell || "").trim().toLowerCase(), idx);
   });
 
@@ -4830,7 +4948,11 @@ async function collectUnifiedContacts(
   const phoneIdx = headerIndex.get("phone") ?? -1;
   const createdAtIdx = headerIndex.get("created_at") ?? -1;
 
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   rows.forEach((row) => {
     const email = getString(row[emailIdx]);
     if (!email) return;
@@ -4967,13 +5089,15 @@ async function processAckQueues(env: Env) {
 async function processAckQueue(env: Env, kind: "order" | "quote") {
   const config = getSheetConfig(env, kind);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerRow = headerRows[0] || [];
-  if (!headerRow.length) {
+  const headerFallback = kind === "order" ? ORDER_SHEET_HEADER : QUOTE_SHEET_HEADER;
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, "request_id");
+  if (!headerConfig.header.length) {
     logWarn("ack_queue_missing_header", { kind });
     return;
   }
   const headerIndex = new Map<string, number>();
-  headerRow.forEach((cell, idx) => {
+  headerConfig.header.forEach((cell, idx) => {
     headerIndex.set(String(cell || "").trim().toLowerCase(), idx);
   });
   const statusIdx = headerIndex.get("status") ?? -1;
@@ -4989,7 +5113,7 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
     return;
   }
 
-  const dataRange = `${config.sheetName}!A2:AZ`;
+  const dataRange = `${config.sheetName}!A${headerConfig.rowStart}:AZ`;
   const rows = await fetchSheetValues(env, config.sheetId, dataRange);
   if (!rows.length) return;
 
@@ -5005,7 +5129,7 @@ async function processAckQueue(env: Env, kind: "order" | "quote") {
       break;
     }
 
-    const rowNumber = i + 2;
+    const rowNumber = i + headerConfig.rowStart;
     const requestId = getString(row[requestIdIdx]);
     const senderEmail = getString(row[emailIdx]);
     const senderName = getString(row[nameIdx]);
@@ -6068,11 +6192,12 @@ async function processOrderStatusEmails(env: Env) {
 
   const config = getSheetConfig(env, "order");
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerRow = headerRows[0] || [];
-  if (!headerRow.length) return;
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, ORDER_SHEET_HEADER, "request_id");
+  if (!headerConfig.header.length) return;
 
   const headerIndex = new Map<string, number>();
-  headerRow.forEach((cell, idx) => {
+  headerConfig.header.forEach((cell, idx) => {
     headerIndex.set(String(cell || "").trim().toLowerCase(), idx);
   });
 
@@ -6085,7 +6210,11 @@ async function processOrderStatusEmails(env: Env) {
   const productIdx = headerIndex.get("product_name") ?? -1;
   if ([requestIdIdx, statusIdx, emailIdx].some((idx) => idx < 0)) return;
 
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   if (!rows.length) return;
 
   const intervalMs = getStatusEmailIntervalHours(env) * 60 * 60 * 1000;
@@ -6207,11 +6336,12 @@ async function processShippedOrderUpdates(env: Env) {
 
   const config = getSheetConfig(env, "order");
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerRow = headerRows[0] || [];
-  if (!headerRow.length) return;
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const headerConfig = resolveHeaderConfig(headerRow, ORDER_SHEET_HEADER, "request_id");
+  if (!headerConfig.header.length) return;
 
   const headerIndex = new Map<string, number>();
-  headerRow.forEach((cell, idx) => {
+  headerConfig.header.forEach((cell, idx) => {
     headerIndex.set(String(cell || "").trim().toLowerCase(), idx);
   });
 
@@ -6220,7 +6350,11 @@ async function processShippedOrderUpdates(env: Env) {
   const notesIdx = headerIndex.get("notes") ?? -1;
   if ([requestIdIdx, statusIdx, notesIdx].some((idx) => idx < 0)) return;
 
-  const rows = await fetchSheetValues(env, config.sheetId, `${config.sheetName}!A2:AZ`);
+  const rows = await fetchSheetValues(
+    env,
+    config.sheetId,
+    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+  );
   if (!rows.length) return;
 
   const intervalMs = ORDER_SHIPPING_CHECK_INTERVAL_HOURS * 60 * 60 * 1000;
