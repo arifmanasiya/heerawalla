@@ -23,6 +23,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: workers/herawalla-email-atelier
           command: deploy
+          wranglerVersion: "4.59.2"
 
   deploy-admin-pages:
     runs-on: ubuntu-latest
@@ -32,3 +33,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: deploy --name ${{ vars.CF_ADMIN_WORKER_NAME }} --assets admin-placeholder
+          wranglerVersion: "4.59.2"
