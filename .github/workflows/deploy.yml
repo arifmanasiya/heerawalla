@@ -34,5 +34,5 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: deploy --name ${{ vars.CF_ADMIN_WORKER_NAME }} --assets admin-placeholder
+          command: deploy --name ${{ vars.CF_ADMIN_WORKER_NAME }} --assets admin-placeholder --compatibility-date 2026-01-16
           wranglerVersion: "4.59.2"
