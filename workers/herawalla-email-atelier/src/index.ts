@@ -2105,6 +2105,9 @@ async function handleOrderConfirmationRequest(
       JSON.stringify({
         ok: true,
         status: updatedRecord.status,
+        selectedMetal,
+        selectedOption: optionIndex,
+        selectedPrice,
         paymentUrl: paymentUrl || undefined,
       }),
       {
@@ -2207,6 +2210,14 @@ async function handleQuoteConfirmationRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
+    if (record.status !== "expired" && isQuoteExpired(record)) {
+      const updatedRecord = { ...record, status: "expired" as const };
+      await storeQuoteConfirmationRecord(env, updatedRecord);
+      return new Response(JSON.stringify({ ok: false, error: "expired", status: "expired" }), {
+        status: 410,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
     return new Response(
       JSON.stringify({
         ok: true,
@@ -2220,6 +2231,7 @@ async function handleQuoteConfirmationRequest(
         selectedMetal: record.selectedMetal || "",
         selectedOption: record.selectedOption ?? null,
         selectedPrice: record.selectedPrice ?? null,
+        selectedAt: record.selectedAt || record.acceptedAt || "",
       }),
       {
         status: 200,
@@ -2252,7 +2264,17 @@ async function handleQuoteConfirmationRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
-    if (record.status !== "pending") {
+    if (record.status === "expired" || isQuoteExpired(record)) {
+      const updatedRecord = record.status === "expired" ? record : { ...record, status: "expired" as const };
+      if (record.status !== "expired") {
+        await storeQuoteConfirmationRecord(env, updatedRecord);
+      }
+      return new Response(JSON.stringify({ ok: false, error: "expired", status: "expired" }), {
+        status: 410,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (!["pending", "selected", "accepted"].includes(record.status)) {
       return new Response(JSON.stringify({ ok: false, error: "already_used", status: record.status }), {
         status: 409,
         headers: buildCorsHeaders(allowedOrigin, true),
@@ -2274,19 +2296,51 @@ async function handleQuoteConfirmationRequest(
     const option = record.options[optionIndex];
     const selectedMetal = metal || record.metals[0] || "18K";
     const selectedPrice = option.prices[selectedMetal] ?? option.price18k;
+    const confirmChange = getBoolean(payload.confirm);
+    const hasSelection = record.selectedOption !== undefined && record.selectedOption !== null;
+    const isDifferentSelection =
+      hasSelection &&
+      (record.selectedOption !== optionIndex || (record.selectedMetal || "") !== selectedMetal);
+    if (isDifferentSelection && !confirmChange) {
+      const currentOption =
+        record.selectedOption !== undefined && record.selectedOption !== null
+          ? record.options[record.selectedOption]
+          : null;
+      const currentPrice = currentOption
+        ? currentOption.prices?.[record.selectedMetal || ""] ?? currentOption.price18k
+        : null;
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: "confirm_required",
+          status: record.status,
+          currentSelection: {
+            metal: record.selectedMetal || "",
+            option: record.selectedOption,
+            price: currentPrice,
+          },
+        }),
+        {
+          status: 409,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        }
+      );
+    }
+
     const acceptedAt = new Date().toISOString();
     const updatedRecord: QuoteConfirmationRecord = {
       ...record,
-      status: "accepted",
+      status: "selected",
       selectedMetal,
       selectedOption: optionIndex,
       selectedPrice,
-      acceptedAt,
+      acceptedAt: record.acceptedAt || acceptedAt,
+      selectedAt: acceptedAt,
     };
     await storeQuoteConfirmationRecord(env, updatedRecord);
 
     try {
-      await updateAdminRow(env, "quote", record.requestId, "CONVERTED", "", {
+      await updateAdminRow(env, "quote", record.requestId, "", "", {
         quote_selected_metal: selectedMetal,
         quote_selected_option: String(optionIndex + 1),
         quote_selected_price: String(selectedPrice),
@@ -3409,7 +3463,7 @@ type QuoteConfirmationRecord = {
   email?: string;
   name?: string;
   productName?: string;
-  status: "pending" | "accepted";
+  status: "pending" | "selected" | "accepted" | "expired";
   createdAt: string;
   expiresAt?: string;
   metals: string[];
@@ -3418,6 +3472,7 @@ type QuoteConfirmationRecord = {
   selectedOption?: number;
   selectedPrice?: number;
   acceptedAt?: string;
+  selectedAt?: string;
 };
 
 async function submitQuoteAdmin(
@@ -8487,6 +8542,13 @@ function buildQuotePageUrl(env: Env, token: string) {
   if (!base) return `https://www.heerawalla.com/quote?token=${encodeURIComponent(token)}`;
   const trimmed = base.endsWith("/") ? base.slice(0, -1) : base;
   return `${trimmed}?token=${encodeURIComponent(token)}`;
+}
+
+function isQuoteExpired(record: QuoteConfirmationRecord) {
+  if (!record.expiresAt) return false;
+  const expiresAt = Date.parse(record.expiresAt);
+  if (!Number.isFinite(expiresAt)) return false;
+  return Date.now() > expiresAt;
 }
 
 function generateOrderConfirmationToken() {

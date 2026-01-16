@@ -85,6 +85,21 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
     </section>
   </main>
 
+  <div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 px-6" data-quote-modal>
+    <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+      <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Confirm selection</div>
+      <h2 class="mt-2 text-2xl font-display text-ink" data-quote-modal-title>Review your selection</h2>
+      <p class="mt-3 text-sm text-slate-600" data-quote-modal-copy>
+        Please confirm this is the exact combination you want before continuing to checkout.
+      </p>
+      <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-ink" data-quote-modal-summary></div>
+      <div class="mt-6 flex flex-wrap items-center justify-end gap-3">
+        <button class="btn btn-ghost" type="button" data-quote-modal-cancel>Change selection</button>
+        <button class="btn btn-primary" type="button" data-quote-modal-confirm>Confirm &amp; continue</button>
+      </div>
+    </div>
+  </div>
+
   <Footer />
 </BaseLayout>
 
@@ -99,6 +114,12 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
     const metalsEl = root.querySelector('[data-quote-metals]');
     const tableEl = root.querySelector('[data-quote-table]');
     const expiryEl = root.querySelector('[data-quote-expiry]');
+    const modalEl = document.querySelector('[data-quote-modal]');
+    const modalTitleEl = document.querySelector('[data-quote-modal-title]');
+    const modalCopyEl = document.querySelector('[data-quote-modal-copy]');
+    const modalSummaryEl = document.querySelector('[data-quote-modal-summary]');
+    const modalCancelEl = document.querySelector('[data-quote-modal-cancel]');
+    const modalConfirmEl = document.querySelector('[data-quote-modal-confirm]');
     const apiBase = root.getAttribute('data-quote-api') || '';
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token') || params.get('t') || params.get('quote');
@@ -137,6 +158,23 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
       return await response.json();
     };
 
+    const requestJsonWithStatus = async (path, options = {}) => {
+      if (!apiBase) throw new Error('missing_api');
+      const base = apiBase.replace(/\/$/, '');
+      const response = await fetch(`${base}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      });
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+      return { ok: response.ok, status: response.status, data };
+    };
+
     if (!token) {
       setStatus('This quote link is missing or invalid. Please contact the concierge.', 'error');
       return;
@@ -144,6 +182,36 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
 
     let quoteData = null;
     let selectedMetal = '';
+    let pendingSelection = null;
+
+    const formatOptionLabel = (option, index) => {
+      return [option?.clarity, option?.color].filter(Boolean).join(' / ') || `Option ${index + 1}`;
+    };
+
+    const formatSelectionSummary = (selection) => {
+      if (!quoteData || !selection) return '';
+      const option = quoteData.options?.[selection.optionIndex];
+      const label = formatOptionLabel(option, selection.optionIndex);
+      const price = option ? option.prices?.[selection.metal] ?? option.price18k : null;
+      return `Metal: ${selection.metal} · Option: ${label} · Price: ${formatMoney(price)}`;
+    };
+
+    const openModal = (title, copy, summary, confirmLabel) => {
+      if (!modalEl) return;
+      if (modalTitleEl) modalTitleEl.textContent = title;
+      if (modalCopyEl) modalCopyEl.textContent = copy;
+      if (modalSummaryEl) modalSummaryEl.textContent = summary;
+      if (modalConfirmEl) modalConfirmEl.textContent = confirmLabel;
+      modalEl.classList.remove('hidden');
+      modalEl.classList.add('flex');
+    };
+
+    const closeModal = () => {
+      if (!modalEl) return;
+      modalEl.classList.add('hidden');
+      modalEl.classList.remove('flex');
+      pendingSelection = null;
+    };
 
     const renderMetals = (metals) => {
       if (!metalsEl) return;
@@ -171,9 +239,25 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
         tableEl.innerHTML = '<div class="px-4 py-3 text-sm text-slate-500">No quote options available.</div>';
         return;
       }
+      const hasSelection = quoteData.selectedOption !== null && quoteData.selectedOption !== undefined;
+      const selectionLabel = hasSelection
+        ? formatOptionLabel(options[quoteData.selectedOption], quoteData.selectedOption)
+        : '';
+      const selectionPrice = hasSelection
+        ? options[quoteData.selectedOption].prices?.[quoteData.selectedMetal] ?? options[quoteData.selectedOption].price18k
+        : null;
+      const selectionNotice = hasSelection
+        ? `
+          <div class="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            Current selection: <span class="font-medium text-ink">${selectionLabel}</span> in
+            <span class="font-medium text-ink">${quoteData.selectedMetal}</span> at
+            <span class="font-medium text-ink">${formatMoney(selectionPrice)}</span>.
+            <button class="ml-3 underline text-ink" type="button" data-quote-resume>Continue to checkout</button>
+          </div>`
+        : '';
       const headerCells = options
         .map((option, index) => {
-          const label = [option.clarity, option.color].filter(Boolean).join(' · ') || `Option ${index + 1}`;
+          const label = formatOptionLabel(option, index);
           return `<th class="px-4 py-3 text-left text-xs uppercase tracking-[0.2em] text-slate-500 border-b border-slate-200">${label}</th>`;
         })
         .join('');
@@ -191,6 +275,7 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
         .join('');
 
       tableEl.innerHTML = `
+        ${selectionNotice}
         <table class="w-full text-sm">
           <thead>
             <tr><th class="px-4 py-3 text-left text-xs uppercase tracking-[0.2em] text-slate-500 border-b border-slate-200"></th>${headerCells}</tr>
@@ -202,26 +287,33 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
         </table>
       `;
 
+      const handleSelection = (optionIndex) => {
+        const selection = { optionIndex, metal: selectedMetal };
+        const hasExisting = quoteData.selectedOption !== null && quoteData.selectedOption !== undefined;
+        const isChange =
+          hasExisting &&
+          (quoteData.selectedOption !== optionIndex || (quoteData.selectedMetal || '') !== selectedMetal);
+        const copy = isChange
+          ? 'You are about to change your previous selection. If you already started checkout, this will replace that invoice.'
+          : 'Please confirm this is the exact combination you want before continuing to checkout.';
+        const summary = formatSelectionSummary(selection);
+        pendingSelection = { ...selection, confirm: isChange };
+        openModal('Review your selection', copy, summary, isChange ? 'Confirm & switch' : 'Confirm & continue');
+      };
+
       tableEl.querySelectorAll('[data-quote-select]').forEach((button) => {
-        button.addEventListener('click', async () => {
+        button.addEventListener('click', () => {
           const optionIndex = Number(button.getAttribute('data-quote-select'));
-          setStatus('Confirming your selection...', 'success');
-          try {
-            const result = await requestJson('/quotes/confirmation/accept', {
-              method: 'POST',
-              body: JSON.stringify({ token, metal: selectedMetal, optionIndex }),
-            });
-            const paymentUrl = result.paymentUrl || result.checkoutUrl || result.url;
-            if (paymentUrl) {
-              window.location.href = paymentUrl;
-              return;
-            }
-            setStatus('Selection received. We will follow up with secure checkout.', 'success');
-          } catch (error) {
-            setStatus('We could not confirm this selection. Please contact the concierge.', 'error');
-          }
+          handleSelection(optionIndex);
         });
       });
+
+      const resumeButton = tableEl.querySelector('[data-quote-resume]');
+      if (resumeButton && hasSelection) {
+        resumeButton.addEventListener('click', () => {
+          handleSelection(quoteData.selectedOption);
+        });
+      }
     };
 
     const loadQuote = async () => {
@@ -241,12 +333,8 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
           }
         }
 
-        if (status !== 'pending') {
-          const statusMessage =
-            status === 'accepted'
-              ? 'This quote has already been used. We will follow up with secure checkout.'
-              : 'This quote link has already been used or expired.';
-          setStatus(statusMessage, status === 'accepted' ? 'success' : 'error');
+        if (status === 'expired') {
+          setStatus('This quote link has expired. Please contact the concierge.', 'error');
           return;
         }
 
@@ -254,11 +342,78 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
         selectedMetal = data.selectedMetal || metals[0];
         renderMetals(metals);
         renderTable();
-        setStatus('Select your preferred metal and option to continue.', 'success');
+        if (status === 'selected' || status === 'accepted') {
+          setStatus('Selection saved. You can update your choice before checkout.', 'success');
+        } else {
+          setStatus('Select your preferred metal and option to continue.', 'success');
+        }
       } catch (error) {
+        const message = String(error || '');
+        if (message.includes('expired')) {
+          setStatus('This quote link has expired. Please contact the concierge.', 'error');
+          return;
+        }
         setStatus('We could not load your quote. Please contact the concierge.', 'error');
       }
     };
+
+    if (modalCancelEl) {
+      modalCancelEl.addEventListener('click', () => {
+        closeModal();
+      });
+    }
+    if (modalConfirmEl) {
+      modalConfirmEl.addEventListener('click', async () => {
+        if (!pendingSelection) return;
+        const { optionIndex, metal, confirm } = pendingSelection;
+        setStatus('Confirming your selection...', 'success');
+        try {
+          const result = await requestJsonWithStatus('/quotes/confirmation/accept', {
+            method: 'POST',
+            body: JSON.stringify({ token, metal, optionIndex, confirm }),
+          });
+          if (!result.ok) {
+            if (result.data && result.data.error === 'confirm_required') {
+              openModal(
+                'Confirm selection change',
+                'Please confirm you want to replace your prior selection before continuing.',
+                formatSelectionSummary({ optionIndex, metal }),
+                'Confirm & switch'
+              );
+              pendingSelection = { optionIndex, metal, confirm: true };
+              return;
+            }
+            setStatus('We could not confirm this selection. Please contact the concierge.', 'error');
+            closeModal();
+            return;
+          }
+          const data = result.data || {};
+          quoteData = {
+            ...quoteData,
+            status: data.status || quoteData.status,
+            selectedMetal: data.selectedMetal || metal,
+            selectedOption:
+              data.selectedOption !== undefined && data.selectedOption !== null
+                ? data.selectedOption
+                : optionIndex,
+            selectedPrice: data.selectedPrice || quoteData.selectedPrice,
+          };
+          selectedMetal = quoteData.selectedMetal || selectedMetal;
+          renderMetals(quoteData.metals || []);
+          renderTable();
+          const paymentUrl = data.paymentUrl || data.checkoutUrl || data.url;
+          closeModal();
+          if (paymentUrl) {
+            window.location.href = paymentUrl;
+            return;
+          }
+          setStatus('Selection saved. We will follow up with secure checkout.', 'success');
+        } catch (error) {
+          setStatus('We could not confirm this selection. Please contact the concierge.', 'error');
+          closeModal();
+        }
+      });
+    }
 
     loadQuote();
   })();
