@@ -4,7 +4,7 @@
 - Build: `npm run build`
 - Update `/data/products-*.csv` and `/data/site_config.sample.csv` with your data.
 - (If using GitHub Pages without a custom domain) set `BASE_PATH` to your repo path, e.g. `/heerawalla`.
-- Push to `main`; GitHub Actions deploys the worker + admin pages to Cloudflare.
+- Push to `main`; GitHub Actions deploys the worker + admin pages to Cloudflare and the site to GitHub Pages.
 
 ---
 

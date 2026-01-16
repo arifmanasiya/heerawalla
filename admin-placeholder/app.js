@@ -351,6 +351,8 @@
   let isSyncingBreakdown = false;
   let quotePricingTimer = null;
   let quotePricingInFlight = false;
+  const catalogCache = { data: null, promise: null };
+  const mediaCache = new Map();
 
   function updateSyncLine() {
     if (!ui.syncLine) return;
@@ -684,6 +686,142 @@
     }, 350);
   }
 
+  function getCatalogBase() {
+    return apiBase.replace(/\/admin\/?$/, "");
+  }
+
+  function extractSlug(url) {
+    if (!url) return "";
+    try {
+      const parsed = new URL(url, "https://www.heerawalla.com");
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const last = parts[parts.length - 1] || "";
+      if (last.toLowerCase() === "bespoke" && parts.length > 1) {
+        return parts[parts.length - 2] || "";
+      }
+      return last;
+    } catch {
+      return "";
+    }
+  }
+
+  function extractCatalogType(url) {
+    if (!url) return "";
+    try {
+      const parsed = new URL(url, "https://www.heerawalla.com");
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parts.includes("inspirations")) return "inspirations";
+      if (parts.includes("product") || parts.includes("products")) return "products";
+      return "";
+    } catch {
+      return "";
+    }
+  }
+
+  async function loadCatalog() {
+    if (catalogCache.data) return catalogCache.data;
+    if (catalogCache.promise) return catalogCache.promise;
+    const url = `${getCatalogBase()}/catalog?include=products,inspirations`;
+    catalogCache.promise = fetch(url)
+      .then((response) => response.json())
+      .then((data) => {
+        catalogCache.data = data || {};
+        return catalogCache.data;
+      })
+      .catch(() => {
+        catalogCache.data = {};
+        return catalogCache.data;
+      })
+      .finally(() => {
+        catalogCache.promise = null;
+      });
+    return catalogCache.promise;
+  }
+
+  function collectImageUrls(entry) {
+    if (!entry) return [];
+    const candidates = [];
+    if (entry.hero_image) candidates.push(entry.hero_image);
+    if (entry.heroImage) candidates.push(entry.heroImage);
+    if (Array.isArray(entry.images)) {
+      entry.images.forEach((image) => candidates.push(image));
+    }
+    return Array.from(new Set(candidates.filter(Boolean)));
+  }
+
+  function resolveCatalogEntry(item, catalog) {
+    if (!catalog) return null;
+    const url = item.product_url || "";
+    const slug = extractSlug(url);
+    const type = extractCatalogType(url);
+    const designCode = item.design_code || "";
+    const name = item.product_name || "";
+    const inspirations = Array.isArray(catalog.inspirations) ? catalog.inspirations : [];
+    const products = Array.isArray(catalog.products) ? catalog.products : [];
+    const byDesignCode = (entry) =>
+      designCode &&
+      (entry.design_code || entry.designCode || "").toLowerCase() === designCode.toLowerCase();
+    const byName = (entry) =>
+      name && String(entry.name || entry.title || "").toLowerCase() === name.toLowerCase();
+    const bySlug = (entry) => slug && String(entry.slug || "").toLowerCase() === slug.toLowerCase();
+    if (type === "inspirations") {
+      return inspirations.find(bySlug) || inspirations.find(byDesignCode) || inspirations.find(byName) || null;
+    }
+    if (type === "products") {
+      return products.find(bySlug) || products.find(byDesignCode) || products.find(byName) || null;
+    }
+    return (
+      inspirations.find(bySlug) ||
+      products.find(bySlug) ||
+      inspirations.find(byDesignCode) ||
+      products.find(byDesignCode) ||
+      inspirations.find(byName) ||
+      products.find(byName) ||
+      null
+    );
+  }
+
+  function buildMediaCarousel(images) {
+    if (!images.length) {
+      return '<div class="media-empty muted">No images available.</div>';
+    }
+    if (images.length === 1) {
+      const src = escapeAttribute(images[0]);
+      return `<div class="media-frame"><img src="${src}" alt="" loading="lazy"></div>`;
+    }
+    const slides = images
+      .map(
+        (src) => `<div class="media-slide"><img src="${escapeAttribute(src)}" alt="" loading="lazy"></div>`
+      )
+      .join("");
+    return `
+      <div class="media-carousel" data-media-carousel>
+        <button class="carousel-btn" type="button" data-carousel-prev aria-label="Previous image">‹</button>
+        <div class="media-track" data-carousel-track>${slides}</div>
+        <button class="carousel-btn" type="button" data-carousel-next aria-label="Next image">›</button>
+      </div>`;
+  }
+
+  function renderQuoteMediaSlot() {
+    return '<div class="media-slot" data-media-slot><span class="muted">Loading images...</span></div>';
+  }
+
+  async function refreshQuoteMedia(item) {
+    if (state.tab !== "quotes" || !ui.detailGrid) return;
+    const slot = ui.detailGrid.querySelector("[data-media-slot]");
+    if (!slot) return;
+    const cacheKey = item.design_code || item.product_url || item.product_name || "";
+    if (cacheKey && mediaCache.has(cacheKey)) {
+      slot.innerHTML = buildMediaCarousel(mediaCache.get(cacheKey));
+      return;
+    }
+    const catalog = await loadCatalog();
+    const entry = resolveCatalogEntry(item, catalog);
+    const images = collectImageUrls(entry);
+    if (cacheKey) mediaCache.set(cacheKey, images);
+    slot.innerHTML = buildMediaCarousel(images);
+  }
+
   function getValue(item, key) {
     if (key === "created_at") return formatDate(item[key]);
     if (key === "price") return formatPrice(item[key]);
@@ -882,6 +1020,13 @@
     ui.results.textContent = `Showing ${state.items.length} of ${state.total}`;
   }
 
+  function renderDetailCell(label, value) {
+    if (label === "Images") {
+      return `<div class="detail-media"><span>${label}</span>${value}</div>`;
+    }
+    return `<div><span>${label}</span>${value}</div>`;
+  }
+
   function updateStatusOptions() {
     if (!ui.statusSelect) return;
     const currentStatus = normalizeStatus(state.selectedItem?.status);
@@ -974,6 +1119,35 @@
             ["Price per ct", item.price_per_ct],
             ["Notes", item.notes],
           ]
+        : state.tab === "quotes"
+        ? [
+            ["Created", formatDate(item.created_at)],
+            ["Name", item.name],
+            ["Email", item.email],
+            ["Phone", item.phone],
+            ["Product", item.product_name],
+            ["Images", renderQuoteMediaSlot()],
+            ["Design code", item.design_code],
+            ["Metal", item.metal],
+            ["Metal weight", formatGrams(item.metal_weight)],
+            ["Metal weight adjustment", formatSignedGrams(item.metal_weight_adjustment)],
+            ["Stone", item.stone],
+            ["Stone weight", item.stone_weight],
+            ["Diamond breakdown", item.diamond_breakdown],
+            ["Size", item.size],
+            ["Price", formatPrice(item.price)],
+            ["Timeline", item.timeline],
+            ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
+            ["Address", item.address_line1],
+            ["City", item.city],
+            ["State", item.state],
+            ["Postal code", item.postal_code],
+            ["Country", item.country],
+            ["Interests", item.interests],
+            ["Contact preference", item.contact_preference],
+            ["Subscription", item.subscription_status],
+            ["Notes", item.notes],
+          ]
         : [
             ["Request ID", item.request_id],
             ["Created", formatDate(item.created_at)],
@@ -1006,8 +1180,9 @@
           ];
     ui.detailGrid.innerHTML = detailFields
       .filter(([, value]) => value)
-      .map(([label, value]) => `<div><span>${label}</span>${value}</div>`)
+      .map(([label, value]) => renderDetailCell(label, value))
       .join("");
+    refreshQuoteMedia(item);
 
     ui.editFields.forEach((field) => {
       const key = field.dataset.field;
@@ -1162,7 +1337,7 @@
     const canEdit = canEditCurrentTab();
     const notesChanged = getNotesValue() !== state.originalNotes.trim();
     if (ui.notesSave) {
-      if (PRICING_TABS.has(state.tab)) {
+      if (PRICING_TABS.has(state.tab) || state.tab === "quotes") {
         ui.notesSave.style.display = "none";
       } else {
         ui.notesSave.style.display = "";
@@ -1177,7 +1352,8 @@
       if (PRICING_TABS.has(state.tab)) {
         fields.notes = getNotesValue();
       }
-      const hasChanges = Object.keys(fields).length > 0;
+      const hasChanges =
+        Object.keys(fields).length > 0 || (state.tab === "quotes" && notesChanged);
       ui.primaryAction.textContent = "Save updates";
       ui.primaryAction.disabled = !canEdit || !hasChanges;
       return;
@@ -1803,6 +1979,21 @@
     ui.drawer.addEventListener("click", (event) => {
       if (event.target === ui.drawer) closeDrawer();
     });
+    if (ui.detailGrid) {
+      ui.detailGrid.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const isPrev = target.closest("[data-carousel-prev]");
+        const isNext = target.closest("[data-carousel-next]");
+        if (!isPrev && !isNext) return;
+        const carousel = target.closest("[data-media-carousel]");
+        if (!carousel) return;
+        const track = carousel.querySelector("[data-carousel-track]");
+        if (!(track instanceof HTMLElement)) return;
+        const delta = isPrev ? -1 : 1;
+        track.scrollBy({ left: track.clientWidth * delta, behavior: "smooth" });
+      });
+    }
 
     ui.actionButtons.addEventListener("click", (event) => {
       const target = event.target;
