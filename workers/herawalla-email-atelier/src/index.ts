@@ -1920,6 +1920,21 @@ async function handleAdminRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
+    if (path === "/quotes/price") {
+      if (!canEditQuotes(role)) {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const fields = coerceUpdates(payload.fields || payload, QUOTE_UPDATE_FIELDS);
+      const force = getBoolean(payload.force);
+      const result = await computeQuoteOptionPrices(env, fields, { force });
+      return new Response(JSON.stringify(result), {
+        status: result.ok ? 200 : 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
     if (path === "/contacts/action") {
       if (!canEditContacts(role)) {
         return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
@@ -2939,6 +2954,8 @@ type DiamondPriceEntry = {
   pricePerCt: number;
 };
 
+const DEFAULT_DIAMOND_PRICE_PER_CT = 3000;
+
 function normalizeCostKey(value: string) {
   return value
     .trim()
@@ -3126,7 +3143,10 @@ function computeOptionPriceFromCosts(
   let diamondCost = 0;
   if (pieces.length) {
     for (const piece of pieces) {
-      const pricePerCt = findDiamondPricePerCt(diamondPrices, clarity, color, piece.weight);
+      let pricePerCt = findDiamondPricePerCt(diamondPrices, clarity, color, piece.weight);
+      if (!pricePerCt && piece.weight > 0 && piece.weight < 1) {
+        pricePerCt = DEFAULT_DIAMOND_PRICE_PER_CT;
+      }
       if (!pricePerCt) {
         return { ok: false, error: "diamond_price_missing" } as const;
       }
@@ -3227,15 +3247,17 @@ function buildQuoteOptions(
 
 async function computeQuoteOptionPrices(
   env: Env,
-  record: Record<string, string>
+  record: Record<string, string>,
+  options?: { force?: boolean }
 ): Promise<{ ok: true; fields: Record<string, string> } | { ok: false; error: string }> {
   const fields: Record<string, string> = {};
+  const force = Boolean(options?.force);
   let needsPricing = false;
   for (let i = 1; i <= 3; i += 1) {
     const priceRaw = record[`quote_option_${i}_price_18k`] || "";
     const clarity = record[`quote_option_${i}_clarity`] || "";
     const color = record[`quote_option_${i}_color`] || "";
-    if (priceRaw) continue;
+    if (!force && priceRaw) continue;
     if (!clarity && !color) continue;
     needsPricing = true;
   }
@@ -3250,7 +3272,7 @@ async function computeQuoteOptionPrices(
     const priceRaw = record[`quote_option_${i}_price_18k`] || "";
     const clarity = record[`quote_option_${i}_clarity`] || "";
     const color = record[`quote_option_${i}_color`] || "";
-    if (priceRaw) continue;
+    if (!force && priceRaw) continue;
     if (!clarity && !color) continue;
     const result = computeOptionPriceFromCosts(record, clarity, color, costValues, diamondPrices);
     if (!result.ok) {
@@ -5243,6 +5265,11 @@ async function handleSubmitPayload(
     const lastError = "";
     const price = getString(payload.price);
     const timeline = normalizeTimeline(getString(payload.timeline));
+    const metalWeight = getString(payload.metalWeight || payload.metal_weight);
+    const timelineAdjustmentWeeks = getString(
+      payload.timelineAdjustmentWeeks || payload.timeline_adjustment_weeks
+    );
+    const diamondBreakdown = getString(payload.diamondBreakdown || payload.diamond_breakdown);
     const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
       resolveAttribution(payload, request);
     const pageUrl = getString(payload.pageUrl) || productUrl || referrer;
@@ -5381,6 +5408,7 @@ async function handleSubmitPayload(
           lastError,
           price,
           timeline,
+          timelineAdjustmentWeeks,
           senderName,
           senderEmail,
           phone,
@@ -5389,8 +5417,10 @@ async function handleSubmitPayload(
           productUrl,
           designCode,
           metal,
+          metalWeight,
           stone,
           stoneWeight,
+          diamondBreakdown,
           size,
           addressLine1,
           addressLine2,

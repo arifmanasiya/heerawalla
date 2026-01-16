@@ -178,6 +178,20 @@
   };
 
   const PRICING_TABS = new Set(["price-chart", "cost-chart", "diamond-price-chart"]);
+  const QUOTE_OPTION_FIELDS = [
+    { clarity: "quote_option_1_clarity", color: "quote_option_1_color", price: "quote_option_1_price_18k" },
+    { clarity: "quote_option_2_clarity", color: "quote_option_2_color", price: "quote_option_2_price_18k" },
+    { clarity: "quote_option_3_clarity", color: "quote_option_3_color", price: "quote_option_3_price_18k" },
+  ];
+  const QUOTE_PRICE_FIELDS = new Set(QUOTE_OPTION_FIELDS.map((option) => option.price));
+  const QUOTE_PRICING_FIELDS = new Set([
+    "metal_weight",
+    "stone_weight",
+    "diamond_breakdown",
+    "timeline",
+    "timeline_adjustment_weeks",
+    ...QUOTE_OPTION_FIELDS.flatMap((option) => [option.clarity, option.color]),
+  ]);
 
   const normalizeStatus = (value) => {
     const normalized = String(value || "NEW").trim().toUpperCase();
@@ -246,6 +260,8 @@
   const storedBase = localStorage.getItem("adminApiBase") || "";
   const apiBase = storedBase || document.body.dataset.apiBase || "";
   let isSyncingBreakdown = false;
+  let quotePricingTimer = null;
+  let quotePricingInFlight = false;
 
   function escapeHtml(value) {
     return String(value)
@@ -441,6 +457,91 @@
   function toggleDiamondBreakdownVisibility() {
     if (!ui.diamondBreakdown) return;
     ui.diamondBreakdown.classList.toggle("is-hidden", state.tab !== "quotes");
+  }
+
+  function getEditField(key) {
+    return ui.editFields.find((field) => field.dataset.field === key);
+  }
+
+  function markQuotePriceManual(field) {
+    if (!field) return;
+    field.dataset.auto = "false";
+    field.dataset.manual = "true";
+  }
+
+  function shouldApplyAutoPrice(field) {
+    if (!field) return false;
+    const manual = field.dataset.manual === "true";
+    if (manual && field.value) return false;
+    return !field.value || field.dataset.auto === "true";
+  }
+
+  function resetQuoteAutoPricingState() {
+    if (state.tab !== "quotes") return;
+    QUOTE_OPTION_FIELDS.forEach((option) => {
+      const field = getEditField(option.price);
+      if (!field) return;
+      field.dataset.auto = "true";
+      field.dataset.manual = "";
+    });
+  }
+
+  function collectQuotePricingFields() {
+    if (state.tab !== "quotes") return null;
+    const metalWeight = getEditValue("metal_weight");
+    if (!metalWeight) return null;
+    const hasOption = QUOTE_OPTION_FIELDS.some((option) => {
+      return Boolean(getEditValue(option.clarity) || getEditValue(option.color));
+    });
+    if (!hasOption) return null;
+    const fields = {};
+    QUOTE_PRICING_FIELDS.forEach((key) => {
+      const value = getEditValue(key);
+      if (value) fields[key] = value;
+    });
+    return fields;
+  }
+
+  function applyQuotePricing(fields) {
+    if (!fields) return;
+    QUOTE_OPTION_FIELDS.forEach((option) => {
+      const value = fields[option.price];
+      if (!value) return;
+      const field = getEditField(option.price);
+      if (!shouldApplyAutoPrice(field)) return;
+      field.value = value;
+      field.dataset.auto = "true";
+      field.dataset.manual = "";
+    });
+    updatePrimaryActionState();
+  }
+
+  async function refreshQuotePricing() {
+    if (state.tab !== "quotes" || quotePricingInFlight) return;
+    const fields = collectQuotePricingFields();
+    if (!fields) return;
+    quotePricingInFlight = true;
+    try {
+      const result = await apiFetch("/quotes/price", {
+        method: "POST",
+        body: JSON.stringify({ fields, force: true }),
+      });
+      if (result.ok) {
+        applyQuotePricing(result.fields || {});
+      }
+    } catch (error) {
+      return;
+    } finally {
+      quotePricingInFlight = false;
+    }
+  }
+
+  function scheduleQuotePricingUpdate() {
+    if (state.tab !== "quotes") return;
+    if (quotePricingTimer) clearTimeout(quotePricingTimer);
+    quotePricingTimer = setTimeout(() => {
+      refreshQuotePricing();
+    }, 350);
   }
 
   function showToast(message, variant) {
@@ -1036,6 +1137,8 @@
     });
     setQuoteMetalSelection(item.quote_metal_options || "");
     setDiamondBreakdownRowsFromField();
+    resetQuoteAutoPricingState();
+    scheduleQuotePricingUpdate();
 
     applyEditVisibility();
     applyOrderDetailsVisibility();
@@ -1391,9 +1494,25 @@
     }
 
     ui.editFields.forEach((field) => {
-      field.addEventListener("input", () => {
+      const handler = () => {
+        const key = field.dataset.field || "";
+        if (state.tab === "quotes" && key) {
+          if (QUOTE_PRICE_FIELDS.has(key)) {
+            if (field.value) {
+              markQuotePriceManual(field);
+            } else {
+              field.dataset.manual = "";
+              field.dataset.auto = "true";
+              scheduleQuotePricingUpdate();
+            }
+          } else if (QUOTE_PRICING_FIELDS.has(key)) {
+            scheduleQuotePricingUpdate();
+          }
+        }
         updatePrimaryActionState();
-      });
+      };
+      field.addEventListener("input", handler);
+      field.addEventListener("change", handler);
     });
     ui.quoteMetals.forEach((input) => {
       input.addEventListener("change", () => {
@@ -1407,6 +1526,7 @@
         const current = getDiamondRowsFromDom();
         current.push({ weight: "", count: "" });
         renderDiamondBreakdownRows(current);
+        scheduleQuotePricingUpdate();
       });
     }
 
@@ -1421,6 +1541,7 @@
         }
         syncDiamondBreakdownField();
         updatePrimaryActionState();
+        scheduleQuotePricingUpdate();
       });
       ui.diamondBreakdownRows.addEventListener("click", (event) => {
         const target = event.target;
@@ -1430,6 +1551,7 @@
         if (row) row.remove();
         syncDiamondBreakdownField();
         updatePrimaryActionState();
+        scheduleQuotePricingUpdate();
         if (!ui.diamondBreakdownRows.querySelector("[data-diamond-row]")) {
           renderDiamondBreakdownRows([]);
         }
@@ -1442,6 +1564,7 @@
         if (isSyncingBreakdown) return;
         setDiamondBreakdownRowsFromField();
         updatePrimaryActionState();
+        scheduleQuotePricingUpdate();
       });
     }
 
