@@ -27,8 +27,8 @@ jobs:
   deploy-admin-pages:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy admin Pages
+      - name: Deploy admin worker assets
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: pages deploy admin-placeholder --project-name ${{ vars.CF_ADMIN_PAGES_PROJECT }}
+          command: deploy --name ${{ vars.CF_ADMIN_WORKER_NAME }} --assets admin-placeholder

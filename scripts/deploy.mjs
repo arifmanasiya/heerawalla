@@ -307,11 +307,8 @@ function resolveSiteVerifyUrl({ owner, repo }) {
 function resolveAdminVerifyUrl() {
   const explicit = (process.env.VERIFY_ADMIN_URL || "").trim();
   if (explicit) return explicit;
-  const project = (process.env.CF_ADMIN_PAGES_PROJECT || "").trim();
-  if (project) {
-    return `https://${project}.pages.dev`;
-  }
-  return "";
+  const adminDomain = (process.env.ADMIN_DOMAIN || "https://business.heerawalla.com").trim();
+  return adminDomain;
 }
 
 function resolveVerifyTargets({ owner, repo }) {

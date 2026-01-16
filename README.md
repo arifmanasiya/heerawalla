@@ -90,12 +90,12 @@ When set, list pages and detail pages refresh catalog-driven pricing on page loa
 - Workflow: `.github/workflows/deploy.yml`
 - Push to `main`; GitHub Actions deploys:
   - Worker: `workers/herawalla-email-atelier`
-  - Admin Pages: `admin-placeholder`
+  - Admin worker assets: `admin-placeholder`
 - GitHub secrets required:
   - `CLOUDFLARE_API_TOKEN`
   - `CLOUDFLARE_ACCOUNT_ID`
 - GitHub variables required:
-  - `CF_ADMIN_PAGES_PROJECT` (Cloudflare Pages project name)
+  - `CF_ADMIN_WORKER_NAME` (Cloudflare Worker name that serves `admin-placeholder`)
 
 ### Local deploy helper
 ```bash
@@ -106,8 +106,9 @@ npm run deploy -- -m "comment"
 - Set `GH_HEERAWALLA_TOKEN` (or `GH_TOKEN`) locally to allow workflow verification.
 - Optional verification overrides:
   - `VERIFY_WORKER_URL` (defaults to `https://admin-api.heerawalla.com/health`)
-  - `VERIFY_ADMIN_URL` (defaults to `https://<CF_ADMIN_PAGES_PROJECT>.pages.dev`)
+  - `VERIFY_ADMIN_URL` (defaults to `https://business.heerawalla.com`)
   - `VERIFY_SITE_URL` (set if you also want to validate the public site)
+- If the admin domain is behind Cloudflare Access, set `VERIFY_ADMIN_URL` to an accessible URL or use `--no-verify`.
 
 ## Google Calendar + People API setup (Worker)
 The concierge booking and contact sync use Google APIs via the worker at `workers/herawalla-email-atelier`.
