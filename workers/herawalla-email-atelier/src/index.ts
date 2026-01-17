@@ -3801,6 +3801,7 @@ async function submitQuoteAdmin(
   if (!lookup) return { ok: false, error: "request_not_found" };
   const header = Array.from(lookup.headerIndex.keys());
   const record = mapSheetRowToRecord(header, lookup.row);
+  const existingNotes = getString(record.notes);
   const existingToken = getString(record.quote_token || "");
   const mergedBase = { ...record, ...updates };
   const computed = await computeQuoteOptionPrices(env, mergedBase);
@@ -3870,7 +3871,10 @@ async function submitQuoteAdmin(
     quote_expires_at: expiresAt,
     quote_sent_at: now,
   };
-  const updateResult = await updateAdminRow(env, "quote", requestId, "QUOTED", notes, updatePayload);
+  const auditLabel = submitOptions?.refreshEmail ? "Quote link refreshed" : "Quote link sent";
+  const auditNote = `${auditLabel}: ${quoteUrl} (${now})`;
+  const combinedNotes = appendNote(appendNote(existingNotes, notes), auditNote);
+  const updateResult = await updateAdminRow(env, "quote", requestId, "QUOTED", combinedNotes, updatePayload);
   if (!updateResult.ok) return updateResult;
   if (submitOptions?.expireExisting && existingToken && existingToken !== token) {
     await expireQuoteConfirmationToken(env, existingToken, token);

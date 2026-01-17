@@ -94,6 +94,7 @@ When set, list pages and detail pages refresh catalog-driven pricing on page loa
 - GitHub secrets required:
   - `CLOUDFLARE_API_TOKEN`
   - `CLOUDFLARE_ACCOUNT_ID`
+  - `PUBLIC_TURNSTILE_SITE_KEY` (required for Turnstile-protected forms on the public site)
 - GitHub variables required:
   - `CF_ADMIN_WORKER_NAME` (Cloudflare Worker name that serves `admin-placeholder`)
 

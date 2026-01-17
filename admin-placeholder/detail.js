@@ -529,10 +529,11 @@
     if (state.tab !== "quotes") return null;
     const metalWeight = getEditValue("metal_weight");
     if (!metalWeight) return null;
+    const goldOnly = isGoldOnlyQuote();
     const hasOption = QUOTE_OPTION_FIELDS.some((option) => {
       return Boolean(getEditValue(option.clarity) || getEditValue(option.color));
     });
-    if (!hasOption) return null;
+    if (!hasOption && !goldOnly) return null;
     const fields = {};
     QUOTE_PRICING_FIELDS.forEach((key) => {
       const value = getEditValue(key);
@@ -823,10 +824,13 @@
 
   function isGoldOnlyQuote() {
     if (state.tab !== "quotes") return false;
-    const stoneWeight = Number(getEditValue("stone_weight"));
+    const stoneWeightRaw = String(getEditValue("stone_weight") || "").trim();
     const diamondBreakdown = getEditValue("diamond_breakdown");
     const hasBreakdown = Boolean(String(diamondBreakdown || "").trim());
-    return (!Number.isFinite(stoneWeight) || stoneWeight <= 0) && !hasBreakdown;
+    if (hasBreakdown) return false;
+    if (!stoneWeightRaw) return false;
+    const stoneWeight = Number(stoneWeightRaw);
+    return Number.isFinite(stoneWeight) && stoneWeight <= 0;
   }
 
   function toggleFieldVisibility(key, show) {
