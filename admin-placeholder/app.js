@@ -499,8 +499,12 @@
     }
   }
 
-  function isRequested18K(value) {
-    return normalizeText(value).includes("18k");
+  function getRequestedMetalGroup(value) {
+    const normalized = normalizeText(value);
+    if (normalized.includes("platinum")) return "Platinum";
+    if (normalized.includes("14k")) return "14K";
+    if (normalized.includes("18k")) return "18K";
+    return "";
   }
 
   function formatDelayWeeks(value) {
@@ -1263,6 +1267,12 @@
 
   function syncQuoteMetalInput() {
     if (!ui.quoteMetalInput) return;
+    const requestedMetal = getEditValue("metal");
+    const group = getRequestedMetalGroup(requestedMetal);
+    if (group) {
+      setQuoteMetalSelection(group, requestedMetal);
+      return;
+    }
     const selected = ui.quoteMetals
       .filter((input) => input.checked)
       .map((input) => input.value);
@@ -1271,21 +1281,22 @@
 
   function setQuoteMetalSelection(value, requestedMetal = "") {
     if (!ui.quoteMetalInput) return;
+    const group = getRequestedMetalGroup(requestedMetal);
     const selected = String(value || "")
       .split(",")
       .map((entry) => entry.trim())
       .filter(Boolean);
-    if (isRequested18K(requestedMetal)) {
+    if (group) {
       selected.length = 0;
-      selected.push("18K");
+      selected.push(group);
     } else if (!selected.length) {
       selected.push("18K");
     }
     ui.quoteMetalInput.value = selected.join(", ");
     ui.quoteMetals.forEach((input) => {
       input.checked = selected.includes(input.value);
-      if (isRequested18K(requestedMetal)) {
-        input.disabled = input.value !== "18K";
+      if (group) {
+        input.disabled = input.value !== group;
       } else {
         input.disabled = false;
       }

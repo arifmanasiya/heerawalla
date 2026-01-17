@@ -906,7 +906,7 @@ export default {
         const productName = getString(payload.productName);
         const productUrl = getString(payload.productUrl);
         const designCode = getString(payload.designCode);
-        const metal = getString(payload.metal);
+        const metal = normalizeMetalOption(getString(payload.metal));
         const stone = getString(payload.stone);
         const stoneWeight = getString(payload.stoneWeight);
         const size = getString(payload.size);
@@ -2960,7 +2960,11 @@ function parseMetalOptions(value: string) {
 function resolveQuoteMetalOptions(value: string, requestedMetal: string) {
   const metals = parseMetalOptions(value);
   const normalizedRequested = normalizeMetalOption(requestedMetal || "");
-  if (normalizedRequested.startsWith("18K")) {
+  if (
+    normalizedRequested.startsWith("18K") ||
+    normalizedRequested.startsWith("14K") ||
+    normalizedRequested === "Platinum"
+  ) {
     return [normalizedRequested || "18K"];
   }
   return metals;
@@ -3304,7 +3308,7 @@ function computeOptionPriceFromCosts(
 
   const goldPricePerGram = getCostNumber(costValues, ["gold_price_per_gram_usd"]);
   const requestedMetal = normalizeMetalOption(record.metal || "");
-  const baseMetalKey = requestedMetal.startsWith("18K") ? requestedMetal : "18K";
+  const baseMetalKey = requestedMetal || "18K";
   let metalCostPerGram = getCostNumber(costValues, [
     "metal_cost_18k_per_gram",
     "metal_cost_per_gram_18k",
@@ -3414,7 +3418,7 @@ function buildQuoteOptions(
 ) {
   const options: QuoteOption[] = [];
   const requestedMetal = normalizeMetalOption(record.metal || "");
-  const baseMetalKey = requestedMetal.startsWith("18K") ? requestedMetal : "18K";
+  const baseMetalKey = requestedMetal || "18K";
   const baseFactor =
     findAdjustmentMultiplier(adjustments, [
       resolveMetalPricingKey(baseMetalKey, requestedMetal),
@@ -5469,7 +5473,7 @@ async function handleSubmitPayload(
     const productName = getString(payload.productName || payload.inspirationTitle);
     const productUrl = getString(payload.productUrl || payload.inspirationUrl);
     const designCode = getString(payload.designCode);
-    const metal = getString(payload.metal);
+    const metal = normalizeMetalOption(getString(payload.metal));
     const stone = getString(payload.stone);
     const stoneWeight = getString(payload.stoneWeight);
     const size = getString(payload.size);
