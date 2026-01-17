@@ -686,6 +686,10 @@ button:disabled {
   font-size: 13px;
 }
 
+.detail-grid.detail-sections {
+  display: block;
+}
+
 .detail-grid div {
   border: 1px solid #efe7d9;
   padding: 10px;
@@ -705,6 +709,18 @@ button:disabled {
   letter-spacing: 0.18em;
   color: var(--muted);
   margin-bottom: 4px;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  margin: 0 0 8px 0;
 }
 
 .detail-media {

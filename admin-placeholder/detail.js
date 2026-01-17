@@ -701,7 +701,8 @@
   }
 
   async function refreshQuoteMedia(item) {
-    if (state.tab !== "quotes" || !ui.detailGrid) return;
+    if (state.tab !== "quotes" && state.tab !== "orders") return;
+    if (!ui.detailGrid) return;
     const slot = ui.detailGrid.querySelector("[data-media-slot]");
     if (!slot) return;
     const cacheKey = item.design_code || item.product_url || item.product_name || "";
@@ -988,6 +989,26 @@
       return `<div class="detail-media"><span>${safeLabel}</span>${rawValue}</div>`;
     }
     return `<div><span>${safeLabel}</span>${escapeHtml(rawValue)}</div>`;
+  }
+
+  function renderDetailRows(rows) {
+    return rows
+      .filter(([, value]) => hasValue(value))
+      .map(([label, value]) => renderDetailField(label, value))
+      .join("");
+  }
+
+  function renderDetailSections(sections) {
+    return sections
+      .map((section) => {
+        const rowsHtml = renderDetailRows(section.rows || []);
+        if (!rowsHtml) return "";
+        return `<div class="detail-section">
+          <p class="detail-section-title">${escapeHtml(section.title)}</p>
+          <div class="detail-grid">${rowsHtml}</div>
+        </div>`;
+      })
+      .join("");
   }
 
   function getEditValue(key) {
@@ -1324,70 +1345,140 @@
             ["Price per ct", item.price_per_ct],
             ["Notes", item.notes],
           ]
-        : state.tab === "quotes"
-        ? [
-            ["Created", formatDate(item.created_at)],
-            ["Name", item.name],
-            ["Email", item.email],
-            ["Phone", item.phone],
-            ["Product", item.product_name],
-            ["Images", renderQuoteMediaSlot()],
-            ["Design code", item.design_code],
-            ["Metal", item.metal],
-            [buildMetalWeightLabel(item.metal), formatGrams(item.metal_weight)],
-            [buildMetalWeightAdjustmentLabel(item.metal), formatSignedGrams(item.metal_weight_adjustment)],
-            ["Stone", item.stone],
-            ["Stone weight", item.stone_weight],
-            ["Diamond breakdown", item.diamond_breakdown],
-            ["Size", item.size],
-            ["Price", formatPrice(item.price)],
-            ["Timeline", item.timeline],
-            ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
-            ["Discount type", item.quote_discount_type],
-            ["Discount percent", item.quote_discount_percent],
-            ["Address", item.address_line1],
-            ["City", item.city],
-            ["State", item.state],
-            ["Postal code", item.postal_code],
-            ["Country", item.country],
-            ["Interests", item.interests],
-            ["Contact preference", item.contact_preference],
-            ["Subscription", item.subscription_status],
-          ]
-        : [
-            ["Request ID", item.request_id],
-            ["Created", formatDate(item.created_at)],
-            ["Status", status],
-            ["Name", item.name],
-            ["Email", item.email],
-            ["Phone", item.phone],
-            ["Product", item.product_name],
-            ["Product URL", item.product_url],
-            ["Design code", item.design_code],
-            ["Metal", item.metal],
-            [buildMetalWeightLabel(item.metal), formatGrams(item.metal_weight)],
-            [buildMetalWeightAdjustmentLabel(item.metal), formatSignedGrams(item.metal_weight_adjustment)],
-            ["Stone", item.stone],
-            ["Stone weight", item.stone_weight],
-            ["Diamond breakdown", item.diamond_breakdown],
-            ["Size", item.size],
-            ["Price", formatPrice(item.price)],
-            ["Timeline", item.timeline],
-            ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
-            ["Address", item.address_line1],
-            ["City", item.city],
-            ["State", item.state],
-            ["Postal code", item.postal_code],
-            ["Country", item.country],
-            ["Interests", item.interests],
-            ["Contact preference", item.contact_preference],
-            ["Subscription", item.subscription_status],
-          ];
+        : [];
 
-    ui.detailGrid.innerHTML = detailFields
-      .filter(([, value]) => hasValue(value))
-      .map(([label, value]) => renderDetailField(label, value))
-      .join("");
+    const detailSections =
+      state.tab === "quotes"
+        ? [
+            {
+              title: "Request",
+              rows: [
+                ["Request ID", item.request_id],
+                ["Created", formatDate(item.created_at)],
+                ["Status", status],
+              ],
+            },
+            {
+              title: "Client",
+              rows: [
+                ["Name", item.name],
+                ["Email", item.email],
+                ["Phone", item.phone],
+              ],
+            },
+            {
+              title: "Piece",
+              rows: [
+                ["Product", item.product_name],
+                ["Images", renderQuoteMediaSlot()],
+                ["Design code", item.design_code],
+                ["Metal", item.metal],
+                [buildMetalWeightLabel(item.metal), formatGrams(item.metal_weight)],
+                [buildMetalWeightAdjustmentLabel(item.metal), formatSignedGrams(item.metal_weight_adjustment)],
+                ["Stone", item.stone],
+                ["Stone weight", item.stone_weight],
+                ["Diamond breakdown", item.diamond_breakdown],
+                ["Size", item.size],
+              ],
+            },
+            {
+              title: "Quote",
+              rows: [
+                ["Price", formatPrice(item.price)],
+                ["Timeline", item.timeline],
+                ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
+                ["Discount type", item.quote_discount_type],
+                ["Discount percent", item.quote_discount_percent],
+              ],
+            },
+            {
+              title: "Address",
+              rows: [
+                ["Address", item.address_line1],
+                ["City", item.city],
+                ["State", item.state],
+                ["Postal code", item.postal_code],
+                ["Country", item.country],
+              ],
+            },
+            {
+              title: "Preferences",
+              rows: [
+                ["Interests", item.interests],
+                ["Contact preference", item.contact_preference],
+                ["Subscription", item.subscription_status],
+              ],
+            },
+          ]
+        : state.tab === "orders"
+        ? [
+            {
+              title: "Request",
+              rows: [
+                ["Request ID", item.request_id],
+                ["Created", formatDate(item.created_at)],
+                ["Status", status],
+              ],
+            },
+            {
+              title: "Client",
+              rows: [
+                ["Name", item.name],
+                ["Email", item.email],
+                ["Phone", item.phone],
+              ],
+            },
+            {
+              title: "Piece",
+              rows: [
+                ["Product", item.product_name],
+                ["Images", renderQuoteMediaSlot()],
+                ["Design code", item.design_code],
+                ["Metal", item.metal],
+                [buildMetalWeightLabel(item.metal), formatGrams(item.metal_weight)],
+                [buildMetalWeightAdjustmentLabel(item.metal), formatSignedGrams(item.metal_weight_adjustment)],
+                ["Stone", item.stone],
+                ["Stone weight", item.stone_weight],
+                ["Diamond breakdown", item.diamond_breakdown],
+                ["Size", item.size],
+              ],
+            },
+            {
+              title: "Timeline & Pricing",
+              rows: [
+                ["Price", formatPrice(item.price)],
+                ["Timeline", item.timeline],
+                ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
+              ],
+            },
+            {
+              title: "Address",
+              rows: [
+                ["Address", item.address_line1],
+                ["City", item.city],
+                ["State", item.state],
+                ["Postal code", item.postal_code],
+                ["Country", item.country],
+              ],
+            },
+            {
+              title: "Preferences",
+              rows: [
+                ["Interests", item.interests],
+                ["Contact preference", item.contact_preference],
+                ["Subscription", item.subscription_status],
+              ],
+            },
+          ]
+        : [];
+
+    if (detailSections.length) {
+      ui.detailGrid.classList.add("detail-sections");
+      ui.detailGrid.innerHTML = renderDetailSections(detailSections);
+    } else {
+      ui.detailGrid.classList.remove("detail-sections");
+      ui.detailGrid.innerHTML = renderDetailRows(detailFields);
+    }
     refreshQuoteMedia(item);
 
     ui.editFields.forEach((field) => {
