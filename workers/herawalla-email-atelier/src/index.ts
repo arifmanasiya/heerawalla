@@ -2044,6 +2044,21 @@ async function handleOrderConfirmationRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
+    let cancelUrl = "";
+    try {
+      if (record.requestId) {
+        const cancelRecord = await ensureOrderCancelRecord(
+          env,
+          record.requestId,
+          record.email || "",
+          record.name || "",
+          record.productName || ""
+        );
+        cancelUrl = buildOrderCancelPageUrl(env, cancelRecord.token);
+      }
+    } catch {
+      cancelUrl = "";
+    }
     return new Response(
       JSON.stringify({
         ok: true,
@@ -2052,6 +2067,7 @@ async function handleOrderConfirmationRequest(
         name: record.name || "",
         productName: record.productName || "",
         changes: record.changes || [],
+        cancelUrl: cancelUrl || "",
       }),
       {
         status: 200,
@@ -2089,10 +2105,44 @@ async function handleOrderConfirmationRequest(
       });
     }
     const confirmedAt = new Date().toISOString();
-    const updatedRecord = { ...record, status: "confirmed", confirmedAt };
+    const paymentUrl = resolveOrderConfirmationPaymentUrl(env, record);
+    const updatedRecord = {
+      ...record,
+      status: "confirmed",
+      confirmedAt,
+      paymentUrl: paymentUrl || record.paymentUrl,
+    };
     await storeOrderConfirmationRecord(env, updatedRecord);
-    await appendOrderNote(env, record.requestId, `Customer confirmed update on ${confirmedAt}.`);
-    const paymentUrl = resolveOrderConfirmationPaymentUrl(env, updatedRecord);
+    const paymentNote = paymentUrl ? ` Payment link: ${paymentUrl}.` : "";
+    await appendOrderNote(
+      env,
+      record.requestId,
+      `Customer confirmed update on ${confirmedAt}.${paymentNote}`
+    );
+    try {
+      if (paymentUrl) {
+        await upsertOrderDetailsRecord(
+          env,
+          record.requestId,
+          { payment_url: paymentUrl },
+          "INVOICED",
+          "customer"
+        );
+      }
+    } catch (error) {
+      logWarn("order_confirmation_details_failed", { requestId: record.requestId, error: String(error) });
+    }
+    try {
+      const lookup = await findSheetRowByRequestId(env, "order", record.requestId);
+      if (lookup) {
+        const currentStatus = getOrderStatusFromRow(lookup);
+        if (isOrderTransitionAllowed(currentStatus, "INVOICED")) {
+          await updateAdminRow(env, "order", record.requestId, "INVOICED", "", {});
+        }
+      }
+    } catch (error) {
+      logWarn("order_confirmation_status_failed", { requestId: record.requestId, error: String(error) });
+    }
     return new Response(
       JSON.stringify({
         ok: true,
@@ -3636,6 +3686,7 @@ async function handleOrderAdminAction(
   const detailUpdates = coerceUpdates(payload.details, ORDER_DETAILS_UPDATE_FIELDS);
   const lookup = await findSheetRowByRequestId(env, "order", requestId);
   if (!lookup) return { ok: false, error: "request_not_found" };
+  const record = mapSheetRowToRecord(Array.from(lookup.headerIndex.keys()), lookup.row);
   const currentStatus = getOrderStatusFromRow(lookup);
   const resolvedStatus = resolveOrderStatus(action, requestedStatus);
   let nextStatus = resolvedStatus;
@@ -3685,7 +3736,12 @@ async function handleOrderAdminAction(
   const statusChanged = Boolean(nextStatus);
   const auditNote = statusChanged ? buildStatusAuditNote(nextStatus) : "";
   const baseNotes = notes || existingNotes;
-  const combinedNotes = appendNote(baseNotes, auditNote);
+  let paymentUrl = "";
+  if (nextStatus === "INVOICED") {
+    paymentUrl = resolveOrderPaymentUrl(env, requestId, getString(record.email || ""), "");
+  }
+  const paymentNote = paymentUrl ? `Invoice link prepared: ${paymentUrl}.` : "";
+  const combinedNotes = appendNote(appendNote(baseNotes, auditNote), paymentNote);
   const notesToSave = combinedNotes && (statusChanged || notes) ? combinedNotes : "";
 
   if (needsOrderDetails) {
@@ -3717,7 +3773,21 @@ async function handleOrderAdminAction(
     }
   }
 
-  return await updateAdminRow(env, "order", requestId, nextStatus, notesToSave, updates);
+  const updateResult = await updateAdminRow(env, "order", requestId, nextStatus, notesToSave, updates);
+  if (updateResult.ok && paymentUrl) {
+    try {
+      await upsertOrderDetailsRecord(
+        env,
+        requestId,
+        { payment_url: paymentUrl },
+        "INVOICED",
+        adminEmail
+      );
+    } catch (error) {
+      logWarn("order_invoice_details_failed", { requestId, error: String(error) });
+    }
+  }
+  return updateResult;
 }
 
 async function handleQuoteAdminAction(env: Env, payload: Record<string, unknown>) {
@@ -3996,6 +4066,7 @@ const ORDER_UPDATE_FIELDS = [
 ] as const;
 
 const ORDER_DETAILS_UPDATE_FIELDS = [
+  "payment_url",
   "shipping_method",
   "shipping_carrier",
   "tracking_number",
@@ -4451,8 +4522,20 @@ async function upsertOrderDetailsRecord(
   updatedBy: string
 ) {
   const config = getOrderDetailsSheetConfig(env);
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, ORDER_DETAILS_SHEET_HEADER, cacheKey, true);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  let headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  if (headerRow.length) {
+    const normalized = headerRow.map((cell) => String(cell || "").trim().toLowerCase());
+    const missing = ORDER_DETAILS_SHEET_HEADER.filter(
+      (key) => !normalized.includes(key.toLowerCase())
+    );
+    if (missing.length) {
+      headerRow = [...headerRow, ...missing];
+      await updateSheetRow(env, config, 1, 0, headerRow.length - 1, headerRow);
+    }
+  }
   const headerConfig = resolveHeaderConfig(headerRow, ORDER_DETAILS_SHEET_HEADER, "request_id");
   const headerIndex = new Map(headerConfig.header.map((key, idx) => [String(key || ""), idx]));
   const lookup = await findOrderDetailsRowByRequestId(env, requestId);
@@ -5964,7 +6047,7 @@ async function handleSubmitPayload(
 const STATUS_EMAIL_MAX_ATTEMPTS = 3;
 const ORDER_SHIPPING_CHECK_INTERVAL_HOURS = 6;
 const ORDER_STATUS_EMAIL_TTL_SECONDS = 60 * 60 * 24 * 180;
-const STATUS_EMAIL_REMINDER_STATUSES = new Set(["PENDING_CONFIRMATION", "INVOICE_EXPIRED"]);
+const STATUS_EMAIL_REMINDER_STATUSES = new Set(["PENDING_CONFIRMATION", "INVOICED", "INVOICE_EXPIRED"]);
 const STATUS_EMAIL_SKIP_STATUSES = new Set(["NEW"]);
 const ORDER_STATUS_EMAIL_KEY_PREFIX = "order:status-email:";
 const ORDER_CONFIRMATION_INDEX_PREFIX = "order:confirm:request:";
@@ -6099,6 +6182,13 @@ function getStatusEmailIntervalHours(env: Env) {
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) return 48;
   return parsed;
+}
+
+function getInvoiceEmailDelayMs(env: Env) {
+  const raw = getString(env.STATUS_EMAIL_INVOICE_DELAY_MINUTES);
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 15 * 60 * 1000;
+  return parsed * 60 * 1000;
 }
 
 function formatOrderReference(requestId: string) {
@@ -6425,6 +6515,8 @@ function buildOrderStatusEmail(payload: {
       intro = `Your concierge prepared secure checkout for ${productName}. Complete payment to reserve your piece.`;
       ctaLabel = "Open secure checkout";
       ctaUrl = paymentUrl;
+      secondaryLabel = cancelUrl ? "Cancel order" : "";
+      secondaryUrl = cancelUrl;
       detailIntro = "Order summary";
       break;
     case "INVOICE_EXPIRED":
@@ -6666,6 +6758,7 @@ async function processOrderStatusEmails(env: Env) {
   if (!rows.length) return;
 
   const intervalMs = getStatusEmailIntervalHours(env) * 60 * 60 * 1000;
+  const invoiceDelayMs = getInvoiceEmailDelayMs(env);
   const now = Date.now();
 
   const useResend = Boolean(env.RESEND_API_KEY);
@@ -6683,6 +6776,7 @@ async function processOrderStatusEmails(env: Env) {
       (statusUpdatedIdx >= 0 ? getString(row[statusUpdatedIdx]) : "") ||
       (createdAtIdx >= 0 ? getString(row[createdAtIdx]) : "") ||
       "";
+    const statusUpdatedMs = Date.parse(statusUpdatedAt);
 
     const existingRecord = await getOrderStatusEmailRecord(env, requestId, status);
     const isNewStatus = !existingRecord || existingRecord.statusUpdatedAt !== statusUpdatedAt;
@@ -6699,6 +6793,11 @@ async function processOrderStatusEmails(env: Env) {
         continue;
       }
     }
+    if (status === "INVOICED" && isNewStatus && Number.isFinite(statusUpdatedMs)) {
+      if (now - statusUpdatedMs < invoiceDelayMs) {
+        continue;
+      }
+    }
 
     let confirmationUrl = "";
     let cancelUrl = "";
@@ -6712,15 +6811,17 @@ async function processOrderStatusEmails(env: Env) {
       confirmationUrl = buildOrderConfirmationPageUrl(env, token);
       changes = record.changes || [];
     }
-    if (status === "INVOICE_EXPIRED") {
+    if (status === "INVOICED" || status === "INVOICE_EXPIRED") {
       const cancelRecord = await ensureOrderCancelRecord(env, requestId, email, name, productName);
       cancelUrl = buildOrderCancelPageUrl(env, cancelRecord.token);
     }
-    if (status === "SHIPPED" || status === "DELIVERED") {
+    if (status === "INVOICED" || status === "INVOICE_EXPIRED" || status === "SHIPPED" || status === "DELIVERED") {
       orderDetails = await getOrderDetailsRecord(env, requestId);
     }
 
-    const paymentUrl = resolveOrderPaymentUrl(env, requestId, email, "");
+    const paymentUrl =
+      (orderDetails && getString(orderDetails.payment_url)) ||
+      resolveOrderPaymentUrl(env, requestId, email, "");
     const emailPayload = buildOrderStatusEmail({
       status,
       requestId,
@@ -8843,6 +8944,7 @@ type OrderDetailsRecord = {
   created_at?: string;
   request_id?: string;
   status?: string;
+  payment_url?: string;
   shipping_method?: string;
   shipping_carrier?: string;
   tracking_number?: string;

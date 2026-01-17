@@ -65,6 +65,7 @@ export interface Env {
   QUOTE_PAGE_URL?: string;
   QUOTE_PAYMENT_URL?: string;
   STATUS_EMAIL_INTERVAL_HOURS?: string;
+  STATUS_EMAIL_INVOICE_DELAY_MINUTES?: string;
   SEND_STATUS_UPDATES?: string | boolean;
 }
 
@@ -114,6 +115,7 @@ export const ORDER_DETAILS_SHEET_HEADER = [
   "created_at",
   "request_id",
   "status",
+  "payment_url",
   "shipping_method",
   "shipping_carrier",
   "tracking_number",

@@ -60,8 +60,8 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
           </div>
 
           <div class="flex flex-col sm:flex-row gap-3">
-            <button class="btn btn-primary" data-confirm-btn disabled>Confirm &amp; continue</button>
-            <button class="btn btn-ghost" data-cancel-btn disabled>Cancel order</button>
+            <button class="btn btn-primary" data-confirm-btn disabled>Confirm and pay</button>
+            <a class="btn btn-ghost" data-cancel-link href="#" aria-disabled="true">Cancel order</a>
           </div>
           <p class="text-xs text-slate-500">
             Confirmation opens secure checkout to reserve your piece.
@@ -102,12 +102,7 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
     const nameEl = root.querySelector('[data-order-name]');
     const listEl = root.querySelector('[data-change-list]');
     const confirmBtn = root.querySelector('[data-confirm-btn]');
-    const cancelBtn = root.querySelector('[data-cancel-btn]');
-    const cancelModal = root.querySelector('[data-cancel-modal]');
-    const cancelCloseButtons = Array.from(root.querySelectorAll('[data-cancel-close]'));
-    const cancelConfirmBtn = root.querySelector('[data-cancel-confirm]');
-    const cancelReason = root.querySelector('[data-cancel-reason]');
-    const cancelNote = root.querySelector('[data-cancel-note]');
+    const cancelLink = root.querySelector('[data-cancel-link]');
     const apiBase = root.getAttribute('data-confirmation-api') || '';
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token') || params.get('t') || params.get('confirmation');
@@ -127,19 +122,13 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
 
     const setButtonsEnabled = (enabled) => {
       if (confirmBtn) confirmBtn.disabled = !enabled;
-      if (cancelBtn) cancelBtn.disabled = !enabled;
-      if (cancelConfirmBtn) cancelConfirmBtn.disabled = !enabled;
-      if (cancelReason) cancelReason.disabled = !enabled;
-    };
-
-    const openCancelModal = () => {
-      if (!cancelModal) return;
-      cancelModal.classList.remove('hidden');
-    };
-
-    const closeCancelModal = () => {
-      if (!cancelModal) return;
-      cancelModal.classList.add('hidden');
+      if (cancelLink) {
+        const href = cancelLink.getAttribute('href') || '';
+        const canUse = enabled && href && href !== '#';
+        cancelLink.setAttribute('aria-disabled', canUse ? 'false' : 'true');
+        cancelLink.classList.toggle('pointer-events-none', !canUse);
+        cancelLink.classList.toggle('opacity-60', !canUse);
+      }
     };
 
     const labelMap = {
@@ -203,10 +192,14 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
         const productName = order.productName || order.product_name || data.productName || '--';
         const customerName = order.name || data.name || '--';
         const status = data.status || 'pending';
+        const cancelUrl = data.cancelUrl || '';
 
         if (requestEl) requestEl.textContent = requestId || '--';
         if (productEl) productEl.textContent = productName || '--';
         if (nameEl) nameEl.textContent = customerName || '--';
+        if (cancelLink && cancelUrl) {
+          cancelLink.setAttribute('href', cancelUrl);
+        }
 
         const changes = Array.isArray(data.changes)
           ? data.changes
@@ -271,94 +264,7 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
       }
     };
 
-    const cancelUpdate = async () => {
-      if (!cancelConfirmBtn) return;
-      const reasonValue = cancelReason ? cancelReason.value : '';
-      const noteValue = cancelNote ? cancelNote.value.trim() : '';
-      if (!reasonValue) {
-        setStatus('Select a cancellation reason to continue.', 'error');
-        return;
-      }
-      setStatus('Canceling your update...');
-      setButtonsEnabled(false);
-      try {
-        await requestJson('/orders/confirmation/cancel', {
-          method: 'POST',
-          body: JSON.stringify({ token, reason: reasonValue, note: noteValue }),
-        });
-        setStatus('Update canceled. Our concierge will follow up.', 'success');
-        closeCancelModal();
-      } catch (error) {
-        setStatus('We could not cancel this update. Please contact the concierge.', 'error');
-        setButtonsEnabled(true);
-      }
-    };
-
     if (confirmBtn) confirmBtn.addEventListener('click', confirmUpdate);
-    if (cancelBtn) {
-      cancelBtn.addEventListener('click', () => {
-        if (cancelReason) cancelReason.value = '';
-        if (cancelNote) cancelNote.value = '';
-        openCancelModal();
-      });
-    }
-    if (cancelConfirmBtn) cancelConfirmBtn.addEventListener('click', cancelUpdate);
-    if (cancelCloseButtons.length) {
-      cancelCloseButtons.forEach((button) => {
-        button.addEventListener('click', closeCancelModal);
-      });
-    }
-    if (cancelReason) {
-      cancelReason.addEventListener('change', () => {
-        if (!cancelNote) return;
-        const showNote = cancelReason.value === 'Other';
-        cancelNote.classList.toggle('hidden', !showNote);
-        if (!showNote) cancelNote.value = '';
-      });
-    }
-
     loadConfirmation();
   })();
 </script>
-
-<div class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 px-4" data-cancel-modal>
-  <div class="absolute inset-0" data-cancel-close></div>
-  <div class="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-    <div class="space-y-2">
-      <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Cancel order update</p>
-      <h2 class="text-xl font-semibold text-ink">Tell us why you are canceling</h2>
-      <p class="text-sm text-slate-600">
-        This helps us follow up with the right information or timing.
-      </p>
-    </div>
-    <div class="mt-4 space-y-3">
-      <label class="text-xs uppercase tracking-[0.2em] text-slate-500" for="cancel-reason">
-        Cancellation reason
-      </label>
-      <select
-        id="cancel-reason"
-        class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
-        data-cancel-reason
-        disabled
-      >
-        <option value="" selected>Select a reason</option>
-        <option value="Timing changed">Timing changed</option>
-        <option value="Budget changed">Budget changed</option>
-        <option value="Found another option">Found another option</option>
-        <option value="Need more details">Need more details</option>
-        <option value="Order mistake">Order mistake</option>
-        <option value="Other">Other</option>
-      </select>
-      <input
-        class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink hidden"
-        type="text"
-        placeholder="Share any additional context (optional)"
-        data-cancel-note
-      />
-    </div>
-    <div class="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-      <button class="btn btn-ghost" type="button" data-cancel-close>Keep order</button>
-      <button class="btn btn-primary" type="button" data-cancel-confirm disabled>Confirm cancellation</button>
-    </div>
-  </div>
-</div>

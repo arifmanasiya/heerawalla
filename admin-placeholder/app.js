@@ -17,7 +17,6 @@
     confirmation: null,
     filters: {
       q: "",
-      status: "",
       sort: "created_at",
       dir: "desc",
     },
@@ -107,6 +106,65 @@
       { key: "price_per_ct", label: "Price/ct" },
       { key: "view", label: "" },
     ],
+  };
+
+  const SORT_OPTIONS = {
+    orders: [
+      { value: "created_at", label: "Created" },
+      { value: "status", label: "Status" },
+      { value: "price", label: "Price" },
+      { value: "timeline", label: "Timeline" },
+      { value: "name", label: "Name" },
+      { value: "request_id", label: "Request ID" },
+    ],
+    quotes: [
+      { value: "created_at", label: "Created" },
+      { value: "status", label: "Status" },
+      { value: "price", label: "Price" },
+      { value: "timeline", label: "Timeline" },
+      { value: "name", label: "Name" },
+      { value: "request_id", label: "Request ID" },
+    ],
+    tickets: [
+      { value: "created_at", label: "Created" },
+      { value: "status", label: "Status" },
+      { value: "name", label: "Name" },
+      { value: "email", label: "Email" },
+    ],
+    contacts: [
+      { value: "created_at", label: "Created" },
+      { value: "name", label: "Name" },
+      { value: "email", label: "Email" },
+      { value: "type", label: "Type" },
+      { value: "subscribed", label: "Subscribed" },
+    ],
+    "price-chart": [
+      { value: "row_number", label: "Row" },
+      { value: "metal", label: "Metal" },
+      { value: "adjustment_value", label: "Value" },
+    ],
+    "cost-chart": [
+      { value: "row_number", label: "Row" },
+      { value: "key", label: "Key" },
+      { value: "value", label: "Value" },
+    ],
+    "diamond-price-chart": [
+      { value: "row_number", label: "Row" },
+      { value: "clarity", label: "Clarity" },
+      { value: "color", label: "Color" },
+      { value: "weight_min", label: "Min ct" },
+      { value: "price_per_ct", label: "Price/ct" },
+    ],
+  };
+
+  const SORT_DEFAULTS = {
+    orders: { sort: "created_at", dir: "desc" },
+    quotes: { sort: "created_at", dir: "desc" },
+    tickets: { sort: "created_at", dir: "desc" },
+    contacts: { sort: "created_at", dir: "desc" },
+    "price-chart": { sort: "row_number", dir: "asc" },
+    "cost-chart": { sort: "row_number", dir: "asc" },
+    "diamond-price-chart": { sort: "row_number", dir: "asc" },
   };
 
   const ACTIONS = {
@@ -946,6 +1004,7 @@
         fallback.classList.add("is-active");
         state.tab = "orders";
         updateStatusOptions();
+        updateSortOptions();
       }
     }
   }
@@ -1078,13 +1137,22 @@
         .map((status) => `<option value="${status}">${status}</option>`)
         .join("");
     }
-    const statusFilter = ui.filters.find((el) => el.dataset.filter === "status");
-    if (statusFilter) {
-      const filterOptions = STATUS_OPTIONS[state.tab] || [];
-      statusFilter.innerHTML =
-        '<option value="">All statuses</option>' +
-        filterOptions.map((status) => `<option value="${status}">${status}</option>`).join("");
+  }
+
+  function updateSortOptions() {
+    const sortFilter = ui.filters.find((el) => el.dataset.filter === "sort");
+    if (!sortFilter) return;
+    const options = SORT_OPTIONS[state.tab] || SORT_OPTIONS.orders;
+    const defaults = SORT_DEFAULTS[state.tab] || SORT_DEFAULTS.orders;
+    const allowed = options.map((option) => option.value);
+    if (!allowed.includes(state.filters.sort)) {
+      state.filters.sort = defaults.sort;
     }
+    state.filters.dir = defaults.dir;
+    sortFilter.innerHTML = options
+      .map((option) => `<option value="${option.value}">${option.label}</option>`)
+      .join("");
+    sortFilter.value = state.filters.sort;
   }
 
   function populateDrawer(item) {
@@ -2001,13 +2069,9 @@
         ui.tabs.forEach((button) => button.classList.remove("is-active"));
         tab.classList.add("is-active");
         state.tab = tab.dataset.tab;
-        if (!STATUS_OPTIONS[state.tab]?.length) {
-          state.filters.status = "";
-          const statusFilter = ui.filters.find((el) => el.dataset.filter === "status");
-          if (statusFilter) statusFilter.value = "";
-        }
         state.offset = 0;
         updateStatusOptions();
+        updateSortOptions();
         updateAddRowVisibility();
         loadList();
       });
@@ -2238,11 +2302,9 @@
       ui.tabs.forEach((button) => {
         button.classList.toggle("is-active", button.dataset.tab === state.tab);
       });
-      if (!STATUS_OPTIONS[state.tab]?.length) {
-        state.filters.status = "";
-      }
     }
     updateStatusOptions();
+    updateSortOptions();
     bindEvents();
     updateSyncLine();
     await loadMe();
