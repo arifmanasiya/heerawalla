@@ -542,15 +542,11 @@
   }
 
   function buildMetalWeightLabel(metalValue) {
-    const metalLabel = String(metalValue || "").trim();
-    if (!metalLabel) return "Metal weight (g)";
-    return `Metal weight (g, ${metalLabel})`;
+    return "Metal weight (g)";
   }
 
   function buildMetalWeightAdjustmentLabel(metalValue) {
-    const metalLabel = String(metalValue || "").trim();
-    if (!metalLabel) return "Metal weight adjustment (g)";
-    return `Metal weight adjustment (g, ${metalLabel})`;
+    return "Final Metal weight difference (g)";
   }
 
   function updateMetalWeightLabels(metalValue) {

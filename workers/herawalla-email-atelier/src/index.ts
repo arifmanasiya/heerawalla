@@ -6204,7 +6204,8 @@ function appendNote(base: string, note: string) {
 }
 
 function buildStatusAuditNote(status: string) {
-  return `Status updated to ${status}. Status email pending.`;
+  const now = new Date().toISOString();
+  return `Status updated to ${status} on ${now}. Status email pending.`;
 }
 
 const ORDER_SHIPPING_SNAPSHOT_PREFIX = "order:shipping:update:";
