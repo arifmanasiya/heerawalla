@@ -457,7 +457,20 @@
   function normalizeImageUrl(value) {
     const raw = String(value || "").trim();
     if (!raw) return "";
-    if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
+    if (/^(https?:|data:|blob:)/i.test(raw)) {
+      try {
+        const parsed = new URL(raw);
+        if (
+          siteBase &&
+          (parsed.hostname === "business.heerawalla.com" || parsed.hostname === "admin-api.heerawalla.com")
+        ) {
+          return `${siteBase}${parsed.pathname}${parsed.search || ""}`;
+        }
+      } catch {
+        return raw;
+      }
+      return raw;
+    }
     if (raw.startsWith("//")) return `https:${raw}`;
     if (!siteBase) return raw;
     if (raw.startsWith("/")) return `${siteBase}${raw}`;
