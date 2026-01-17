@@ -110,10 +110,10 @@
     { key: "timeline", label: "Timeline", normalize: normalizeTimelineValue, format: formatTimelineValue },
     { key: "timeline_adjustment_weeks", label: "Timeline delay", normalize: normalizeNumber, format: formatDelayWeeks },
     { key: "metal", label: "Metal", normalize: normalizeText, format: formatPlain },
-    { key: "metal_weight", label: "Metal weight", normalize: normalizeNumber, format: formatGrams },
+    { key: "metal_weight", label: "Metal weight (g)", normalize: normalizeNumber, format: formatGrams },
     {
       key: "metal_weight_adjustment",
-      label: "Metal weight adjustment",
+      label: "Final Metal weight difference (g)",
       normalize: normalizeNumber,
       format: formatSignedGrams,
     },

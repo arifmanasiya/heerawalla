@@ -2044,6 +2044,38 @@ async function handleOrderConfirmationRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
+    let orderSummary: Record<string, string> = {};
+    try {
+      const orderLookup = await findSheetRowByRequestId(env, "order", record.requestId);
+      if (orderLookup) {
+        const orderHeader = Array.from(orderLookup.headerIndex.keys());
+        const orderRecord = mapSheetRowToRecord(orderHeader, orderLookup.row);
+        orderSummary = {
+          requestId: getString(orderRecord.request_id || record.requestId),
+          productName: getString(orderRecord.product_name || record.productName),
+          productUrl: getString(orderRecord.product_url),
+          designCode: getString(orderRecord.design_code),
+          metal: getString(orderRecord.metal),
+          metalWeight: getString(orderRecord.metal_weight),
+          metalWeightAdjustment: getString(orderRecord.metal_weight_adjustment),
+          stone: getString(orderRecord.stone),
+          stoneWeight: getString(orderRecord.stone_weight),
+          diamondBreakdown: getString(orderRecord.diamond_breakdown),
+          size: getString(orderRecord.size),
+          price: getString(orderRecord.price),
+          timeline: getString(orderRecord.timeline),
+          timelineAdjustmentWeeks: getString(orderRecord.timeline_adjustment_weeks),
+          addressLine1: getString(orderRecord.address_line1),
+          addressLine2: getString(orderRecord.address_line2),
+          city: getString(orderRecord.city),
+          state: getString(orderRecord.state),
+          postalCode: getString(orderRecord.postal_code),
+          country: getString(orderRecord.country),
+        };
+      }
+    } catch (error) {
+      logWarn("order_confirmation_order_fetch_failed", { requestId: record.requestId, error: String(error) });
+    }
     let cancelUrl = "";
     try {
       if (record.requestId) {
@@ -2067,6 +2099,7 @@ async function handleOrderConfirmationRequest(
         name: record.name || "",
         productName: record.productName || "",
         changes: record.changes || [],
+        order: orderSummary,
         cancelUrl: cancelUrl || "",
       }),
       {
