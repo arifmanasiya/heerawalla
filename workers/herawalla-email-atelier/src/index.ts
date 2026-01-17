@@ -3732,7 +3732,11 @@ async function handleOrderAdminAction(
   }
 
   if (nextStatus && nextStatus !== currentStatus) {
-    if (!isOrderTransitionAllowed(currentStatus, nextStatus)) {
+    const allowConfirmationFromNew =
+      action === "request_confirmation" &&
+      nextStatus === "PENDING_CONFIRMATION" &&
+      currentStatus === "NEW";
+    if (!isOrderTransitionAllowed(currentStatus, nextStatus) && !allowConfirmationFromNew) {
       return {
         ok: false,
         error: "invalid_transition",
