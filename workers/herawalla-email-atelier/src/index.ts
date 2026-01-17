@@ -3571,12 +3571,18 @@ async function computeQuoteOptionPrices(
   const fields: Record<string, string> = {};
   const force = Boolean(options?.force);
   let needsPricing = false;
+  const breakdownPieces = parseDiamondBreakdown(record.diamond_breakdown || "");
+  const stoneWeightValue = parseNumberValue(record.stone_weight || "");
+  const hasDiamonds =
+    breakdownPieces.length > 0 ||
+    (Number.isFinite(stoneWeightValue) && stoneWeightValue > 0);
   for (let i = 1; i <= 3; i += 1) {
     const priceRaw = record[`quote_option_${i}_price_18k`] || "";
     const clarity = record[`quote_option_${i}_clarity`] || "";
     const color = record[`quote_option_${i}_color`] || "";
+    const goldOnlyOption = !hasDiamonds && i === 1;
     if (!force && priceRaw) continue;
-    if (!clarity && !color) continue;
+    if (!goldOnlyOption && !clarity && !color) continue;
     needsPricing = true;
   }
 
@@ -3599,8 +3605,9 @@ async function computeQuoteOptionPrices(
     const priceRaw = record[`quote_option_${i}_price_18k`] || "";
     const clarity = record[`quote_option_${i}_clarity`] || "";
     const color = record[`quote_option_${i}_color`] || "";
+    const goldOnlyOption = !hasDiamonds && i === 1;
     if (!force && priceRaw) continue;
-    if (!clarity && !color) continue;
+    if (!goldOnlyOption && !clarity && !color) continue;
     const result = computeOptionPriceFromCosts(
       record,
       clarity,

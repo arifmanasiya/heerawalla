@@ -237,7 +237,7 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
         pieces.push({ weight: fallback, count: 1 });
       }
       if (!pieces.length) {
-        diamondsEl.innerHTML = '<li>Not specified</li>';
+        diamondsEl.innerHTML = '<li>No diamonds included</li>';
         return;
       }
       diamondsEl.innerHTML = pieces
@@ -523,8 +523,21 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
             <button class="ml-3 underline text-ink" type="button" data-quote-resume>Continue to checkout</button>
           </div>`
         : '';
+      const isGoldOnly =
+        options.length === 1 &&
+        !String(options[0]?.clarity || '').trim() &&
+        !String(options[0]?.color || '').trim();
       const headerCells = options
         .map((option, index) => {
+          if (isGoldOnly) {
+            return `
+              <th class="px-4 py-3 text-left border-b border-slate-200">
+                <div class="text-[10px] uppercase tracking-[0.2em] text-slate-500">Gold only</div>
+                <div class="mt-1 text-sm font-medium text-ink">Price quote</div>
+                <div class="mt-1 text-xs text-slate-500 leading-relaxed">Diamond details are not applicable.</div>
+              </th>
+            `;
+          }
           const label = formatOptionLabel(option, index);
           const emotion = getEmotionLabel(index);
           const description = buildQualityDescription(option);

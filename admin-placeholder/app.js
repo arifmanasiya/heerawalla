@@ -1242,6 +1242,7 @@
     applyOrderDetailsVisibility();
     applyQuoteVisibility();
     applyDiscountControlState();
+    applyGoldOnlyQuoteState();
     renderActions();
     updatePrimaryActionState();
     loadOrderDetails(requestId);
@@ -1267,6 +1268,36 @@
     ui.orderDetailsSection.classList.toggle("is-hidden", !show);
   }
 
+  function isGoldOnlyQuote() {
+    if (state.tab !== "quotes") return false;
+    const stoneWeight = Number(getEditValue("stone_weight"));
+    const diamondBreakdown = getEditValue("diamond_breakdown");
+    const hasBreakdown = Boolean(String(diamondBreakdown || "").trim());
+    return (!Number.isFinite(stoneWeight) || stoneWeight <= 0) && !hasBreakdown;
+  }
+
+  function toggleFieldVisibility(key, show) {
+    const field = getEditField(key);
+    if (!field) return;
+    const wrapper = field.closest(".field");
+    if (wrapper) wrapper.classList.toggle("is-hidden", !show);
+  }
+
+  function applyGoldOnlyQuoteState() {
+    if (state.tab !== "quotes") return;
+    const goldOnly = isGoldOnlyQuote();
+    const optionCards = Array.from(document.querySelectorAll(".quote-option-card"));
+    optionCards.forEach((card, index) => {
+      if (index === 0) {
+        card.classList.toggle("is-hidden", false);
+      } else {
+        card.classList.toggle("is-hidden", goldOnly);
+      }
+    });
+    toggleFieldVisibility("quote_option_1_clarity", !goldOnly);
+    toggleFieldVisibility("quote_option_1_color", !goldOnly);
+  }
+
   function applyDiscountControlState() {
     if (state.tab !== "quotes") return;
     const type = normalizeText(getEditValue("quote_discount_type"));
@@ -1280,6 +1311,7 @@
     if (!ui.quoteSection) return;
     ui.quoteSection.classList.toggle("is-hidden", state.tab !== "quotes");
     toggleDiamondBreakdownVisibility();
+    applyGoldOnlyQuoteState();
   }
 
   function syncQuoteMetalInput() {
@@ -2079,6 +2111,9 @@
         }
         if (key === "quote_discount_type") {
           applyDiscountControlState();
+        }
+        if (key === "stone_weight" || key === "diamond_breakdown") {
+          applyGoldOnlyQuoteState();
         }
         if (state.tab === "quotes" && key) {
           if (QUOTE_PRICE_FIELDS.has(key)) {
