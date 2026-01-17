@@ -1253,7 +1253,6 @@
             ["Interests", item.interests],
             ["Contact preference", item.contact_preference],
             ["Subscription", item.subscription_status],
-            ["Notes", item.notes],
           ]
         : [
             ["Request ID", item.request_id],
@@ -1283,7 +1282,6 @@
             ["Interests", item.interests],
             ["Contact preference", item.contact_preference],
             ["Subscription", item.subscription_status],
-            ["Notes", item.notes],
           ];
     ui.detailGrid.innerHTML = detailFields
       .filter(([, value]) => value)
