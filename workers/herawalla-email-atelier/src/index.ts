@@ -2210,13 +2210,29 @@ async function handleQuoteConfirmationRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
+    if (record.status === "expired") {
+      const redirectUrl = record.redirectToken ? buildQuotePageUrl(env, record.redirectToken) : "";
+      return new Response(
+        JSON.stringify({ ok: false, error: "expired", status: "expired", redirectUrl }),
+        {
+          status: 410,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        }
+      );
+    }
     if (record.status !== "expired" && isQuoteExpired(record)) {
       const updatedRecord = { ...record, status: "expired" as const };
       await storeQuoteConfirmationRecord(env, updatedRecord);
-      return new Response(JSON.stringify({ ok: false, error: "expired", status: "expired" }), {
-        status: 410,
-        headers: buildCorsHeaders(allowedOrigin, true),
-      });
+      const redirectUrl = updatedRecord.redirectToken
+        ? buildQuotePageUrl(env, updatedRecord.redirectToken)
+        : "";
+      return new Response(
+        JSON.stringify({ ok: false, error: "expired", status: "expired", redirectUrl }),
+        {
+          status: 410,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        }
+      );
     }
     return new Response(
       JSON.stringify({
@@ -2225,6 +2241,15 @@ async function handleQuoteConfirmationRequest(
         requestId: record.requestId,
         name: record.name || "",
         productName: record.productName || "",
+        productUrl: record.productUrl || "",
+        designCode: record.designCode || "",
+        metal: record.metal || "",
+        metalWeight: record.metalWeight || "",
+        metalWeightAdjustment: record.metalWeightAdjustment || "",
+        stoneWeight: record.stoneWeight || "",
+        diamondBreakdown: record.diamondBreakdown || "",
+        discountSummary: record.discountSummary || "",
+        discountPercent: record.discountPercent ?? null,
         metals: record.metals || [],
         options: record.options || [],
         expiresAt: record.expiresAt || "",
@@ -3170,6 +3195,52 @@ function getCostPercent(values: CostChartValues, keys: string[], fallback = 0) {
   return fallback;
 }
 
+type DiscountDetails = {
+  label: string;
+  rawPercent: number;
+  appliedPercent: number;
+  summary: string;
+};
+
+function resolveDiscountDetails(costValues: CostChartValues): DiscountDetails {
+  const candidates = [
+    {
+      label: "Friends & family",
+      value: getCostPercent(costValues, [
+        "friends_and_family_discount_pct",
+        "friends_and_familty_discount_pct",
+      ]),
+    },
+    { label: "Welcome", value: getCostPercent(costValues, ["welcome_discount_pct"]) },
+    { label: "Offer code", value: getCostPercent(costValues, ["offer_code_discount_pct"]) },
+  ].filter((entry) => entry.value > 0);
+
+  let rawPercent = 0;
+  let label = "";
+  if (candidates.length) {
+    rawPercent = Math.max(...candidates.map((entry) => entry.value));
+    label = candidates
+      .filter((entry) => entry.value === rawPercent)
+      .map((entry) => entry.label)
+      .join(" / ");
+  }
+
+  const maxDiscountPercent = getCostPercent(costValues, [
+    "max_discount_pct",
+    "max_discount_percent",
+    "max_discount",
+  ]);
+  const appliedPercent =
+    maxDiscountPercent > 0 ? Math.min(rawPercent, maxDiscountPercent) : rawPercent;
+  const percentDisplay = Math.round(appliedPercent * 100);
+  let summary = appliedPercent > 0 ? `${label} (${percentDisplay}% off)` : "No discount applied";
+  if (appliedPercent > 0 && maxDiscountPercent > 0 && appliedPercent < rawPercent) {
+    summary = `${summary} - capped`;
+  }
+
+  return { label, rawPercent, appliedPercent, summary };
+}
+
 type DiamondPiece = { weight: number; count: number };
 
 function parseDiamondBreakdown(input: string): DiamondPiece[] {
@@ -3291,7 +3362,8 @@ function computeOptionPriceFromCosts(
   color: string,
   costValues: CostChartValues,
   diamondPrices: DiamondPriceEntry[],
-  adjustments?: Record<string, PriceAdjustment>
+  adjustments?: Record<string, PriceAdjustment>,
+  discountDetails?: DiscountDetails
 ) {
   const metalWeight = parseNumberValue(record.metal_weight || "");
   if (!Number.isFinite(metalWeight) || metalWeight <= 0) {
@@ -3396,19 +3468,10 @@ function computeOptionPriceFromCosts(
   const profitSales = getCostPercent(costValues, ["profit_margin_sales_pct"]);
   const priceWithMargin = baseCost * (1 + pricePremium + profitProduction + profitSales);
 
-  const friendsDiscount = getCostPercent(costValues, [
-    "friends_and_family_discount_pct",
-    "friends_and_familty_discount_pct",
-  ]);
-  const welcomeDiscount = getCostPercent(costValues, ["welcome_discount_pct"]);
-  const offerDiscount = getCostPercent(costValues, ["offer_code_discount_pct"]);
-  const discountPercent = Math.max(friendsDiscount, welcomeDiscount, offerDiscount);
-  const maxDiscountPercent = getCostPercent(costValues, ["max_discount_pct", "max_discount_percent", "max_discount"]);
-  const appliedDiscount =
-    maxDiscountPercent > 0 ? Math.min(discountPercent, maxDiscountPercent) : discountPercent;
-  const finalPrice = priceWithMargin * (1 - appliedDiscount);
+  const discount = discountDetails || resolveDiscountDetails(costValues);
+  const finalPrice = priceWithMargin * (1 - discount.appliedPercent);
 
-  return { ok: true, price: Math.round(finalPrice) } as const;
+  return { ok: true, price: Math.round(finalPrice), discount } as const;
 }
 
 function buildQuoteOptions(
@@ -3465,7 +3528,10 @@ async function computeQuoteOptionPrices(
   env: Env,
   record: Record<string, string>,
   options?: { force?: boolean }
-): Promise<{ ok: true; fields: Record<string, string> } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; fields: Record<string, string>; meta: { discountSummary: string; discountPercent: number } }
+  | { ok: false; error: string }
+> {
   const fields: Record<string, string> = {};
   const force = Boolean(options?.force);
   let needsPricing = false;
@@ -3478,11 +3544,19 @@ async function computeQuoteOptionPrices(
     needsPricing = true;
   }
 
+  const costValues = await loadCostChartValues(env);
+  const discountDetails = resolveDiscountDetails(costValues);
   if (!needsPricing) {
-    return { ok: true, fields };
+    return {
+      ok: true,
+      fields,
+      meta: {
+        discountSummary: discountDetails.summary,
+        discountPercent: discountDetails.appliedPercent,
+      },
+    };
   }
 
-  const costValues = await loadCostChartValues(env);
   const diamondPrices = await loadDiamondPriceChart(env);
   const adjustments = await loadPriceChartAdjustments(env);
   for (let i = 1; i <= 3; i += 1) {
@@ -3491,14 +3565,29 @@ async function computeQuoteOptionPrices(
     const color = record[`quote_option_${i}_color`] || "";
     if (!force && priceRaw) continue;
     if (!clarity && !color) continue;
-    const result = computeOptionPriceFromCosts(record, clarity, color, costValues, diamondPrices, adjustments);
+    const result = computeOptionPriceFromCosts(
+      record,
+      clarity,
+      color,
+      costValues,
+      diamondPrices,
+      adjustments,
+      discountDetails
+    );
     if (!result.ok) {
       return { ok: false, error: result.error };
     }
     fields[`quote_option_${i}_price_18k`] = String(result.price);
   }
 
-  return { ok: true, fields };
+  return {
+    ok: true,
+    fields,
+    meta: {
+      discountSummary: discountDetails.summary,
+      discountPercent: discountDetails.appliedPercent,
+    },
+  };
 }
 
 async function handleOrderAdminAction(
@@ -3609,6 +3698,12 @@ async function handleQuoteAdminAction(env: Env, payload: Record<string, unknown>
   if (action === "submit_quote") {
     return await submitQuoteAdmin(env, requestId, updates, notes);
   }
+  if (action === "refresh_quote") {
+    return await submitQuoteAdmin(env, requestId, updates, notes, {
+      expireExisting: true,
+      refreshEmail: true,
+    });
+  }
   const nextStatus = resolveQuoteStatus(action, status);
   return await updateAdminRow(env, "quote", requestId, nextStatus, notes, updates);
 }
@@ -3626,9 +3721,20 @@ type QuoteConfirmationRecord = {
   email?: string;
   name?: string;
   productName?: string;
+  productUrl?: string;
+  designCode?: string;
+  metal?: string;
+  metalWeight?: string;
+  metalWeightAdjustment?: string;
+  stoneWeight?: string;
+  diamondBreakdown?: string;
+  discountSummary?: string;
+  discountPercent?: number;
   status: "pending" | "selected" | "accepted" | "expired";
   createdAt: string;
   expiresAt?: string;
+  refreshedAt?: string;
+  redirectToken?: string;
   metals: string[];
   options: QuoteOption[];
   selectedMetal?: string;
@@ -3642,7 +3748,8 @@ async function submitQuoteAdmin(
   env: Env,
   requestId: string,
   updates: Record<string, string>,
-  notes: string
+  notes: string,
+  options?: { expireExisting?: boolean; refreshEmail?: boolean }
 ) {
   if (!env.HEERAWALLA_ACKS) {
     return { ok: false, error: "kv_missing" };
@@ -3651,12 +3758,15 @@ async function submitQuoteAdmin(
   if (!lookup) return { ok: false, error: "request_not_found" };
   const header = Array.from(lookup.headerIndex.keys());
   const record = mapSheetRowToRecord(header, lookup.row);
+  const existingToken = getString(record.quote_token || "");
   const mergedBase = { ...record, ...updates };
   const computed = await computeQuoteOptionPrices(env, mergedBase);
   if (!computed.ok) {
     return { ok: false, error: computed.error };
   }
   const merged = { ...mergedBase, ...computed.fields };
+  const discountSummary = computed.meta?.discountSummary || "";
+  const discountPercent = Number(computed.meta?.discountPercent || 0);
   const metals = resolveQuoteMetalOptions(merged.quote_metal_options || "", merged.metal || "");
   const adjustments = await loadPriceChartAdjustments(env);
   const options = buildQuoteOptions(merged, metals, adjustments);
@@ -3673,6 +3783,15 @@ async function submitQuoteAdmin(
     email: merged.email || record.email,
     name: merged.name || record.name,
     productName: merged.product_name || record.product_name,
+    productUrl: merged.product_url || record.product_url,
+    designCode: merged.design_code || record.design_code,
+    metal: merged.metal || record.metal,
+    metalWeight: merged.metal_weight || record.metal_weight,
+    metalWeightAdjustment: merged.metal_weight_adjustment || record.metal_weight_adjustment,
+    stoneWeight: merged.stone_weight || record.stone_weight,
+    diamondBreakdown: merged.diamond_breakdown || record.diamond_breakdown,
+    discountSummary: discountSummary || "",
+    discountPercent: Number.isFinite(discountPercent) ? discountPercent : 0,
     status: "pending",
     createdAt: now,
     expiresAt,
@@ -3685,7 +3804,9 @@ async function submitQuoteAdmin(
 
   await storeQuoteConfirmationRecord(env, quoteRecord);
   const quoteUrl = buildQuotePageUrl(env, token);
-  const emailPayload = buildQuoteEmail(quoteRecord, quoteUrl);
+  const emailPayload = buildQuoteEmail(quoteRecord, quoteUrl, {
+    refreshed: Boolean(options?.refreshEmail),
+  });
   try {
     await sendEmail(env, {
       to: [quoteRecord.email || ""],
@@ -3706,7 +3827,12 @@ async function submitQuoteAdmin(
     quote_expires_at: expiresAt,
     quote_sent_at: now,
   };
-  return await updateAdminRow(env, "quote", requestId, "QUOTED", notes, updatePayload);
+  const updateResult = await updateAdminRow(env, "quote", requestId, "QUOTED", notes, updatePayload);
+  if (!updateResult.ok) return updateResult;
+  if (options?.expireExisting && existingToken && existingToken !== token) {
+    await expireQuoteConfirmationToken(env, existingToken, token);
+  }
+  return updateResult;
 }
 
 async function handleContactAdminAction(env: Env, payload: Record<string, unknown>) {
@@ -4011,6 +4137,7 @@ function resolveQuoteStatus(action: string, status: string) {
   if (status) return normalizeQuoteStatus(status);
   switch (action) {
     case "submit_quote":
+    case "refresh_quote":
       return "QUOTED";
     case "convert_to_order":
     case "mark_actioned":
@@ -6026,20 +6153,41 @@ function resolveQuotePaymentUrl(env: Env, requestId: string, token = "", metal =
     .replace(/\{option\}/g, option);
 }
 
-function buildQuoteEmail(record: QuoteConfirmationRecord, quoteUrl: string) {
+function buildQuoteEmail(
+  record: QuoteConfirmationRecord,
+  quoteUrl: string,
+  options?: { refreshed?: boolean }
+) {
   const requestId = record.requestId || "";
   const name = record.name || "there";
   const product = record.productName || "your piece";
-  const subject = requestId
+  const refreshed = Boolean(options?.refreshed);
+  const subject = refreshed
+    ? requestId
+      ? `Heerawalla - Updated quote (${requestId})`
+      : "Heerawalla - Updated quote"
+    : requestId
     ? `Heerawalla - Your personal quote is ready (${requestId})`
     : "Heerawalla - Your personal quote is ready";
+  const heading = refreshed ? "Your quote has been updated" : "Your personal quote is ready";
+  const intro = refreshed
+    ? `Hello ${name}, we updated your quote for ${product}.`
+    : `Hello ${name}, your quote for ${product} is ready to review.`;
+  const followUp = refreshed
+    ? "Please use the new link below. The previous link is no longer valid."
+    : "This private link is valid for 72 hours.";
+  const validityLine = "This private link is valid for 72 hours.";
   const textBody = [
     `Hello ${name},`,
     "",
-    `Your personal quote for ${product} is ready to review.`,
+    refreshed
+      ? `We updated your quote for ${product}.`
+      : `Your personal quote for ${product} is ready to review.`,
     `Use your private link (valid for 72 hours): ${quoteUrl}`,
     "",
-    "Your link is private and can be used once to begin purchase.",
+    refreshed
+      ? "Your previous link is no longer valid."
+      : "Your link is private and can be used once to begin purchase.",
     "If you need changes, reply to this email and our concierge will assist.",
     "",
     "Warm regards,",
@@ -6067,10 +6215,10 @@ function buildQuoteEmail(record: QuoteConfirmationRecord, quoteUrl: string) {
                 Heerawalla
               </div>
               <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.4;font-weight:600;color:#0f172a;">
-                Your personal quote is ready
+                ${escapeHtml(heading)}
               </h1>
               <p style="margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;">
-                Hello ${escapeHtml(name)}, your quote for ${escapeHtml(product)} is ready to review.
+                ${escapeHtml(intro)}
               </p>
               <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px 0;">
                 <tr>
@@ -6080,8 +6228,15 @@ function buildQuoteEmail(record: QuoteConfirmationRecord, quoteUrl: string) {
                 </tr>
               </table>
               <p style="margin:0 0 6px 0;font-size:13px;line-height:1.7;color:#475569;">
-                This private link is valid for 72 hours.
+                ${escapeHtml(followUp)}
               </p>
+              ${
+                refreshed
+                  ? `<p style="margin:0 0 24px 0;font-size:13px;line-height:1.7;color:#475569;">
+                ${escapeHtml(validityLine)}
+              </p>`
+                  : ""
+              }
               <p style="margin:0 0 24px 0;font-size:13px;line-height:1.7;color:#475569;">
                 If you need adjustments, reply to this email and our concierge will assist.
               </p>
@@ -8783,6 +8938,21 @@ async function storeQuoteConfirmationRecord(env: Env, record: QuoteConfirmationR
   const key = buildQuoteConfirmationKey(record.token);
   if (!key) return;
   await env.HEERAWALLA_ACKS.put(key, JSON.stringify(record), { expirationTtl: QUOTE_CONFIRMATION_TTL });
+}
+
+async function expireQuoteConfirmationToken(env: Env, token: string, redirectToken = "") {
+  if (!env.HEERAWALLA_ACKS) return;
+  const existing = await getQuoteConfirmationRecord(env, token);
+  if (!existing) return;
+  const refreshedAt = new Date().toISOString();
+  const updated: QuoteConfirmationRecord = {
+    ...existing,
+    status: "expired",
+    expiresAt: refreshedAt,
+    refreshedAt,
+    redirectToken: redirectToken || existing.redirectToken,
+  };
+  await storeQuoteConfirmationRecord(env, updated);
 }
 
 async function getQuoteConfirmationRecord(env: Env, token: string) {

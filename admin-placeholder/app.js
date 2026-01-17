@@ -123,6 +123,7 @@
     quotes: [
       { action: "acknowledge", label: "Acknowledge", confirm: "Mark as acknowledged?" },
       { action: "submit_quote", label: "Send quote link", confirm: "Send quote link to customer?" },
+      { action: "refresh_quote", label: "Refresh quote link", confirm: "Send a refreshed quote link?" },
       { action: "mark_actioned", label: "Mark quote actioned", confirm: "Mark quote as actioned?" },
       { action: "drop", label: "Drop", confirm: "Drop this quote?" },
     ],
