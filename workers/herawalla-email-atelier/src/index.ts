@@ -2069,16 +2069,8 @@ async function handleOrderConfirmationRequest(
       });
     }
     const token = getString(payload.token || payload.confirmationToken);
-    const reason = getString(payload.reason || payload.cancelReason);
-    const note = getString(payload.note || payload.cancelNote);
     if (!token) {
       return new Response(JSON.stringify({ ok: false, error: "missing_token" }), {
-        status: 400,
-        headers: buildCorsHeaders(allowedOrigin, true),
-      });
-    }
-    if (!reason) {
-      return new Response(JSON.stringify({ ok: false, error: "missing_reason" }), {
         status: 400,
         headers: buildCorsHeaders(allowedOrigin, true),
       });
@@ -2105,9 +2097,6 @@ async function handleOrderConfirmationRequest(
       JSON.stringify({
         ok: true,
         status: updatedRecord.status,
-        selectedMetal,
-        selectedOption: optionIndex,
-        selectedPrice,
         paymentUrl: paymentUrl || undefined,
       }),
       {
