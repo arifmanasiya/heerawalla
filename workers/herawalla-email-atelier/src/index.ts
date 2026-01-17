@@ -2685,6 +2685,10 @@ async function buildAdminList(
       if (!key) return;
       entry[key] = String(row[idx] ?? "");
     });
+    if (kind === "quote") {
+      const normalizedStatus = normalizeQuoteStatus(entry.status || "");
+      if (normalizedStatus) entry.status = normalizedStatus;
+    }
     return entry;
   });
 
@@ -2903,7 +2907,7 @@ function applyAdminSort(items: Array<Record<string, string>>, params: URLSearchP
   });
 }
 
-type PriceAdjustment = { type: "percent" | "flat"; value: number };
+type PriceAdjustment = { type: "percent" | "flat"; value: number; mode?: "delta" | "multiplier" };
 
 function normalizeAdjustmentType(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -2924,13 +2928,22 @@ function parseAdjustmentValue(rawValue: string, adjustmentType: "percent" | "fla
   return numeric;
 }
 
+function getMetalColorSuffix(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.includes("white")) return "White Gold";
+  if (normalized.includes("yellow")) return "Yellow Gold";
+  if (normalized.includes("rose")) return "Rose Gold";
+  return "";
+}
+
 function normalizeMetalOption(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
   const normalized = trimmed.toLowerCase();
-  if (normalized.startsWith("14")) return "14K";
-  if (normalized.startsWith("18")) return "18K";
   if (normalized.includes("plat")) return "Platinum";
+  const color = getMetalColorSuffix(trimmed);
+  if (normalized.startsWith("14")) return color ? `14K ${color}` : "14K";
+  if (normalized.startsWith("18")) return color ? `18K ${color}` : "18K";
   return trimmed;
 }
 
@@ -2942,6 +2955,15 @@ function parseMetalOptions(value: string) {
   const unique = Array.from(new Set(metals));
   if (!unique.length) return ["18K"];
   return unique;
+}
+
+function resolveQuoteMetalOptions(value: string, requestedMetal: string) {
+  const metals = parseMetalOptions(value);
+  const normalizedRequested = normalizeMetalOption(requestedMetal || "");
+  if (normalizedRequested.startsWith("18K")) {
+    return [normalizedRequested || "18K"];
+  }
+  return metals;
 }
 
 function parsePriceValue(value: string) {
@@ -2971,7 +2993,34 @@ function parsePercentValue(value: string) {
 function applyPriceAdjustment(base: number, adjustment?: PriceAdjustment) {
   if (!adjustment || !adjustment.value) return base;
   if (adjustment.type === "flat") return base + adjustment.value;
+  if (adjustment.mode === "multiplier") return base * adjustment.value;
   return base * (1 + adjustment.value);
+}
+
+function adjustmentToMultiplier(adjustment?: PriceAdjustment) {
+  if (!adjustment || adjustment.type !== "percent") return null;
+  if (adjustment.mode === "multiplier") return adjustment.value;
+  return 1 + adjustment.value;
+}
+
+function resolveMetalPricingKey(metal: string, requestedMetal: string) {
+  const normalized = normalizeMetalOption(metal);
+  if (!normalized) return "";
+  if (normalized === "Platinum") return normalized;
+  const color = getMetalColorSuffix(requestedMetal || "");
+  if (color && (normalized === "14K" || normalized === "18K")) {
+    return `${normalized} ${color}`;
+  }
+  return normalized;
+}
+
+function findAdjustmentMultiplier(adjustments: Record<string, PriceAdjustment>, keys: string[]) {
+  for (const key of keys) {
+    if (!key) continue;
+    const multiplier = adjustmentToMultiplier(adjustments[key]);
+    if (multiplier && multiplier > 0) return multiplier;
+  }
+  return null;
 }
 
 async function loadPriceChartAdjustments(env: Env): Promise<Record<string, PriceAdjustment>> {
@@ -2993,8 +3042,23 @@ async function loadPriceChartAdjustments(env: Env): Promise<Record<string, Price
     const metal = normalizeMetalOption(record.metal || "");
     if (!metal) return;
     const adjustmentType = normalizeAdjustmentType(record.adjustment_type || "");
-    const value = parseAdjustmentValue(record.adjustment_value || "", adjustmentType);
-    adjustments[metal] = { type: adjustmentType, value };
+    const rawValue = getString(record.adjustment_value);
+    const value = parseAdjustmentValue(rawValue || "", adjustmentType);
+    let mode: "delta" | "multiplier" | undefined;
+    if (adjustmentType === "percent") {
+      const numeric = parseNumberValue(rawValue || "");
+      const hasPercent = rawValue.includes("%");
+      if (Number.isFinite(numeric)) {
+        if (numeric < 0) {
+          mode = "delta";
+        } else if (hasPercent || numeric >= 2) {
+          mode = "delta";
+        } else {
+          mode = "multiplier";
+        }
+      }
+    }
+    adjustments[metal] = { type: adjustmentType, value, mode };
   });
   return adjustments;
 }
@@ -3007,8 +3071,6 @@ type DiamondPriceEntry = {
   weightMax: number;
   pricePerCt: number;
 };
-
-const DEFAULT_DIAMOND_PRICE_PER_CT = 3000;
 
 function normalizeCostKey(value: string) {
   return value
@@ -3160,12 +3222,72 @@ function findDiamondPricePerCt(
   return best ? best.entry.pricePerCt : null;
 }
 
+function parseDiamondTokens(value: string) {
+  if (!value) return [];
+  const normalized = normalizeDiamondToken(value);
+  const rangeMatch = normalized.match(/^([A-Z])\s*-\s*([A-Z])$/);
+  if (rangeMatch) {
+    const start = rangeMatch[1].charCodeAt(0);
+    const end = rangeMatch[2].charCodeAt(0);
+    const tokens: string[] = [];
+    const step = start <= end ? 1 : -1;
+    for (let code = start; step > 0 ? code <= end : code >= end; code += step) {
+      tokens.push(String.fromCharCode(code));
+    }
+    return tokens;
+  }
+  return normalized.split(/[^A-Z0-9]+/).filter(Boolean);
+}
+
+function matchesDiamondToken(entryValue: string, tokens: string[], allowPrefix: boolean) {
+  if (isDiamondWildcard(entryValue) || !tokens.length) return true;
+  return tokens.some((token) => {
+    if (!token) return false;
+    if (entryValue === token) return true;
+    return allowPrefix ? entryValue.startsWith(token) : false;
+  });
+}
+
+function findDiamondPricePerCtAverage(
+  entries: DiamondPriceEntry[],
+  clarityTokens: string[],
+  colorTokens: string[],
+  weight: number
+) {
+  let bestScore = -1;
+  let bestRange = Infinity;
+  let sum = 0;
+  let count = 0;
+  for (const entry of entries) {
+    if (weight < entry.weightMin || weight > entry.weightMax) continue;
+    const clarityMatch = matchesDiamondToken(entry.clarity, clarityTokens, true);
+    const colorMatch = matchesDiamondToken(entry.color, colorTokens, false);
+    if (!clarityMatch || !colorMatch) continue;
+    const clarityScore = isDiamondWildcard(entry.clarity) ? 0 : 2;
+    const colorScore = isDiamondWildcard(entry.color) ? 0 : 1;
+    const score = clarityScore + colorScore;
+    const range = entry.weightMax - entry.weightMin;
+    if (score > bestScore || (score === bestScore && range < bestRange)) {
+      bestScore = score;
+      bestRange = range;
+      sum = entry.pricePerCt;
+      count = 1;
+    } else if (score === bestScore && range === bestRange) {
+      sum += entry.pricePerCt;
+      count += 1;
+    }
+  }
+  if (!count) return null;
+  return sum / count;
+}
+
 function computeOptionPriceFromCosts(
   record: Record<string, string>,
   clarity: string,
   color: string,
   costValues: CostChartValues,
-  diamondPrices: DiamondPriceEntry[]
+  diamondPrices: DiamondPriceEntry[],
+  adjustments?: Record<string, PriceAdjustment>
 ) {
   const metalWeight = parseNumberValue(record.metal_weight || "");
   if (!Number.isFinite(metalWeight) || metalWeight <= 0) {
@@ -3181,13 +3303,29 @@ function computeOptionPriceFromCosts(
     : [];
 
   const goldPricePerGram = getCostNumber(costValues, ["gold_price_per_gram_usd"]);
+  const requestedMetal = normalizeMetalOption(record.metal || "");
+  const baseMetalKey = requestedMetal.startsWith("18K") ? requestedMetal : "18K";
   let metalCostPerGram = getCostNumber(costValues, [
     "metal_cost_18k_per_gram",
     "metal_cost_per_gram_18k",
     "metal_cost_per_gram",
   ]);
   if ((!Number.isFinite(metalCostPerGram) || metalCostPerGram <= 0) && goldPricePerGram > 0) {
-    metalCostPerGram = goldPricePerGram * 0.75;
+    const adjustmentMap = adjustments || {};
+    const baseKey = resolveMetalPricingKey(baseMetalKey, requestedMetal);
+    const baseFactor =
+      findAdjustmentMultiplier(adjustmentMap, [
+        baseKey,
+        baseMetalKey,
+        "18K",
+        "18K Yellow Gold",
+        "18K White Gold",
+      ]) || 0;
+    if (baseFactor > 0) {
+      metalCostPerGram = goldPricePerGram * baseFactor;
+    } else {
+      metalCostPerGram = goldPricePerGram * 0.75;
+    }
   }
   if (!Number.isFinite(metalCostPerGram) || metalCostPerGram <= 0) {
     return { ok: false, error: "missing_metal_cost" } as const;
@@ -3195,12 +3333,16 @@ function computeOptionPriceFromCosts(
   const metalCost = metalCostPerGram * metalWeight;
 
   let diamondCost = 0;
+  const clarityTokens = parseDiamondTokens(clarity || "");
+  const colorTokens = parseDiamondTokens(color || "");
   if (pieces.length) {
     for (const piece of pieces) {
-      let pricePerCt = findDiamondPricePerCt(diamondPrices, clarity, color, piece.weight);
-      if (!pricePerCt && piece.weight > 0 && piece.weight < 1) {
-        pricePerCt = DEFAULT_DIAMOND_PRICE_PER_CT;
-      }
+      const pricePerCt = findDiamondPricePerCtAverage(
+        diamondPrices,
+        clarityTokens,
+        colorTokens,
+        piece.weight
+      );
       if (!pricePerCt) {
         return { ok: false, error: "diamond_price_missing" } as const;
       }
@@ -3271,6 +3413,16 @@ function buildQuoteOptions(
   adjustments: Record<string, PriceAdjustment>
 ) {
   const options: QuoteOption[] = [];
+  const requestedMetal = normalizeMetalOption(record.metal || "");
+  const baseMetalKey = requestedMetal.startsWith("18K") ? requestedMetal : "18K";
+  const baseFactor =
+    findAdjustmentMultiplier(adjustments, [
+      resolveMetalPricingKey(baseMetalKey, requestedMetal),
+      baseMetalKey,
+      "18K",
+      "18K Yellow Gold",
+      "18K White Gold",
+    ]) || null;
   for (let i = 1; i <= 3; i += 1) {
     const clarity = record[`quote_option_${i}_clarity`] || "";
     const color = record[`quote_option_${i}_color`] || "";
@@ -3281,12 +3433,18 @@ function buildQuoteOptions(
     metals.forEach((metal) => {
       const normalized = normalizeMetalOption(metal);
       const base = price18k;
-      if (normalized === "14K") {
-        prices[normalized] = Math.round(applyPriceAdjustment(base, adjustments["14K"]));
-      } else if (normalized === "Platinum") {
-        prices[normalized] = Math.round(applyPriceAdjustment(base, adjustments["Platinum"]));
+      if (!normalized) return;
+      const targetKey = resolveMetalPricingKey(normalized, requestedMetal);
+      const targetFactor = findAdjustmentMultiplier(adjustments, [targetKey, normalized]);
+      if (baseFactor && targetFactor && baseFactor > 0) {
+        prices[normalized] = Math.round(base * (targetFactor / baseFactor));
       } else {
-        prices[normalized] = Math.round(base);
+        const directAdjustment = adjustments[targetKey] || adjustments[normalized];
+        if (normalized !== baseMetalKey && directAdjustment) {
+          prices[normalized] = Math.round(applyPriceAdjustment(base, directAdjustment));
+        } else {
+          prices[normalized] = Math.round(base);
+        }
       }
     });
     options.push({
@@ -3322,13 +3480,14 @@ async function computeQuoteOptionPrices(
 
   const costValues = await loadCostChartValues(env);
   const diamondPrices = await loadDiamondPriceChart(env);
+  const adjustments = await loadPriceChartAdjustments(env);
   for (let i = 1; i <= 3; i += 1) {
     const priceRaw = record[`quote_option_${i}_price_18k`] || "";
     const clarity = record[`quote_option_${i}_clarity`] || "";
     const color = record[`quote_option_${i}_color`] || "";
     if (!force && priceRaw) continue;
     if (!clarity && !color) continue;
-    const result = computeOptionPriceFromCosts(record, clarity, color, costValues, diamondPrices);
+    const result = computeOptionPriceFromCosts(record, clarity, color, costValues, diamondPrices, adjustments);
     if (!result.ok) {
       return { ok: false, error: result.error };
     }
@@ -3494,7 +3653,7 @@ async function submitQuoteAdmin(
     return { ok: false, error: computed.error };
   }
   const merged = { ...mergedBase, ...computed.fields };
-  const metals = parseMetalOptions(merged.quote_metal_options || "");
+  const metals = resolveQuoteMetalOptions(merged.quote_metal_options || "", merged.metal || "");
   const adjustments = await loadPriceChartAdjustments(env);
   const options = buildQuoteOptions(merged, metals, adjustments);
   if (!options.length) {
@@ -3824,6 +3983,12 @@ function normalizeOrderStatus(value: string) {
   return normalized === "INVOICE_NOT_PAID" ? "INVOICE_EXPIRED" : normalized;
 }
 
+function normalizeQuoteStatus(value: string) {
+  const normalized = getString(value).toUpperCase();
+  if (normalized === "CONVERTED") return "QUOTE_ACTIONED";
+  return normalized;
+}
+
 function getOrderStatusFromRow(lookup: SheetRowLookup) {
   const statusIdx = lookup.headerIndex.get("status");
   const rawStatus = statusIdx === undefined ? "" : getString(lookup.row[statusIdx]);
@@ -3839,12 +4004,13 @@ function isOrderTransitionAllowed(currentStatus: string, nextStatus: string) {
 }
 
 function resolveQuoteStatus(action: string, status: string) {
-  if (status) return status;
+  if (status) return normalizeQuoteStatus(status);
   switch (action) {
     case "submit_quote":
       return "QUOTED";
     case "convert_to_order":
-      return "CONVERTED";
+    case "mark_actioned":
+      return "QUOTE_ACTIONED";
     case "drop":
       return "DROPPED";
     case "acknowledge":

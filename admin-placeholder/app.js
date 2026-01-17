@@ -36,7 +36,7 @@
       "DELIVERED",
       "CANCELLED",
     ],
-    quotes: ["NEW", "ACKNOWLEDGED", "QUOTED", "CONVERTED", "DROPPED"],
+    quotes: ["NEW", "ACKNOWLEDGED", "QUOTED", "QUOTE_ACTIONED", "DROPPED"],
     tickets: ["NEW", "PENDING", "RESOLVED"],
     contacts: [],
     "price-chart": [],
@@ -123,7 +123,7 @@
     quotes: [
       { action: "acknowledge", label: "Acknowledge", confirm: "Mark as acknowledged?" },
       { action: "submit_quote", label: "Send quote link", confirm: "Send quote link to customer?" },
-      { action: "convert_to_order", label: "Convert to order", confirm: "Convert to order?" },
+      { action: "mark_actioned", label: "Mark quote actioned", confirm: "Mark quote as actioned?" },
       { action: "drop", label: "Drop", confirm: "Drop this quote?" },
     ],
     tickets: [
@@ -259,6 +259,7 @@
   ];
   const QUOTE_PRICE_FIELDS = new Set(QUOTE_OPTION_FIELDS.map((option) => option.price));
   const QUOTE_PRICING_FIELDS = new Set([
+    "metal",
     "metal_weight",
     "stone_weight",
     "diamond_breakdown",
@@ -325,6 +326,8 @@
     quoteSection: document.querySelector("[data-quote-section]"),
     quoteMetals: Array.from(document.querySelectorAll("[data-quote-metals] input[type=\"checkbox\"]")),
     quoteMetalInput: document.querySelector("[data-field=\"quote_metal_options\"]"),
+    metalWeightLabel: document.querySelector("[data-metal-weight-label]"),
+    metalWeightAdjustmentLabel: document.querySelector("[data-metal-weight-adjustment-label]"),
     editFields: Array.from(document.querySelectorAll("[data-field]")),
     orderDetailsSection: document.querySelector("[data-order-details-section]"),
     orderDetailsFields: Array.from(document.querySelectorAll("[data-order-details-field]")),
@@ -473,6 +476,31 @@
     if (Number.isNaN(number)) return raw;
     const sign = number > 0 ? "+" : "";
     return `${sign}${number} g`;
+  }
+
+  function buildMetalWeightLabel(metalValue) {
+    const metalLabel = String(metalValue || "").trim();
+    if (!metalLabel) return "Metal weight (g)";
+    return `Metal weight (g, ${metalLabel})`;
+  }
+
+  function buildMetalWeightAdjustmentLabel(metalValue) {
+    const metalLabel = String(metalValue || "").trim();
+    if (!metalLabel) return "Metal weight adjustment (g)";
+    return `Metal weight adjustment (g, ${metalLabel})`;
+  }
+
+  function updateMetalWeightLabels(metalValue) {
+    if (ui.metalWeightLabel) {
+      ui.metalWeightLabel.textContent = buildMetalWeightLabel(metalValue);
+    }
+    if (ui.metalWeightAdjustmentLabel) {
+      ui.metalWeightAdjustmentLabel.textContent = buildMetalWeightAdjustmentLabel(metalValue);
+    }
+  }
+
+  function isRequested18K(value) {
+    return normalizeText(value).includes("18k");
   }
 
   function formatDelayWeeks(value) {
@@ -1129,8 +1157,8 @@
             ["Images", renderQuoteMediaSlot()],
             ["Design code", item.design_code],
             ["Metal", item.metal],
-            ["Metal weight", formatGrams(item.metal_weight)],
-            ["Metal weight adjustment", formatSignedGrams(item.metal_weight_adjustment)],
+            [buildMetalWeightLabel(item.metal), formatGrams(item.metal_weight)],
+            [buildMetalWeightAdjustmentLabel(item.metal), formatSignedGrams(item.metal_weight_adjustment)],
             ["Stone", item.stone],
             ["Stone weight", item.stone_weight],
             ["Diamond breakdown", item.diamond_breakdown],
@@ -1159,8 +1187,8 @@
             ["Product URL", item.product_url],
             ["Design code", item.design_code],
             ["Metal", item.metal],
-            ["Metal weight", formatGrams(item.metal_weight)],
-            ["Metal weight adjustment", formatSignedGrams(item.metal_weight_adjustment)],
+            [buildMetalWeightLabel(item.metal), formatGrams(item.metal_weight)],
+            [buildMetalWeightAdjustmentLabel(item.metal), formatSignedGrams(item.metal_weight_adjustment)],
             ["Stone", item.stone],
             ["Stone weight", item.stone_weight],
             ["Diamond breakdown", item.diamond_breakdown],
@@ -1193,7 +1221,8 @@
       }
       field.value = item[key] || "";
     });
-    setQuoteMetalSelection(item.quote_metal_options || "");
+    updateMetalWeightLabels(item.metal || "");
+    setQuoteMetalSelection(item.quote_metal_options || "", item.metal || "");
     setDiamondBreakdownRowsFromField();
     resetQuoteAutoPricingState();
     scheduleQuotePricingUpdate();
@@ -1240,18 +1269,26 @@
     ui.quoteMetalInput.value = selected.join(", ");
   }
 
-  function setQuoteMetalSelection(value) {
+  function setQuoteMetalSelection(value, requestedMetal = "") {
     if (!ui.quoteMetalInput) return;
     const selected = String(value || "")
       .split(",")
       .map((entry) => entry.trim())
       .filter(Boolean);
-    if (!selected.length) {
+    if (isRequested18K(requestedMetal)) {
+      selected.length = 0;
+      selected.push("18K");
+    } else if (!selected.length) {
       selected.push("18K");
     }
     ui.quoteMetalInput.value = selected.join(", ");
     ui.quoteMetals.forEach((input) => {
       input.checked = selected.includes(input.value);
+      if (isRequested18K(requestedMetal)) {
+        input.disabled = input.value !== "18K";
+      } else {
+        input.disabled = false;
+      }
     });
   }
 
@@ -2008,6 +2045,10 @@
     ui.editFields.forEach((field) => {
       const handler = () => {
         const key = field.dataset.field || "";
+        if (key === "metal") {
+          updateMetalWeightLabels(field.value);
+          setQuoteMetalSelection(ui.quoteMetalInput ? ui.quoteMetalInput.value : "", field.value);
+        }
         if (state.tab === "quotes" && key) {
           if (QUOTE_PRICE_FIELDS.has(key)) {
             if (field.value) {

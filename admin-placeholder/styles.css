@@ -477,7 +477,8 @@ button:disabled {
 }
 
 .badge[data-status="INVOICED"],
-.badge[data-status="QUOTED"] {
+.badge[data-status="QUOTED"],
+.badge[data-status="QUOTE_ACTIONED"] {
   border-color: #fde68a;
   color: #b45309;
 }
