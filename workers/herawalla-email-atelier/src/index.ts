@@ -3749,7 +3749,7 @@ async function submitQuoteAdmin(
   requestId: string,
   updates: Record<string, string>,
   notes: string,
-  options?: { expireExisting?: boolean; refreshEmail?: boolean }
+  submitOptions?: { expireExisting?: boolean; refreshEmail?: boolean }
 ) {
   if (!env.HEERAWALLA_ACKS) {
     return { ok: false, error: "kv_missing" };
@@ -3769,8 +3769,8 @@ async function submitQuoteAdmin(
   const discountPercent = Number(computed.meta?.discountPercent || 0);
   const metals = resolveQuoteMetalOptions(merged.quote_metal_options || "", merged.metal || "");
   const adjustments = await loadPriceChartAdjustments(env);
-  const options = buildQuoteOptions(merged, metals, adjustments);
-  if (!options.length) {
+  const quoteOptions = buildQuoteOptions(merged, metals, adjustments);
+  if (!quoteOptions.length) {
     return { ok: false, error: "quote_options_missing" };
   }
 
@@ -3796,7 +3796,7 @@ async function submitQuoteAdmin(
     createdAt: now,
     expiresAt,
     metals,
-    options,
+    options: quoteOptions,
   };
   if (!quoteRecord.email) {
     return { ok: false, error: "missing_email" };
@@ -3805,7 +3805,7 @@ async function submitQuoteAdmin(
   await storeQuoteConfirmationRecord(env, quoteRecord);
   const quoteUrl = buildQuotePageUrl(env, token);
   const emailPayload = buildQuoteEmail(quoteRecord, quoteUrl, {
-    refreshed: Boolean(options?.refreshEmail),
+    refreshed: Boolean(submitOptions?.refreshEmail),
   });
   try {
     await sendEmail(env, {
@@ -3829,7 +3829,7 @@ async function submitQuoteAdmin(
   };
   const updateResult = await updateAdminRow(env, "quote", requestId, "QUOTED", notes, updatePayload);
   if (!updateResult.ok) return updateResult;
-  if (options?.expireExisting && existingToken && existingToken !== token) {
+  if (submitOptions?.expireExisting && existingToken && existingToken !== token) {
     await expireQuoteConfirmationToken(env, existingToken, token);
   }
   return updateResult;
