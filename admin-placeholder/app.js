@@ -411,6 +411,7 @@
 
   const storedBase = localStorage.getItem("adminApiBase") || "";
   const apiBase = storedBase || document.body.dataset.apiBase || "";
+  const siteBase = (document.body.dataset.siteBase || "https://www.heerawalla.com").replace(/\/$/, "");
   let syncStatus = "Connecting";
   let lastSync = "";
   let autoRefresh = localStorage.getItem("adminAutoRefresh") !== "false";
@@ -451,6 +452,16 @@
 
   function escapeAttribute(value) {
     return escapeHtml(value).replace(/`/g, "&#96;");
+  }
+
+  function normalizeImageUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (/^(https?:|data:|blob:)/i.test(raw)) return raw;
+    if (raw.startsWith("//")) return `https:${raw}`;
+    if (!siteBase) return raw;
+    if (raw.startsWith("/")) return `${siteBase}${raw}`;
+    return `${siteBase}/${raw}`;
   }
 
   function showToast(message, variant) {
@@ -837,7 +848,7 @@
     if (Array.isArray(entry.images)) {
       entry.images.forEach((image) => candidates.push(image));
     }
-    return Array.from(new Set(candidates.filter(Boolean)));
+    return Array.from(new Set(candidates.map(normalizeImageUrl).filter(Boolean)));
   }
 
   function resolveCatalogEntry(item, catalog) {
