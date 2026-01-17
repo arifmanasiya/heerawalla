@@ -958,7 +958,7 @@
       ui.actionRun.disabled = !canEdit || !ui.actionSelect || !ui.actionSelect.value;
     }
     if (ui.actionRow) {
-      ui.actionRow.style.display = actions.length ? "" : "none";
+      ui.actionRow.style.display = "";
     }
     if (ui.primaryAction) {
       ui.primaryAction.disabled = !canEdit;

@@ -24,7 +24,6 @@
             <span class="role" data-user-role>Loading role</span>
             <span class="email" data-user-email>Checking access...</span>
           </div>
-          <a class="btn btn-ghost back-link" data-back-link href="/">Back to list</a>
           <a class="btn btn-ghost back-link" href="/cdn-cgi/access/logout?redirect=/">Log out</a>
         </div>
       </header>
@@ -51,11 +50,18 @@
           </div>
 
           <div class="action-row" data-action-row>
-            <label class="field">
-              <span>Actions</span>
-              <select data-action-select></select>
-            </label>
-            <button class="btn btn-ghost" data-action-run type="button">Run action</button>
+            <div class="action-row-main">
+              <a class="btn btn-ghost back-link" data-back-link href="/">Back to list</a>
+              <label class="field">
+                <span>Actions</span>
+                <select data-action-select></select>
+              </label>
+              <button class="btn btn-ghost" data-action-run type="button">Run action</button>
+            </div>
+            <div class="action-row-tools">
+              <button class="btn" data-primary-action type="button">Get Customer Confirmation</button>
+              <button class="btn btn-ghost" data-notes-save type="button">Save notes</button>
+            </div>
           </div>
 
           <div class="drawer-section">
@@ -279,10 +285,6 @@
               <span>Notes</span>
               <textarea rows="4" data-field="notes" placeholder="Add internal notes"></textarea>
             </label>
-            <div class="drawer-actions-row">
-              <button class="btn" data-primary-action type="button">Get Customer Confirmation</button>
-              <button class="btn btn-ghost" data-notes-save type="button">Save notes</button>
-            </div>
           </div>
 
           <div class="drawer-section" data-order-details-section>
