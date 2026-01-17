@@ -1215,6 +1215,18 @@
             ["Unsubscribed reason", item.unsubscribed_reason],
             ["Updated", formatDate(item.updated_at)],
           ]
+        : state.tab === "tickets"
+        ? [
+            ["Request ID", item.request_id],
+            ["Created", formatDate(item.created_at)],
+            ["Status", item.status],
+            ["Name", item.name],
+            ["Email", item.email],
+            ["Phone", item.phone],
+            ["Interests", item.interests],
+            ["Contact preference", item.contact_preference],
+            ["Customer notes", item.notes],
+          ]
         : state.tab === "price-chart"
         ? [
             ["Row", item.row_number],
