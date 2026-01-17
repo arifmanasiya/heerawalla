@@ -3271,7 +3271,7 @@ function resolveDiscountDetails(costValues: CostChartValues, record?: Record<str
   const percentDisplay = Math.round(appliedPercent * 100);
   let summary = appliedPercent > 0 ? `${label} (${percentDisplay}% off)` : "No discount applied";
   if (appliedPercent > 0 && maxDiscountPercent > 0 && appliedPercent < rawPercent) {
-    summary = `${summary} - capped`;
+    summary = `${summary} - max discount applied`;
   }
 
   return { label, rawPercent, appliedPercent, summary, source };

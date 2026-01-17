@@ -108,8 +108,8 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
           <div class="text-xs uppercase tracking-[0.3em] text-slate-500">How to proceed</div>
           <ul class="text-sm text-slate-600 space-y-2">
             <li>Review the piece details and the quality guide.</li>
-            <li>Select your preferred metal to see the updated prices.</li>
-            <li>Choose an option to begin purchase and reserve the piece.</li>
+            <li>Choose your preferred quality for the jewelry.</li>
+            <li>Make payment to confirm the order.</li>
           </ul>
         </div>
         <div class="border border-slate-200 bg-white p-5 text-sm text-slate-600 space-y-2">
@@ -630,7 +630,9 @@ const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.co
         if (expiryEl && data.expiresAt) {
           const expiresAt = new Date(data.expiresAt);
           if (!Number.isNaN(expiresAt.getTime())) {
-            expiryEl.textContent = `Quote valid until ${expiresAt.toLocaleString()}.`;
+            expiryEl.textContent =
+              `Your quote link is valid until ${expiresAt.toLocaleString()}. ` +
+              "We reserve the right to adjust pricing on quotes that have not been acted upon as market conditions shift.";
           }
         }
 
