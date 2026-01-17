@@ -168,6 +168,8 @@
       "quote_option_3_clarity",
       "quote_option_3_color",
       "quote_option_3_price_18k",
+      "quote_discount_type",
+      "quote_discount_percent",
       "notes",
     ],
     tickets: ["notes"],
@@ -266,6 +268,8 @@
     "diamond_breakdown",
     "timeline",
     "timeline_adjustment_weeks",
+    "quote_discount_type",
+    "quote_discount_percent",
     ...QUOTE_OPTION_FIELDS.flatMap((option) => [option.clarity, option.color]),
   ]);
 
@@ -1171,6 +1175,8 @@
             ["Price", formatPrice(item.price)],
             ["Timeline", item.timeline],
             ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
+            ["Discount type", item.quote_discount_type],
+            ["Discount percent", item.quote_discount_percent],
             ["Address", item.address_line1],
             ["City", item.city],
             ["State", item.state],
@@ -1235,6 +1241,7 @@
     applyEditVisibility();
     applyOrderDetailsVisibility();
     applyQuoteVisibility();
+    applyDiscountControlState();
     renderActions();
     updatePrimaryActionState();
     loadOrderDetails(requestId);
@@ -1258,6 +1265,15 @@
     if (!ui.orderDetailsSection) return;
     const show = state.tab === "orders";
     ui.orderDetailsSection.classList.toggle("is-hidden", !show);
+  }
+
+  function applyDiscountControlState() {
+    if (state.tab !== "quotes") return;
+    const type = normalizeText(getEditValue("quote_discount_type"));
+    const percentField = getEditField("quote_discount_percent");
+    if (!percentField) return;
+    const isCustom = type === "custom";
+    percentField.disabled = !isCustom;
   }
 
   function applyQuoteVisibility() {
@@ -2060,6 +2076,9 @@
         if (key === "metal") {
           updateMetalWeightLabels(field.value);
           setQuoteMetalSelection(ui.quoteMetalInput ? ui.quoteMetalInput.value : "", field.value);
+        }
+        if (key === "quote_discount_type") {
+          applyDiscountControlState();
         }
         if (state.tab === "quotes" && key) {
           if (QUOTE_PRICE_FIELDS.has(key)) {

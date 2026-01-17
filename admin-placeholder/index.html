@@ -231,8 +231,8 @@
                 <label><input type="checkbox" value="Platinum" />Platinum</label>
               </div>
             </label>
-            <div class="quote-options-grid">
-              <div class="quote-option-card">
+              <div class="quote-options-grid">
+                <div class="quote-option-card">
                 <p class="drawer-eyebrow">Option 1</p>
                 <label class="field">
                   <span>Clarity</span>
@@ -302,16 +302,33 @@
                     <option value="G-I">G-I</option>
                   </select>
                 </label>
+                  <label class="field">
+                    <span>Price (18K)</span>
+                    <input type="text" data-field="quote_option_3_price_18k" placeholder="2999" />
+                  </label>
+                </div>
+              </div>
+              <div class="quote-options-grid">
                 <label class="field">
-                  <span>Price (18K)</span>
-                  <input type="text" data-field="quote_option_3_price_18k" placeholder="2999" />
+                  <span>Discount type</span>
+                  <select data-field="quote_discount_type">
+                    <option value="">Auto (best available)</option>
+                    <option value="none">No discount</option>
+                    <option value="friends">Friends &amp; family</option>
+                    <option value="welcome">Welcome</option>
+                    <option value="offer">Offer code</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Custom discount %</span>
+                  <input type="text" data-field="quote_discount_percent" placeholder="10" />
                 </label>
               </div>
-            </div>
-            <p class="muted">
-              18K prices auto-calc from metal weight + diamond breakdown. Enter to override if needed.
-              14K discount and Platinum premium apply from the price chart.
-            </p>
+              <p class="muted">
+                18K prices auto-calc from metal weight + diamond breakdown. Enter to override if needed.
+                14K discount and Platinum premium apply from the price chart.
+              </p>
           </div>
           <label class="field">
             <span>Notes</span>

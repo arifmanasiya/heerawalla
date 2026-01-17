@@ -179,6 +179,8 @@ export const QUOTE_SHEET_HEADER = [
   "quote_option_3_clarity",
   "quote_option_3_color",
   "quote_option_3_price_18k",
+  "quote_discount_type",
+  "quote_discount_percent",
   "quote_token",
   "quote_expires_at",
   "quote_sent_at",

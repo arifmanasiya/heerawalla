@@ -3200,36 +3200,72 @@ type DiscountDetails = {
   rawPercent: number;
   appliedPercent: number;
   summary: string;
+  source: string;
 };
 
-function resolveDiscountDetails(costValues: CostChartValues): DiscountDetails {
-  const candidates = [
-    {
+function normalizeDiscountType(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized.includes("friend")) return "friends";
+  if (normalized.includes("welcome")) return "welcome";
+  if (normalized.includes("offer")) return "offer";
+  if (normalized.includes("custom")) return "custom";
+  if (normalized.includes("none")) return "none";
+  return normalized;
+}
+
+function resolveDiscountDetails(costValues: CostChartValues, record?: Record<string, string>): DiscountDetails {
+  const maxDiscountPercent = getCostPercent(costValues, [
+    "max_discount_pct",
+    "max_discount_percent",
+    "max_discount",
+  ]);
+  const type = normalizeDiscountType(getString(record?.quote_discount_type || ""));
+  const overridePercent = parsePercentValue(getString(record?.quote_discount_percent || ""));
+  const presets = {
+    friends: {
       label: "Friends & family",
       value: getCostPercent(costValues, [
         "friends_and_family_discount_pct",
         "friends_and_familty_discount_pct",
       ]),
     },
-    { label: "Welcome", value: getCostPercent(costValues, ["welcome_discount_pct"]) },
-    { label: "Offer code", value: getCostPercent(costValues, ["offer_code_discount_pct"]) },
-  ].filter((entry) => entry.value > 0);
+    welcome: { label: "Welcome", value: getCostPercent(costValues, ["welcome_discount_pct"]) },
+    offer: { label: "Offer code", value: getCostPercent(costValues, ["offer_code_discount_pct"]) },
+  };
 
   let rawPercent = 0;
   let label = "";
-  if (candidates.length) {
-    rawPercent = Math.max(...candidates.map((entry) => entry.value));
-    label = candidates
-      .filter((entry) => entry.value === rawPercent)
-      .map((entry) => entry.label)
-      .join(" / ");
+  let source = "auto";
+
+  if (type === "none") {
+    rawPercent = 0;
+    label = "";
+    source = "none";
+  } else if (type === "custom" && overridePercent > 0) {
+    rawPercent = overridePercent;
+    label = "Custom";
+    source = "custom";
+  } else if (type && presets[type as keyof typeof presets]) {
+    rawPercent = presets[type as keyof typeof presets].value;
+    label = presets[type as keyof typeof presets].label;
+    source = type;
+  } else if (overridePercent > 0) {
+    rawPercent = overridePercent;
+    label = "Custom";
+    source = "custom";
+  } else {
+    const candidates = Object.values(presets).filter((entry) => entry.value > 0);
+    if (candidates.length) {
+      rawPercent = Math.max(...candidates.map((entry) => entry.value));
+      label = candidates
+        .filter((entry) => entry.value === rawPercent)
+        .map((entry) => entry.label)
+        .join(" / ");
+      source = "auto";
+    }
   }
 
-  const maxDiscountPercent = getCostPercent(costValues, [
-    "max_discount_pct",
-    "max_discount_percent",
-    "max_discount",
-  ]);
   const appliedPercent =
     maxDiscountPercent > 0 ? Math.min(rawPercent, maxDiscountPercent) : rawPercent;
   const percentDisplay = Math.round(appliedPercent * 100);
@@ -3238,7 +3274,7 @@ function resolveDiscountDetails(costValues: CostChartValues): DiscountDetails {
     summary = `${summary} - capped`;
   }
 
-  return { label, rawPercent, appliedPercent, summary };
+  return { label, rawPercent, appliedPercent, summary, source };
 }
 
 type DiamondPiece = { weight: number; count: number };
@@ -3545,7 +3581,7 @@ async function computeQuoteOptionPrices(
   }
 
   const costValues = await loadCostChartValues(env);
-  const discountDetails = resolveDiscountDetails(costValues);
+  const discountDetails = resolveDiscountDetails(costValues, record);
   if (!needsPricing) {
     return {
       ok: true,
@@ -4014,6 +4050,8 @@ const QUOTE_UPDATE_FIELDS = [
   "quote_option_3_clarity",
   "quote_option_3_color",
   "quote_option_3_price_18k",
+  "quote_discount_type",
+  "quote_discount_percent",
   "quote_token",
   "quote_expires_at",
   "quote_sent_at",
