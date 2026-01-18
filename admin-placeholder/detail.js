@@ -656,13 +656,50 @@
     return catalogCache.promise;
   }
 
+  function slugifyCategory(value) {
+    return String(value || "uncategorized")
+      .split("/")
+      .map((part) => part.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "uncategorized")
+      .filter(Boolean)
+      .join("/");
+  }
+
+  function buildProductImageFallbacks(entry) {
+    const categorySlug = slugifyCategory(entry.category || "uncategorized");
+    const folder = `/images/products/${categorySlug}/${entry.id}`;
+    const candidates = [
+      "img-hero-1.png",
+      "img-hero-1.jpeg",
+      "img-hero-1.jpg",
+      "img-hero-2.png",
+      "img-hero-2.jpeg",
+      "img-hero-2.jpg",
+      "img-hero-03.jpeg",
+      "img-1.png",
+      "img-1.jpeg",
+      "img-1.jpg",
+      "image-1.svg",
+    ].map((file) => `${folder}/${file}`);
+    candidates.push(`/images/products/${categorySlug}/image-1.svg`);
+    candidates.push("/images/products/placeholder.svg");
+    return candidates;
+  }
+
   function collectImageUrls(entry) {
-    if (!entry) return [];
-    const candidates = [];
+    if (!entry) {
+      return [normalizeImageUrl("/images/products/placeholder.svg")].filter(Boolean);
+    }
+    let candidates = [];
     if (entry.hero_image) candidates.push(entry.hero_image);
     if (entry.heroImage) candidates.push(entry.heroImage);
     if (Array.isArray(entry.images)) {
       entry.images.forEach((image) => candidates.push(image));
+    }
+    if (!candidates.length && entry.id && entry.category) {
+      candidates = buildProductImageFallbacks(entry);
+    }
+    if (!candidates.length) {
+      candidates = ["/images/products/placeholder.svg"];
     }
     return Array.from(new Set(candidates.map(normalizeImageUrl).filter(Boolean)));
   }
@@ -703,13 +740,15 @@
     if (!images.length) {
       return '<div class="media-empty muted">No images available.</div>';
     }
+    const fallback = escapeAttribute(normalizeImageUrl("/images/products/placeholder.svg"));
     if (images.length === 1) {
       const src = escapeAttribute(images[0]);
-      return `<div class="media-frame"><img src="${src}" alt="" loading="lazy"></div>`;
+      return `<div class="media-frame"><img src="${src}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${fallback}';"></div>`;
     }
     const slides = images
       .map(
-        (src) => `<div class="media-slide"><img src="${escapeAttribute(src)}" alt="" loading="lazy"></div>`
+        (src) =>
+          `<div class="media-slide"><img src="${escapeAttribute(src)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${fallback}';"></div>`
       )
       .join("");
     return `
