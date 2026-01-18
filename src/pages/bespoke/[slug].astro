@@ -246,11 +246,18 @@ const productUrl = Astro.site
       return tokenEl ? (tokenEl.value || '').trim() : '';
     };
 
-    const setStatus = (message, isError) => {
+    const setStatus = (message, tone = 'neutral') => {
       if (!statusEl) return;
       statusEl.textContent = message;
       statusEl.classList.remove('hidden');
-      statusEl.classList.toggle('text-red-600', Boolean(isError));
+      statusEl.classList.remove('text-slate-500', 'text-red-600', 'text-emerald-600');
+      if (tone === 'error') {
+        statusEl.classList.add('text-red-600');
+      } else if (tone === 'success') {
+        statusEl.classList.add('text-emerald-600');
+      } else {
+        statusEl.classList.add('text-slate-500');
+      }
     };
 
     form.addEventListener('submit', async (event) => {
@@ -278,12 +285,12 @@ const productUrl = Astro.site
       const timeline = timelineField ? String(timelineField.value || '').trim() || 'Standard' : 'Standard';
 
       if (!name || !email || !phone || !addressLine1 || !city || !state || !postalCode || !country) {
-        setStatus('Please complete contact and shipping details before sending.', true);
+        setStatus('Please complete contact and shipping details before sending.', 'error');
         return;
       }
 
       if (turnstileSiteKey && !getTurnstileToken()) {
-        setStatus('Please complete the verification step before sending.', true);
+        setStatus('Please complete the verification step before sending.', 'error');
         return;
       }
 
@@ -312,11 +319,11 @@ const productUrl = Astro.site
       const body = lines.join('\n');
 
       if (submitBtn) submitBtn.setAttribute('disabled', 'true');
-      setStatus('Sending your request...', false);
+      setStatus('Sending your request...', 'neutral');
 
       try {
         if (!orderUrl) {
-          setStatus('Order service is unavailable. Please try again later.', true);
+          setStatus('Order service is unavailable. Please try again later.', 'error');
           if (submitBtn) submitBtn.removeAttribute('disabled');
           return;
         }
@@ -353,9 +360,9 @@ const productUrl = Astro.site
         if (!response.ok || !result.ok) {
           throw new Error(result.error || 'send_failed');
         }
-        setStatus('Request received. Please check your email for confirmation.', false);
+        setStatus('Request received. Please check your email for confirmation.', 'success');
       } catch (error) {
-        setStatus('We could not send your request. Please try again.', true);
+        setStatus('We could not send your request. Please try again.', 'error');
         if (submitBtn) submitBtn.removeAttribute('disabled');
       }
     });

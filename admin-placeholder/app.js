@@ -1814,19 +1814,44 @@
     return `https://www.heerawalla.com/order_confirmation?token=${encodeURIComponent(token)}`;
   }
 
+  let lastFocusedConfirm = null;
+
+  function focusFirstConfirmElement() {
+    if (!ui.confirmModal) return;
+    const target =
+      ui.confirmClose ||
+      ui.confirmModal.querySelector(
+        "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"
+      );
+    if (target && typeof target.focus === "function") {
+      target.focus();
+    }
+  }
+
   function openConfirmModal(emailPayload) {
     if (!ui.confirmModal) return;
+    lastFocusedConfirm = document.activeElement;
     ui.confirmTo.textContent = emailPayload.to;
     ui.confirmSubject.textContent = emailPayload.subject;
     ui.confirmPreview.innerHTML = emailPayload.previewHtml;
     ui.confirmModal.classList.add("is-open");
+    ui.confirmModal.removeAttribute("inert");
     ui.confirmModal.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(focusFirstConfirmElement);
   }
 
   function closeConfirmModal() {
     if (!ui.confirmModal) return;
+    if (ui.confirmModal.contains(document.activeElement)) {
+      if (lastFocusedConfirm && typeof lastFocusedConfirm.focus === "function") {
+        lastFocusedConfirm.focus();
+      } else {
+        document.body.focus?.();
+      }
+    }
     ui.confirmModal.classList.remove("is-open");
     ui.confirmModal.setAttribute("aria-hidden", "true");
+    ui.confirmModal.setAttribute("inert", "");
   }
 
   function renderActions() {
@@ -1879,11 +1904,36 @@
     ui.drawer.setAttribute("aria-hidden", "true");
   }
 
+  async function saveQuoteBeforeRefresh(recordId) {
+    if (state.tab !== "quotes") return true;
+    const fields = collectEditableUpdates();
+    const notes = getNotesValue();
+    if (!Object.keys(fields).length && !notes) return true;
+    const endpoint = getActionEndpoint();
+    if (!endpoint) {
+      showToast("No edits allowed.", "error");
+      return false;
+    }
+    const result = await apiFetch(endpoint, {
+      method: "POST",
+      body: JSON.stringify({ action: "edit", requestId: recordId, fields, notes }),
+    });
+    if (!result.ok) {
+      showToast("Save failed", "error");
+      return false;
+    }
+    return true;
+  }
+
   async function runAction(action) {
     const recordId = getSelectedRecordId();
     if (!recordId) {
       showToast("Missing record ID", "error");
       return;
+    }
+    if (state.tab === "quotes" && action === "refresh_quote") {
+      const saved = await saveQuoteBeforeRefresh(recordId);
+      if (!saved) return;
     }
     const details = state.tab === "orders" ? collectOrderDetailsUpdates() : {};
     if (state.tab === "orders" && action === "mark_shipped") {

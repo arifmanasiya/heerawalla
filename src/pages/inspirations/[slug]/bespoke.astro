@@ -508,6 +508,7 @@ const defaultStoneType = (() => {
     const storageKey = `hw-inspiration-quote-${slug}`;
     const returnUrl = inspirationImageValue ? inspirationsUrl : homeUrl;
     const mailReturnKey = `hw-bespoke-mail-${slug}`;
+    const storageEnabledKey = `${storageKey}:enabled`;
     const baseApi = atelierApiBase ? atelierApiBase.replace(/\/$/, '') : '';
     const workerSubmitUrl = baseApi ? `${baseApi}/submit` : '';
     const workerSubmitStatusUrl = workerSubmitUrl ? workerSubmitUrl.replace(/\/submit$/, '/submit-status') : '';
@@ -541,6 +542,23 @@ const defaultStoneType = (() => {
     })();
 
     const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+    const safeStorageGet = (key) => {
+      try {
+        return localStorage.getItem(key);
+      } catch {
+        return null;
+      }
+    };
+    const safeStorageSet = (key, value) => {
+      try {
+        localStorage.setItem(key, value);
+      } catch {}
+    };
+    const safeStorageRemove = (key) => {
+      try {
+        localStorage.removeItem(key);
+      } catch {}
+    };
     const isValidEmail = (value) => {
       const normalized = String(value || '').trim();
       if (!normalized || normalized.length > 254) return false;
@@ -866,7 +884,8 @@ const defaultStoneType = (() => {
       updateReview(style);
       if (allowStorage) {
         const payload = collectDraft();
-        localStorage.setItem(storageKey, JSON.stringify(payload));
+        safeStorageSet(storageKey, JSON.stringify(payload));
+        safeStorageSet(storageEnabledKey, 'true');
       }
     };
 
@@ -1093,15 +1112,17 @@ const defaultStoneType = (() => {
       saveDraftToggle.addEventListener('change', () => {
         allowStorage = saveDraftToggle.checked;
         if (!allowStorage) {
-          localStorage.removeItem(storageKey);
+          safeStorageRemove(storageKey);
+          safeStorageRemove(storageEnabledKey);
           return;
         }
-        const existing = localStorage.getItem(storageKey);
+        safeStorageSet(storageEnabledKey, 'true');
+        const existing = safeStorageGet(storageKey);
         if (existing) {
           try {
             applyDraft(JSON.parse(existing));
           } catch {
-            localStorage.removeItem(storageKey);
+            safeStorageRemove(storageKey);
           }
         }
         updateEmail();
@@ -1255,8 +1276,21 @@ const defaultStoneType = (() => {
 
     handleReturnNote();
     checkWorkerSubmitStatus();
-
-
+    if (saveDraftToggle) {
+      const existing = safeStorageGet(storageKey);
+      const enabled = safeStorageGet(storageEnabledKey) === 'true';
+      if (enabled || existing) {
+        allowStorage = true;
+        saveDraftToggle.checked = true;
+        if (existing) {
+          try {
+            applyDraft(JSON.parse(existing));
+          } catch {
+            safeStorageRemove(storageKey);
+          }
+        }
+      }
+    }
     if (linkSection) {
       const shouldHide = !requiresReferenceLinks;
       linkSection.classList.toggle('hidden', shouldHide);
