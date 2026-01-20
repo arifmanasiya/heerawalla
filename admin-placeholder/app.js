@@ -565,6 +565,69 @@
     return `${sign}${number} g`;
   }
 
+  function isFilled(value) {
+    return value !== undefined && value !== null && String(value).trim() !== "";
+  }
+
+  function getSizingBlob(item) {
+    const raw =
+      item?.sizing ||
+      item?.sizing_details ||
+      item?.sizing_info ||
+      item?.size_details ||
+      item?.size_info;
+    if (!raw) return {};
+    if (typeof raw === "object") return raw;
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") return parsed;
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  }
+
+  function getSizingValue(item, sizing, keys) {
+    for (const key of keys) {
+      const itemValue = item ? item[key] : "";
+      if (isFilled(itemValue)) return itemValue;
+      const sizingValue = sizing ? sizing[key] : "";
+      if (isFilled(sizingValue)) return sizingValue;
+    }
+    return "";
+  }
+
+  function buildSizingRows(item) {
+    const sizing = getSizingBlob(item);
+    const rows = [];
+    const ringSize = getSizingValue(item, sizing, ["ring_size", "ring", "ringSize"]);
+    const wristSize = getSizingValue(item, sizing, ["wrist_size", "wrist", "bracelet_size", "bracelet"]);
+    const neckSize = getSizingValue(item, sizing, [
+      "neck_size",
+      "neck",
+      "chain_size",
+      "chain_length",
+      "necklace_size",
+      "necklace_length",
+    ]);
+    const earringStyle = getSizingValue(item, sizing, [
+      "earring_style",
+      "earring_type",
+      "earring",
+      "earring_size",
+    ]);
+    if (isFilled(ringSize)) rows.push(["Ring size", ringSize]);
+    if (isFilled(wristSize)) rows.push(["Wrist size", wristSize]);
+    if (isFilled(neckSize)) rows.push(["Neck/chain size", neckSize]);
+    if (isFilled(earringStyle)) rows.push(["Earring style", earringStyle]);
+    if (!rows.length && isFilled(item?.size)) {
+      rows.push(["Size", item.size]);
+    }
+    return rows;
+  }
+
   function buildMetalWeightLabel(metalValue) {
     return "Metal weight (g)";
   }
@@ -1349,7 +1412,7 @@
                 ["Stone", item.stone],
                 ["Stone weight", item.stone_weight],
                 ["Diamond breakdown", item.diamond_breakdown],
-                ["Size", item.size],
+                ...buildSizingRows(item),
               ],
             },
             {
@@ -1411,7 +1474,7 @@
                 ["Stone", item.stone],
                 ["Stone weight", item.stone_weight],
                 ["Diamond breakdown", item.diamond_breakdown],
-                ["Size", item.size],
+                ...buildSizingRows(item),
               ],
             },
             {
