@@ -240,7 +240,7 @@ export default {
           const message = getString(payload.message);
           const date = getString(payload.date);
           const time = getString(payload.time);
-          const phone = getString(payload.phone);
+          const phone = normalizePhone(getString(payload.phone));
           const contactPreference = normalizeContactPreference(
             getString(payload.contactPreference) || getString(payload.contact_preference)
           );
@@ -425,7 +425,7 @@ export default {
 
         const senderEmail = getString(payload.email);
         const name = getString(payload.name);
-        const phone = getString(payload.phone);
+        const phone = normalizePhone(getString(payload.phone));
         const interests = getStringArray(payload.interests || payload.interest || payload.designInterests);
         const source = getString(payload.source);
         const pageUrl = getString(payload.pageUrl);
@@ -680,7 +680,7 @@ export default {
         const subjectInput = getString(payload.subject);
         const requestIdInput = getString(payload.requestId) || generateRequestId();
         const requestId = normalizeRequestId(requestIdInput);
-        const phone = getString(payload.phone);
+        const phone = normalizePhone(getString(payload.phone));
         const phonePreferred = getBoolean(payload.phonePreferred);
         const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
           resolveAttribution(payload, request);
@@ -806,8 +806,9 @@ export default {
             subscriptionStatus: "subscribed",
           });
           try {
+            const now = new Date().toISOString();
             await appendContactRow(env, [
-              new Date().toISOString(),
+              now,
               senderEmail,
               name,
               phone,
@@ -829,6 +830,10 @@ export default {
               "",
               "",
               "subscribed",
+              "NEW",
+              now,
+              message,
+              "",
             ]);
           } catch (error) {
             logWarn("contact_sheet_failed", { requestId, error: String(error) });
@@ -901,7 +906,7 @@ export default {
         const senderName = getString(payload.name);
         const requestId = getString(payload.requestId);
         const turnstileToken = getString(payload.turnstileToken);
-        const phone = getString(payload.phone);
+        const phone = normalizePhone(getString(payload.phone));
         const source = getString(payload.source) || "order";
         const productName = getString(payload.productName);
         const productUrl = getString(payload.productUrl);
@@ -2645,7 +2650,7 @@ async function handleOrderVerificationRequest(
   const rawRequestId = getString(payload.requestId || payload.request_id || payload.orderId || payload.order_id);
   const normalizedRequestId = normalizeRequestId(rawRequestId).replace(/^HW-REQ:/, "");
   const email = getString(payload.email);
-  const phone = getString(payload.phone);
+  const phone = normalizePhone(getString(payload.phone));
   if (!normalizedRequestId || (!email && !phone)) {
     return new Response(JSON.stringify({ ok: false, error: "missing_fields" }), {
       status: 400,
@@ -3532,6 +3537,13 @@ function computeOptionPriceFromCosts(
       }
       diamondCost += pricePerCt * piece.weight * piece.count;
     }
+  }
+  const stoneLabel = String(record.stone || "").toLowerCase();
+  const isLabDiamond = stoneLabel.includes("lab");
+  if (isLabDiamond && diamondCost > 0) {
+    const relativeCost = getCostPercent(costValues, ["lab_diamonds_relative_cost_pct"]);
+    const multiplier = relativeCost > 0 ? relativeCost : 0.2;
+    diamondCost *= multiplier;
   }
 
   const totalDiamondWeight = pieces.reduce((sum, piece) => sum + piece.weight * piece.count, 0);
@@ -5753,7 +5765,7 @@ async function handleSubmitPayload(
     const senderName = getString(payload.name);
     const requestId = getString(payload.requestId);
     const turnstileToken = getString(payload.turnstileToken);
-    const phone = getString(payload.phone);
+    const phone = normalizePhone(getString(payload.phone));
     const source = getString(payload.source) || "quote";
     const productName = getString(payload.productName || payload.inspirationTitle);
     const productUrl = getString(payload.productUrl || payload.inspirationUrl);

@@ -111,6 +111,7 @@ const joinInterests = [
       const name = nameInput?.value.trim() || '';
       const email = emailInput?.value.trim() || '';
       const phone = phoneInput?.value.trim() || '';
+      const phoneNormalized = phone.replace(/\D/g, '');
       const interests = interestInputs.filter((input) => input.checked).map((input) => input.value);
 
       if (!name) {
@@ -139,7 +140,7 @@ const joinInterests = [
           body: JSON.stringify({
             name,
             email,
-            phone,
+            phone: phoneNormalized,
             interests,
             source: 'join-page',
             pageUrl: window.location.href,

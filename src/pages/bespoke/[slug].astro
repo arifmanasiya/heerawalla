@@ -275,7 +275,8 @@ const productUrl = Astro.site
       const timelineField = form.querySelector('[data-field="timeline"]');
       const name = nameField ? String(nameField.value || '').trim() : '';
       const email = emailField ? String(emailField.value || '').trim() : '';
-      const phone = phoneField ? String(phoneField.value || '').trim() : '';
+      const phoneRaw = phoneField ? String(phoneField.value || '').trim() : '';
+      const phone = phoneRaw.replace(/\D/g, '');
       const addressLine1 = addressLine1Field ? String(addressLine1Field.value || '').trim() : '';
       const addressLine2 = addressLine2Field ? String(addressLine2Field.value || '').trim() : '';
       const city = cityField ? String(cityField.value || '').trim() : '';

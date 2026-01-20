@@ -508,6 +508,19 @@
     return num.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   }
 
+  function formatPhone(value) {
+    const digits = String(value || "").replace(/\D/g, "");
+    if (!digits) return "--";
+    if (digits.length === 10) {
+      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+    if (digits.length === 11 && digits.startsWith("1")) {
+      return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+    }
+    if (digits.length > 11) return `+${digits}`;
+    return digits;
+  }
+
   function normalizeText(value) {
     return String(value || "").trim().toLowerCase();
   }
@@ -1105,6 +1118,7 @@
     if (key === "created_at") return formatDate(item[key]);
     if (key === "price") return formatPrice(item[key]);
     if (key === "status") return item[key] || "--";
+    if (key === "phone") return formatPhone(item[key]);
     return item[key] || "--";
   }
 
@@ -1391,7 +1405,7 @@
             ["Created", formatDate(item.created_at)],
             ["Name", item.name],
             ["Email", item.email],
-            ["Phone", item.phone],
+            ["Phone", formatPhone(item.phone)],
             ["Type", item.type],
             ["Subscribed", item.subscribed],
             ["Sources", item.sources],
@@ -1410,7 +1424,7 @@
             ["Status", item.status],
             ["Name", item.name],
             ["Email", item.email],
-            ["Phone", item.phone],
+            ["Phone", formatPhone(item.phone)],
             ["Interests", item.interests],
             ["Contact preference", item.contact_preference],
             ["Customer notes", item.notes],
@@ -1462,7 +1476,7 @@
               rows: [
                 ["Name", item.name],
                 ["Email", item.email],
-                ["Phone", item.phone],
+                ["Phone", formatPhone(item.phone)],
               ],
             },
             {
@@ -1524,7 +1538,7 @@
               rows: [
                 ["Name", item.name],
                 ["Email", item.email],
-                ["Phone", item.phone],
+                ["Phone", formatPhone(item.phone)],
               ],
             },
             {

@@ -683,7 +683,8 @@ const defaultStoneType = (() => {
       const notes = fieldValue('[data-field="notes"]') || 'None';
       const name = fieldValue('[data-field="name"]') || 'Name withheld';
       const email = fieldValue('[data-field="email"]') || 'Not provided';
-      const phone = fieldValue('[data-field="phone"]') || 'Not provided';
+      const phoneRaw = fieldValue('[data-field="phone"]') || '';
+      const phone = phoneRaw ? phoneRaw.replace(/\D/g, '') : 'Not provided';
       const addressLine1 = fieldValue('[data-field="addressLine1"]') || 'Not provided';
       const addressLine2 = fieldValue('[data-field="addressLine2"]');
       const city = fieldValue('[data-field="city"]') || 'Not provided';
@@ -847,10 +848,12 @@ const defaultStoneType = (() => {
       if (wristSize) sizes.push({ label: 'Wrist', value: wristSize });
       if (chainLength) sizes.push({ label: 'Chain', value: chainLength });
       if (earringPreference) sizes.push({ label: 'Earring', value: earringPreference });
+      const contactPhoneRaw = fieldValue('[data-field="phone"]') || '';
+      const contactPhone = contactPhoneRaw ? contactPhoneRaw.replace(/\D/g, '') : '';
       const contact = [
         { label: 'Name', value: fieldValue('[data-field="name"]') || 'Not provided' },
         { label: 'Email', value: fieldValue('[data-field="email"]') || 'Not provided' },
-        { label: 'Phone', value: fieldValue('[data-field="phone"]') || 'Not provided' },
+        { label: 'Phone', value: contactPhone || 'Not provided' },
       ];
       const shipping = [
         { label: 'Address', value: fieldValue('[data-field="addressLine1"]') || 'Not provided' },
@@ -1195,7 +1198,7 @@ const defaultStoneType = (() => {
           body,
           email: fieldValue('[data-field="email"]'),
           name: fieldValue('[data-field="name"]'),
-          phone: fieldValue('[data-field="phone"]'),
+          phone: fieldValue('[data-field="phone"]').replace(/\D/g, ''),
           requestId,
           turnstileToken: getTurnstileToken(),
           source: 'quote',

@@ -593,6 +593,7 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const { phoneValue, wantsPhone, phoneOk, preference } = applyPhoneValidity();
+        const phoneNormalized = normalizePhone(phoneValue);
         if (!form.checkValidity()) {
           form.reportValidity();
           return;
@@ -628,7 +629,7 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
               message,
               date: selectedDateKey,
               time: selectedTimeValue,
-              phone: phoneValue,
+              phone: phoneNormalized,
               phonePreferred: wantsPhone,
               contactPreference: preference
             };
@@ -754,7 +755,7 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
               email,
               message,
               subject,
-              phone: phoneValue,
+              phone: phoneNormalized,
               phonePreferred: wantsPhone,
               contactPreference: preference
             })

@@ -1104,6 +1104,19 @@
     return num.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   }
 
+  function formatPhone(value) {
+    const digits = String(value || "").replace(/\D/g, "");
+    if (!digits) return "--";
+    if (digits.length === 10) {
+      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+    if (digits.length === 11 && digits.startsWith("1")) {
+      return `+1 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+    }
+    if (digits.length > 11) return `+${digits}`;
+    return digits;
+  }
+
   function hasValue(value) {
     return value !== undefined && value !== null && value !== "";
   }
@@ -1363,7 +1376,7 @@
     }
     if (ui.summaryCustomer) ui.summaryCustomer.textContent = item.name || "--";
     if (ui.summaryEmail) ui.summaryEmail.textContent = item.email || "--";
-    if (ui.summaryPhone) ui.summaryPhone.textContent = item.phone || "--";
+    if (ui.summaryPhone) ui.summaryPhone.textContent = formatPhone(item.phone);
     if (ui.summaryAddress) ui.summaryAddress.textContent = buildSummaryAddress(item);
   }
 
@@ -1460,7 +1473,7 @@
       `Timeline: ${formatTimelineValue(item.timeline) || "--"} ${
         formatDelayWeeks(item.timeline_adjustment_weeks) || ""
       }`,
-      `Customer: ${item.name || "--"} (${item.email || "--"} / ${item.phone || "--"})`,
+      `Customer: ${item.name || "--"} (${item.email || "--"} / ${formatPhone(item.phone)})`,
       `Address: ${buildSummaryAddress(item)}`,
     ];
     return lines.filter(Boolean).join("\n");
@@ -2065,7 +2078,7 @@
             ["Created", formatDate(item.created_at)],
             ["Name", item.name],
             ["Email", item.email],
-            ["Phone", item.phone],
+            ["Phone", formatPhone(item.phone)],
             ["Type", item.type],
             ["Subscribed", item.subscribed],
             ["Sources", item.sources],
@@ -2083,7 +2096,7 @@
             ["Status", status],
             ["Name", item.name],
             ["Email", item.email],
-            ["Phone", item.phone],
+            ["Phone", formatPhone(item.phone)],
             ["Interests", item.interests],
             ["Contact preference", item.contact_preference],
             ["Customer notes", item.notes],
@@ -2132,7 +2145,7 @@
               rows: [
                 ["Name", item.name],
                 ["Email", item.email],
-                ["Phone", item.phone],
+                ["Phone", formatPhone(item.phone)],
               ],
             },
             {
@@ -2194,7 +2207,7 @@
               rows: [
                 ["Name", item.name],
                 ["Email", item.email],
-                ["Phone", item.phone],
+                ["Phone", formatPhone(item.phone)],
               ],
             },
             {
