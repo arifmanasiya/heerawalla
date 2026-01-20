@@ -534,6 +534,7 @@
       item?.notes,
       item?.customer_notes,
       item?.request_notes,
+      item?.size,
       item?.size_details,
       item?.sizeDetails,
       item?.body,
