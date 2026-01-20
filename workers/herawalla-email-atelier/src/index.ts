@@ -6377,7 +6377,7 @@ function buildQuoteEmail(
               <div style="margin:0 0 16px 0;">
                 <img src="https://www.heerawalla.com/images/engraving_mark.svg" width="36" height="36" alt="Heerawalla" style="display:block;">
               </div>
-              <div style="font-size:12px;letter-spacing:0.32em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">
+              <div style="font-family:'Baskervville','Cormorant Garamond',serif;font-size:24px;letter-spacing:0.08em;text-transform:none;color:#0b1928;margin-bottom:12px;">
                 Heerawalla
               </div>
               <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.4;font-weight:600;color:#0f172a;">
@@ -8560,7 +8560,7 @@ function buildConsultationAckHtml(payload: ConsultationAckPayload) {
               <div style="margin:0 0 16px 0;">
                 <img src="https://www.heerawalla.com/images/engraving_mark.svg" width="36" height="36" alt="Heerawalla" style="display:block;">
               </div>
-              <div style="font-size:12px;letter-spacing:0.32em;text-transform:uppercase;color:#64748b;margin-bottom:12px;">
+              <div style="font-family:'Baskervville','Cormorant Garamond',serif;font-size:24px;letter-spacing:0.08em;text-transform:none;color:#0b1928;margin-bottom:12px;">
                 Heerawalla
               </div>
               <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.4;font-weight:600;color:#0f172a;">

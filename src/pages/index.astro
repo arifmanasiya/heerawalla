@@ -372,14 +372,15 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
         <div class="flex h-full flex-col">
           <p class="text-[11px] uppercase tracking-[0.3em] text-slate-400">Customization</p>
           <div class="flex-1 flex items-center justify-center">
-            <img
-              src={withBase('/images/engraving_mark.svg')}
-              alt=""
+            <svg
+              viewBox="0 0 128 128"
+              class="w-32 sm:w-36 opacity-75 mark-gold"
               aria-hidden="true"
-              class="w-32 sm:w-36 opacity-15"
-              loading="lazy"
-              decoding="async"
-            />
+              focusable="false"
+            >
+              <circle cx="64" cy="64" r="46" stroke-width="10" fill="none"></circle>
+              <line x1="64" y1="10" x2="64" y2="118" stroke-width="9"></line>
+            </svg>
           </div>
           <div class="space-y-4">
             <h2 class="font-display text-3xl sm:text-4xl tracking-tight text-ink">Begin with inspiration, finish with a signature.</h2>

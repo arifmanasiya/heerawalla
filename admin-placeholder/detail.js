@@ -517,22 +517,58 @@
     return {};
   }
 
-  function getSizingValue(item, sizing, keys) {
+  function getSizingValue(item, sizing, textSizing, keys) {
     for (const key of keys) {
       const itemValue = item ? item[key] : "";
       if (isFilled(itemValue)) return itemValue;
       const sizingValue = sizing ? sizing[key] : "";
       if (isFilled(sizingValue)) return sizingValue;
+      const textValue = textSizing ? textSizing[key] : "";
+      if (isFilled(textValue)) return textValue;
     }
     return "";
+  }
+
+  function getSizingText(item) {
+    const parts = [
+      item?.notes,
+      item?.customer_notes,
+      item?.request_notes,
+      item?.summary,
+      item?.summary_text,
+      item?.details,
+      item?.inquiry,
+      item?.message,
+    ];
+    return parts.filter(isFilled).join("\n");
+  }
+
+  function parseSizingFromText(text) {
+    if (!isFilled(text)) return {};
+    const matchValue = (regex) => {
+      const match = text.match(regex);
+      return match && match[1] ? match[1].trim() : "";
+    };
+    return {
+      ring: matchValue(/(?:^|\n)\s*ring(?:\s*size)?\s*[:\-]\s*([^\n,;]+)/i),
+      wrist: matchValue(/(?:^|\n)\s*(?:wrist|bracelet)(?:\s*size)?\s*[:\-]\s*([^\n,;]+)/i),
+      neck: matchValue(/(?:^|\n)\s*(?:neck|necklace|chain)(?:\s*(?:size|length))?\s*[:\-]\s*([^\n,;]+)/i),
+      earring: matchValue(/(?:^|\n)\s*earrings?(?:\s*(?:style|type|size))?\s*[:\-]\s*([^\n,;]+)/i),
+    };
   }
 
   function buildSizingRows(item) {
     const sizing = getSizingBlob(item);
     const rows = [];
-    const ringSize = getSizingValue(item, sizing, ["ring_size", "ring", "ringSize"]);
-    const wristSize = getSizingValue(item, sizing, ["wrist_size", "wrist", "bracelet_size", "bracelet"]);
-    const neckSize = getSizingValue(item, sizing, [
+    const textSizing = parseSizingFromText(getSizingText(item));
+    const ringSize = getSizingValue(item, sizing, textSizing, ["ring_size", "ring", "ringSize"]);
+    const wristSize = getSizingValue(item, sizing, textSizing, [
+      "wrist_size",
+      "wrist",
+      "bracelet_size",
+      "bracelet",
+    ]);
+    const neckSize = getSizingValue(item, sizing, textSizing, [
       "neck_size",
       "neck",
       "chain_size",
@@ -540,7 +576,7 @@
       "necklace_size",
       "necklace_length",
     ]);
-    const earringStyle = getSizingValue(item, sizing, [
+    const earringStyle = getSizingValue(item, sizing, textSizing, [
       "earring_style",
       "earring_type",
       "earring",

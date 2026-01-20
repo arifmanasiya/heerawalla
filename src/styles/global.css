@@ -61,7 +61,7 @@
   .wordmark {
     font-family: "Baskervville", "Cormorant Garamond", serif;
     font-weight: 400;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.08em;
     color: #0b1928;
   }
   .gallery-caption {
@@ -74,6 +74,13 @@
     white-space: nowrap;
     animation: gallery-marquee 12s linear infinite;
     will-change: transform;
+  }
+  .mark-gold {
+    color: #0b1928;
+  }
+  .mark-gold circle,
+  .mark-gold line {
+    stroke: currentColor;
   }
   .hero-media {
     position: relative;

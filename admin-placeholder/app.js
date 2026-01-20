@@ -589,22 +589,58 @@
     return {};
   }
 
-  function getSizingValue(item, sizing, keys) {
+  function getSizingValue(item, sizing, textSizing, keys) {
     for (const key of keys) {
       const itemValue = item ? item[key] : "";
       if (isFilled(itemValue)) return itemValue;
       const sizingValue = sizing ? sizing[key] : "";
       if (isFilled(sizingValue)) return sizingValue;
+      const textValue = textSizing ? textSizing[key] : "";
+      if (isFilled(textValue)) return textValue;
     }
     return "";
+  }
+
+  function getSizingText(item) {
+    const parts = [
+      item?.notes,
+      item?.customer_notes,
+      item?.request_notes,
+      item?.summary,
+      item?.summary_text,
+      item?.details,
+      item?.inquiry,
+      item?.message,
+    ];
+    return parts.filter(isFilled).join("\n");
+  }
+
+  function parseSizingFromText(text) {
+    if (!isFilled(text)) return {};
+    const matchValue = (regex) => {
+      const match = text.match(regex);
+      return match && match[1] ? match[1].trim() : "";
+    };
+    return {
+      ring: matchValue(/(?:^|\n)\s*ring(?:\s*size)?\s*[:\-]\s*([^\n,;]+)/i),
+      wrist: matchValue(/(?:^|\n)\s*(?:wrist|bracelet)(?:\s*size)?\s*[:\-]\s*([^\n,;]+)/i),
+      neck: matchValue(/(?:^|\n)\s*(?:neck|necklace|chain)(?:\s*(?:size|length))?\s*[:\-]\s*([^\n,;]+)/i),
+      earring: matchValue(/(?:^|\n)\s*earrings?(?:\s*(?:style|type|size))?\s*[:\-]\s*([^\n,;]+)/i),
+    };
   }
 
   function buildSizingRows(item) {
     const sizing = getSizingBlob(item);
     const rows = [];
-    const ringSize = getSizingValue(item, sizing, ["ring_size", "ring", "ringSize"]);
-    const wristSize = getSizingValue(item, sizing, ["wrist_size", "wrist", "bracelet_size", "bracelet"]);
-    const neckSize = getSizingValue(item, sizing, [
+    const textSizing = parseSizingFromText(getSizingText(item));
+    const ringSize = getSizingValue(item, sizing, textSizing, ["ring_size", "ring", "ringSize"]);
+    const wristSize = getSizingValue(item, sizing, textSizing, [
+      "wrist_size",
+      "wrist",
+      "bracelet_size",
+      "bracelet",
+    ]);
+    const neckSize = getSizingValue(item, sizing, textSizing, [
       "neck_size",
       "neck",
       "chain_size",
@@ -612,7 +648,7 @@
       "necklace_size",
       "necklace_length",
     ]);
-    const earringStyle = getSizingValue(item, sizing, [
+    const earringStyle = getSizingValue(item, sizing, textSizing, [
       "earring_style",
       "earring_type",
       "earring",
@@ -626,6 +662,22 @@
       rows.push(["Size", item.size]);
     }
     return rows;
+  }
+
+  function getContactNotes(item) {
+    if (!item) return "";
+    const candidates = [
+      item.notes,
+      item.customer_notes,
+      item.note,
+      item.message,
+      item.inquiry,
+      item.details,
+    ];
+    for (const value of candidates) {
+      if (isFilled(value)) return value;
+    }
+    return "";
   }
 
   function buildMetalWeightLabel(metalValue) {
@@ -1339,6 +1391,7 @@
             ["Last source", item.last_source],
             ["Unsubscribed at", formatDate(item.unsubscribed_at)],
             ["Unsubscribed reason", item.unsubscribed_reason],
+            ["Customer notes", getContactNotes(item)],
             ["Updated", formatDate(item.updated_at)],
           ]
         : state.tab === "tickets"
@@ -1385,11 +1438,14 @@
       state.tab === "quotes"
         ? [
             {
-              title: "Request",
+              title: "At a glance",
               rows: [
                 ["Request ID", item.request_id],
                 ["Created", formatDate(item.created_at)],
                 ["Status", item.status],
+                ["Price", formatPrice(item.price)],
+                ["Timeline", item.timeline],
+                ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
               ],
             },
             {
@@ -1412,15 +1468,15 @@
                 ["Stone", item.stone],
                 ["Stone weight", item.stone_weight],
                 ["Diamond breakdown", item.diamond_breakdown],
-                ...buildSizingRows(item),
               ],
             },
             {
-              title: "Quote",
+              title: "Sizing",
+              rows: buildSizingRows(item),
+            },
+            {
+              title: "Quote options",
               rows: [
-                ["Price", formatPrice(item.price)],
-                ["Timeline", item.timeline],
-                ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
                 ["Discount type", item.quote_discount_type],
                 ["Discount percent", item.quote_discount_percent],
               ],
