@@ -825,7 +825,7 @@
     if (!field) return false;
     const manual = field.dataset.manual === "true";
     if (manual && field.value) return false;
-    return !field.value || field.dataset.auto === "true";
+    return true;
   }
 
   function resetQuoteAutoPricingState() {
@@ -1177,13 +1177,10 @@
 
   function isGoldOnlyQuote() {
     if (state.tab !== "quotes") return false;
-    const stoneWeightRaw = String(getEditValue("stone_weight") || "").trim();
+    const stoneWeight = Number(getEditValue("stone_weight"));
     const diamondBreakdown = getEditValue("diamond_breakdown");
     const hasBreakdown = Boolean(String(diamondBreakdown || "").trim());
-    if (hasBreakdown) return false;
-    if (!stoneWeightRaw) return false;
-    const stoneWeight = Number(stoneWeightRaw);
-    return Number.isFinite(stoneWeight) && stoneWeight <= 0;
+    return (!Number.isFinite(stoneWeight) || stoneWeight <= 0) && !hasBreakdown;
   }
 
   function toggleFieldVisibility(key, show) {

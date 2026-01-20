@@ -853,7 +853,7 @@
     if (!field) return false;
     const manual = field.dataset.manual === "true";
     if (manual && field.value) return false;
-    return !field.value || field.dataset.auto === "true";
+    return true;
   }
 
   function resetQuoteAutoPricingState() {
