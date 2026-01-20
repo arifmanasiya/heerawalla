@@ -870,10 +870,11 @@
     if (state.tab !== "quotes") return null;
     const metalWeight = getEditValue("metal_weight");
     if (!metalWeight) return null;
+    const goldOnly = isGoldOnlyQuote();
     const hasOption = QUOTE_OPTION_FIELDS.some((option) => {
       return Boolean(getEditValue(option.clarity) || getEditValue(option.color));
     });
-    if (!hasOption) return null;
+    if (!hasOption && !goldOnly) return null;
     const fields = {};
     QUOTE_PRICING_FIELDS.forEach((key) => {
       const value = getEditValue(key);
