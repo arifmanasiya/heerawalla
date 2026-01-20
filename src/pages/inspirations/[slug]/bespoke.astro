@@ -1184,6 +1184,12 @@ const defaultStoneType = (() => {
         const wristSize = fieldValue('[data-field="wristSize"]');
         const chainLength = fieldValue('[data-field="chainLength"]');
         const earringPreference = fieldValue('[data-field="earringPreference"]');
+        const sizeDetails = [
+          ringSize ? `Ring size: ${ringSize}` : '',
+          wristSize ? `Wrist size: ${wristSize}` : '',
+          chainLength ? `Chain length: ${chainLength}` : '',
+          earringPreference ? `Earring preference: ${earringPreference}` : ''
+        ].filter(Boolean).join(' | ');
         const payload = {
           subject,
           body,
@@ -1200,6 +1206,8 @@ const defaultStoneType = (() => {
           stone: fieldValue('[data-field="stoneType"]'),
           stoneWeight: '',
           size: ringSize || wristSize || chainLength || earringPreference,
+          size_details: sizeDetails,
+          sizeDetails,
           ringSize,
           wristSize,
           chainLength,
