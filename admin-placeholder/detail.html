@@ -66,15 +66,21 @@
           <div class="detail-layout">
             <div class="detail-main">
               <div class="drawer-section callout-section" data-missing-panel>
-                <h3>Needs attention</h3>
+                <div class="section-heading">
+                  <h3>Missing critical info</h3>
+                  <p class="muted">Resolve or acknowledge before running actions.</p>
+                </div>
                 <div class="chip-list" data-missing-list>
                   <span class="muted">No missing details.</span>
                 </div>
               </div>
 
               <div class="drawer-section" data-activity-section>
-                <h3>Activity</h3>
-                <div class="activity-feed" data-activity-feed>
+                <div class="section-heading">
+                  <h3>Timeline &amp; activity</h3>
+                  <p class="muted">Created timestamps, status shifts, local edits, and fulfillment notes.</p>
+                </div>
+                <div class="timeline-feed" data-activity-feed>
                   <div class="activity-item muted">Loading activity...</div>
                 </div>
               </div>
@@ -143,10 +149,12 @@
                     <label class="field">
                       <span data-metal-weight-label>Metal weight (g)</span>
                       <input type="text" data-field="metal_weight" placeholder="12.4" />
+                      <span class="field-error" data-metal-weight-error></span>
                     </label>
                     <label class="field">
                       <span data-metal-weight-adjustment-label>Final Metal weight difference (g)</span>
                       <input type="text" data-field="metal_weight_adjustment" placeholder="+0.5 or -0.3" />
+                      <span class="field-error" data-metal-weight-adjustment-error></span>
                     </label>
                     <div class="field read-only">
                       <span>Final metal weight</span>
@@ -215,7 +223,7 @@
                   </div>
                 </div>
 
-                <div class="diamond-breakdown" data-diamond-breakdown>
+                <div class="diamond-breakdown is-hidden" data-diamond-breakdown>
                   <div class="diamond-breakdown-head">
                     <span>Diamond pieces</span>
                     <div class="diamond-breakdown-actions">
@@ -435,7 +443,7 @@
                     </label>
                     <label class="field">
                       <span>Delivery ETA</span>
-                      <input type="text" data-order-details-field="delivery_eta" placeholder="YYYY-MM-DD" />
+                      <input type="date" data-order-details-field="delivery_eta" placeholder="YYYY-MM-DD" />
                     </label>
                   </div>
                 </div>
@@ -493,12 +501,20 @@
                     <span data-summary-timeline>--</span>
                   </div>
                   <div class="summary-row">
+                    <span>Timeline delay</span>
+                    <span data-summary-timeline-delay>--</span>
+                  </div>
+                  <div class="summary-row">
                     <span>Metal</span>
                     <span data-summary-metal>--</span>
                   </div>
                   <div class="summary-row">
                     <span>Stone</span>
                     <span data-summary-stone>--</span>
+                  </div>
+                  <div class="summary-row">
+                    <span>Stone weight</span>
+                    <span data-summary-stone-weight>--</span>
                   </div>
                 </div>
                 <div class="summary-block">
@@ -528,7 +544,7 @@
                 <button class="btn btn-ghost" type="button" data-copy-summary>Copy order summary</button>
               </div>
 
-              <div class="summary-card" data-next-action-panel>
+              <div class="summary-card next-action-card" data-next-action-panel>
                 <p class="drawer-eyebrow">Next action</p>
                 <p class="summary-next" data-next-action-text>Review edits or choose an action.</p>
               </div>

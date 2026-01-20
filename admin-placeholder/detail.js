@@ -9,6 +9,8 @@
     originalRaw: {},
     originalNotes: "",
     orderDetails: {},
+    dirtySections: { edits: false, fulfillment: false },
+    criticalDirty: false,
     pendingChanges: [],
     confirmation: null,
     isNewRow: false,
@@ -199,6 +201,44 @@
     ...QUOTE_OPTION_FIELDS.flatMap((option) => [option.clarity, option.color]),
   ]);
 
+  const CRITICAL_EDIT_FIELDS = new Set([
+    "price",
+    "timeline",
+    "timeline_adjustment_weeks",
+    "metal",
+    "metal_weight",
+    "metal_weight_adjustment",
+    "stone",
+    "stone_weight",
+  ]);
+
+  const TRACKING_URL_TEMPLATES = {
+    fedex: "https://www.fedex.com/apps/fedextrack/?tracknumbers=",
+    ups: "https://www.ups.com/track?tracknum=",
+    dhl: "https://www.dhl.com/en/express/tracking.html?AWB=",
+    usps: "https://tools.usps.com/go/TrackConfirmAction?tLabels=",
+  };
+
+  const TRACKING_REQUIRED_STATUSES = new Set([
+    "in transit",
+    "out for delivery",
+    "delivered",
+    "picked up",
+    "exception",
+  ]);
+
+  const DIAMOND_TERMS = ["diamond", "lab grown diamond"];
+  const NOTE_CHECKLIST = [
+    "Metal weight confirmed",
+    "Diamond breakdown confirmed",
+    "Customer confirmation sent",
+    "Vendor assigned",
+    "Tracking added",
+  ];
+
+  const ACTIVITY_LIMIT = 40;
+  const activityEvents = [];
+
   const normalizeStatus = (value) => {
     const normalized = String(value || "NEW").trim().toUpperCase();
     return normalized === "INVOICE_NOT_PAID" ? "INVOICE_EXPIRED" : normalized || "NEW";
@@ -247,12 +287,17 @@
     quoteMetalInput: document.querySelector("[data-field=\"quote_metal_options\"]"),
     metalWeightLabel: document.querySelector("[data-metal-weight-label]"),
     metalWeightAdjustmentLabel: document.querySelector("[data-metal-weight-adjustment-label]"),
+    metalWeightFinal: document.querySelector("[data-metal-weight-final]"),
+    metalWeightError: document.querySelector("[data-metal-weight-error]"),
+    metalWeightAdjustmentError: document.querySelector("[data-metal-weight-adjustment-error]"),
     editFields: Array.from(document.querySelectorAll("[data-field]")),
     orderDetailsSection: document.querySelector("[data-order-details-section]"),
     orderDetailsFields: Array.from(document.querySelectorAll("[data-order-details-field]")),
     diamondBreakdown: document.querySelector("[data-diamond-breakdown]"),
     diamondBreakdownRows: document.querySelector("[data-diamond-breakdown-rows]"),
     diamondBreakdownAdd: document.querySelector("[data-diamond-breakdown-add]"),
+    diamondPieceCount: document.querySelector("[data-diamond-piece-count]"),
+    diamondCaratTotal: document.querySelector("[data-diamond-carat-total]"),
     detailsSave: document.querySelector("[data-details-save]"),
     primaryAction: document.querySelector("[data-primary-action]"),
     notesSave: document.querySelector("[data-notes-save]"),
@@ -262,6 +307,40 @@
     confirmSubject: document.querySelector("[data-confirm-subject]"),
     confirmPreview: document.querySelector("[data-confirm-preview]"),
     confirmSend: document.querySelector("[data-confirm-send]"),
+    dirtyIndicator: document.querySelector("[data-dirty-indicator]"),
+    missingPanel: document.querySelector("[data-missing-panel]"),
+    missingList: document.querySelector("[data-missing-list]"),
+    activityFeed: document.querySelector("[data-activity-feed]"),
+    summaryStatus: document.querySelector("[data-summary-status]"),
+    summaryProduct: document.querySelector("[data-summary-product]"),
+    summaryDesignCode: document.querySelector("[data-summary-design-code]"),
+    summaryRequest: document.querySelector("[data-summary-request]"),
+    summaryCreated: document.querySelector("[data-summary-created]"),
+    summaryPrice: document.querySelector("[data-summary-price]"),
+    summaryTimeline: document.querySelector("[data-summary-timeline]"),
+    summaryTimelineDelay: document.querySelector("[data-summary-timeline-delay]"),
+    summaryMetal: document.querySelector("[data-summary-metal]"),
+    summaryStone: document.querySelector("[data-summary-stone]"),
+    summaryStoneWeight: document.querySelector("[data-summary-stone-weight]"),
+    summaryCustomer: document.querySelector("[data-summary-customer]"),
+    summaryEmail: document.querySelector("[data-summary-email]"),
+    summaryPhone: document.querySelector("[data-summary-phone]"),
+    summaryAddress: document.querySelector("[data-summary-address]"),
+    copyCustomer: document.querySelector("[data-copy-customer]"),
+    copyEmail: document.querySelector("[data-copy-email]"),
+    copyPhone: document.querySelector("[data-copy-phone]"),
+    copyAddress: document.querySelector("[data-copy-address]"),
+    copySummary: document.querySelector("[data-copy-summary]"),
+    nextActionText: document.querySelector("[data-next-action-text]"),
+    discountPanel: document.querySelector("[data-discount-panel]"),
+    discountType: document.querySelector("[data-discount-type]"),
+    discountPercent: document.querySelector("[data-discount-percent]"),
+    discountFinal: document.querySelector("[data-discount-final]"),
+    diamondPresets: document.querySelector("[data-diamond-presets]"),
+    noteTimestamp: document.querySelector("[data-note-timestamp]"),
+    noteTemplate: document.querySelector("[data-note-template]"),
+    noteTags: Array.from(document.querySelectorAll("[data-note-tag]")),
+    openTracking: document.querySelector("[data-open-tracking]"),
     toast: document.querySelector("[data-toast]"),
   };
 
@@ -273,6 +352,53 @@
   let quotePricingInFlight = false;
   const catalogCache = { data: null, promise: null };
   const mediaCache = new Map();
+
+  function setButtonEnabled(button, enabled) {
+    if (!button) return;
+    button.disabled = !enabled;
+    button.classList.toggle("is-disabled", !enabled);
+  }
+
+  function scrollToField(selector) {
+    if (!selector) return;
+    const target = document.querySelector(selector);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (typeof target.focus === "function") {
+      target.focus({ preventScroll: true });
+    }
+  }
+
+  function trackDirty(sectionElement, handler) {
+    if (!sectionElement || typeof handler !== "function") return;
+    const fields = sectionElement.querySelectorAll("input,select,textarea");
+    fields.forEach((field) => {
+      const listener = () => handler(field);
+      field.addEventListener("input", listener);
+      field.addEventListener("change", listener);
+    });
+  }
+
+  function copyToClipboard(text) {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "true");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand("copy");
+      } catch (error) {
+        // ignore
+      }
+      document.body.removeChild(textarea);
+    }
+  }
 
   function escapeHtml(value) {
     return String(value)
@@ -487,23 +613,80 @@
     if (!rows.length) {
       ui.diamondBreakdownRows.innerHTML =
         '<p class="muted">No diamond pieces yet. Add a row to begin.</p>';
+      updateDiamondStats([]);
       return;
     }
     ui.diamondBreakdownRows.innerHTML = rows
-      .map(
-        (row, index) => `
+      .map((row, index) => {
+        const weight = String(row.weight || "").trim();
+        const count = String(row.count || "").trim();
+        const totalValue = Number(weight || 0) * Number(count || 0);
+        const totalText = formatDiamondCarat(totalValue);
+        return `
           <div class="diamond-row" data-diamond-row data-row-index="${index}">
-            <input type="text" data-diamond-weight placeholder="0.10" value="${escapeAttribute(
-              row.weight || ""
-            )}" />
-            <span>ct ×</span>
-            <input type="text" data-diamond-count placeholder="1" value="${escapeAttribute(
-              row.count || ""
-            )}" />
+            <label>
+              <span>ct</span>
+              <input type="text" data-diamond-weight placeholder="0.10" value="${escapeAttribute(
+                weight
+              )}" />
+            </label>
+            <label>
+              <span>count</span>
+              <input type="text" data-diamond-count placeholder="1" value="${escapeAttribute(
+                count
+              )}" />
+            </label>
+            <div class="diamond-total">
+              <span>Total ct</span>
+              <strong data-diamond-row-total>${totalText}</strong>
+            </div>
             <button class="btn btn-ghost" type="button" data-diamond-remove>Remove</button>
-          </div>`
-      )
+          </div>`;
+      })
       .join("");
+    updateDiamondStats(rows);
+  }
+
+  function formatDiamondCarat(value) {
+    if (!Number.isFinite(value)) return "--";
+    const trimmed = value % 1 === 0 ? value.toFixed(0) : value.toFixed(2).replace(/\.?0+$/, "");
+    return `${trimmed} ct`;
+  }
+
+  function updateDiamondStats(rows) {
+    if (!ui.diamondPieceCount || !ui.diamondCaratTotal) return;
+    const pieces = rows.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+    const carats = rows.reduce(
+      (sum, item) => sum + (Number(item.weight) || 0) * (Number(item.count) || 0),
+      0
+    );
+    ui.diamondPieceCount.textContent = pieces;
+    ui.diamondCaratTotal.textContent = formatDiamondCarat(carats);
+  }
+
+  function updateDiamondRowTotals() {
+    if (!ui.diamondBreakdownRows) return;
+    const rows = Array.from(ui.diamondBreakdownRows.querySelectorAll("[data-diamond-row]"));
+    rows.forEach((row) => {
+      const weight = Number(row.querySelector("[data-diamond-weight]")?.value || 0);
+      const count = Number(row.querySelector("[data-diamond-count]")?.value || 0);
+      const totalValue = weight * count;
+      const totalEl = row.querySelector("[data-diamond-row-total]");
+      if (totalEl) {
+        totalEl.textContent = formatDiamondCarat(totalValue);
+      }
+    });
+  }
+
+  function applyDiamondPreset(value) {
+    if (!value) return;
+    const match = value.match(/([0-9]*\.?[0-9]+)x([0-9]+)/i);
+    if (!match) return;
+    const rows = getDiamondRowsFromDom();
+    rows.push({ weight: match[1], count: match[2] });
+    renderDiamondBreakdownRows(rows);
+    syncDiamondBreakdownField();
+    if (ui.diamondPresets) ui.diamondPresets.value = "";
   }
 
   function setDiamondBreakdownRowsFromField() {
@@ -515,7 +698,10 @@
 
   function toggleDiamondBreakdownVisibility() {
     if (!ui.diamondBreakdown) return;
-    ui.diamondBreakdown.classList.toggle("is-hidden", state.tab !== "quotes");
+    const stoneValue = getEditValue("stone").toLowerCase();
+    const hasDiamond = DIAMOND_TERMS.some((term) => stoneValue.includes(term));
+    const shouldShow = state.tab === "quotes" && hasDiamond;
+    ui.diamondBreakdown.classList.toggle("is-hidden", !shouldShow);
   }
 
   function getEditField(key) {
@@ -922,6 +1108,9 @@
     if (!percentField) return;
     const isCustom = type === "custom";
     percentField.disabled = !isCustom;
+    if (ui.discountPercent) {
+      ui.discountPercent.disabled = !isCustom;
+    }
   }
 
   function applyQuoteVisibility() {
@@ -974,6 +1163,10 @@
     return field ? field.value.trim() : "";
   }
 
+  function getOrderDetailsField(key) {
+    return ui.orderDetailsFields.find((input) => input.dataset.orderDetailsField === key);
+  }
+
   function collectOrderDetailsUpdates() {
     const details = {};
     ORDER_DETAILS_FIELDS.forEach((key) => {
@@ -983,6 +1176,38 @@
     return details;
   }
 
+  function updateTrackingUrlAuto() {
+    const carrier = getOrderDetailsValue("shipping_carrier").toLowerCase();
+    const trackingNumber = getOrderDetailsValue("tracking_number");
+    const urlField = getOrderDetailsField("tracking_url");
+    if (!urlField) return;
+    const template = TRACKING_URL_TEMPLATES[carrier];
+    if (template && trackingNumber) {
+      const generated = `${template}${encodeURIComponent(trackingNumber)}`;
+      if (!urlField.value || urlField.dataset.autoGenerated === "true") {
+        urlField.value = generated;
+        urlField.dataset.autoGenerated = "true";
+      }
+    }
+    if (!template || !trackingNumber) {
+      if (urlField.dataset.autoGenerated === "true") {
+        urlField.value = "";
+      }
+      urlField.dataset.autoGenerated = "";
+    }
+    setButtonEnabled(ui.openTracking, Boolean(urlField.value));
+  }
+
+  function handleFulfillmentFieldChange(field) {
+    if (!field) return;
+    if (field.dataset.orderDetailsField === "tracking_url") {
+      field.dataset.autoGenerated = "";
+    }
+    updateTrackingUrlAuto();
+    refreshMissingInfo();
+    updateFulfillmentDirty();
+  }
+
   function populateOrderDetails(details = {}) {
     state.orderDetails = details || {};
     ui.orderDetailsFields.forEach((field) => {
@@ -990,7 +1215,274 @@
       if (!key) return;
       const fallback = key === "shipping_method" ? "Express" : "";
       field.value = details[key] || fallback;
+      field.dataset.activityValue = field.value;
     });
+    updateFulfillmentDirty();
+    updateTrackingUrlAuto();
+  }
+
+  function buildSummaryAddress(item) {
+    const lines = [
+      item.address_line1,
+      item.address_line2,
+      item.city,
+      item.state,
+      item.postal_code,
+      item.country,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    return lines || "--";
+  }
+
+  function updateSummaryCard(item) {
+    if (!item) return;
+    const status = normalizeStatus(item.status);
+    if (ui.summaryStatus) {
+      ui.summaryStatus.textContent = status;
+      ui.summaryStatus.dataset.status = status;
+    }
+    if (ui.summaryProduct) ui.summaryProduct.textContent = item.product_name || "--";
+    if (ui.summaryDesignCode) ui.summaryDesignCode.textContent = item.design_code || "--";
+    if (ui.summaryRequest) ui.summaryRequest.textContent = item.request_id || "--";
+    if (ui.summaryCreated) ui.summaryCreated.textContent = formatDate(item.created_at) || "--";
+    if (ui.summaryPrice) ui.summaryPrice.textContent = formatPrice(item.price) || "--";
+    if (ui.summaryTimeline) ui.summaryTimeline.textContent = formatTimelineValue(item.timeline) || "--";
+    if (ui.summaryTimelineDelay) {
+      const delayText = formatDelayWeeks(item.timeline_adjustment_weeks);
+      ui.summaryTimelineDelay.textContent = delayText || "--";
+    }
+    if (ui.summaryMetal) ui.summaryMetal.textContent = item.metal || "--";
+    if (ui.summaryStone) ui.summaryStone.textContent = item.stone || "--";
+    if (ui.summaryStoneWeight) {
+      ui.summaryStoneWeight.textContent = formatStoneWeight(item.stone_weight) || "--";
+    }
+    if (ui.summaryCustomer) ui.summaryCustomer.textContent = item.name || "--";
+    if (ui.summaryEmail) ui.summaryEmail.textContent = item.email || "--";
+    if (ui.summaryPhone) ui.summaryPhone.textContent = item.phone || "--";
+    if (ui.summaryAddress) ui.summaryAddress.textContent = buildSummaryAddress(item);
+  }
+
+  function buildMissingChip(label, selector) {
+    return `<button class="chip missing-chip" type="button" data-focus-target='${selector}'>${label}</button>`;
+  }
+
+  function refreshMissingInfo() {
+    if (!ui.missingList) return;
+    const chips = [];
+    const metalWeight = getEditValue("metal_weight");
+    if (!metalWeight) {
+      chips.push(buildMissingChip("Metal weight missing", '[data-field="metal_weight"]'));
+    }
+    const stoneWeight = getEditValue("stone_weight");
+    if (!stoneWeight) {
+      chips.push(buildMissingChip("Stone weight missing", '[data-field="stone_weight"]'));
+    }
+    const stoneValue = getEditValue("stone").toLowerCase();
+    const breakdownValue = getEditValue("diamond_breakdown");
+    const isDiamond = DIAMOND_TERMS.some((term) => stoneValue.includes(term));
+    if (isDiamond && !breakdownValue) {
+      chips.push(buildMissingChip("Diamond breakdown empty", '[data-field="diamond_breakdown"]'));
+    }
+    const shippingStatus = getOrderDetailsValue("shipping_status").toLowerCase();
+    const trackingNumber = getOrderDetailsValue("tracking_number");
+    if (TRACKING_REQUIRED_STATUSES.has(shippingStatus) && !trackingNumber) {
+      chips.push(
+        buildMissingChip("Tracking # required for shipping", '[data-order-details-field="tracking_number"]')
+      );
+    }
+    const etaValue = getOrderDetailsValue("delivery_eta");
+    if (etaValue && !/^\d{4}-\d{2}-\d{2}$/.test(etaValue)) {
+      chips.push(
+        buildMissingChip("Delivery ETA needs YYYY-MM-DD", '[data-order-details-field="delivery_eta"]')
+      );
+    }
+    ui.missingList.innerHTML = chips.length ? chips.join("") : '<span class="muted">No missing details.</span>';
+    updateNextActionText();
+  }
+
+  function syncDiscountUiFromFields() {
+    if (!ui.discountType || !ui.discountPercent) return;
+    const typeField = getEditField("quote_discount_type");
+    const percentField = getEditField("quote_discount_percent");
+    if (typeField) {
+      ui.discountType.value = typeField.value || "none";
+    }
+    if (percentField) {
+      ui.discountPercent.value = percentField.value || "";
+    }
+  }
+
+  function syncDiscountFieldsFromUi() {
+    const typeField = getEditField("quote_discount_type");
+    const percentField = getEditField("quote_discount_percent");
+    if (typeField && ui.discountType) {
+      typeField.value = ui.discountType.value;
+    }
+    if (percentField && ui.discountPercent) {
+      percentField.value = ui.discountPercent.value.trim();
+    }
+  }
+
+  function updateDiscountPreview() {
+    if (!ui.discountFinal) return;
+    const base = Number(getEditValue("price"));
+    const percent = Number(ui.discountPercent?.value) || 0;
+    if (ui.discountType && ui.discountPercent) {
+      ui.discountPercent.disabled = ui.discountType.value !== "custom";
+    }
+    if (!base || Number.isNaN(base)) {
+      ui.discountFinal.textContent = "--";
+      syncDiscountFieldsFromUi();
+      return;
+    }
+    const finalValue =
+      percent && percent > 0 ? Math.max(0, base * (1 - percent / 100)) : base;
+    ui.discountFinal.textContent = formatPrice(finalValue) || "--";
+    syncDiscountFieldsFromUi();
+  }
+
+  function buildSummaryText(item) {
+    if (!item) return "";
+    const lines = [
+      `Order: ${item.request_id || "--"}`,
+      `Created: ${formatDate(item.created_at) || "--"}`,
+      `Status: ${normalizeStatus(item.status)}`,
+      `Product: ${item.product_name || "--"} (${item.design_code || "--"})`,
+      `Specs: ${item.metal || "--"} / ${item.stone || "--"} ${formatStoneWeight(
+        item.stone_weight
+      )}`,
+      `Price: ${formatPrice(item.price) || "--"}`,
+      `Timeline: ${formatTimelineValue(item.timeline) || "--"} ${
+        formatDelayWeeks(item.timeline_adjustment_weeks) || ""
+      }`,
+      `Customer: ${item.name || "--"} (${item.email || "--"} / ${item.phone || "--"})`,
+      `Address: ${buildSummaryAddress(item)}`,
+    ];
+    return lines.filter(Boolean).join("\n");
+  }
+
+  function updateMetalWeightFinal() {
+    if (!ui.metalWeightFinal) return;
+    const weight = Number(getEditValue("metal_weight"));
+    const adjustment = Number(getEditValue("metal_weight_adjustment"));
+    const hasWeight = Number.isFinite(weight);
+    const hasAdjustment = Number.isFinite(adjustment);
+    if (!hasWeight && !hasAdjustment) {
+      ui.metalWeightFinal.textContent = "--";
+      return;
+    }
+    const finalValue = (hasWeight ? weight : 0) + (hasAdjustment ? adjustment : 0);
+    ui.metalWeightFinal.textContent = `${finalValue.toFixed(2).replace(/\.?0+$/, "")} g`;
+  }
+
+  function validateMetalWeightInputs() {
+    const weightField = getEditField("metal_weight");
+    const adjustmentField = getEditField("metal_weight_adjustment");
+    const weightError = ui.metalWeightError;
+    const adjustmentError = ui.metalWeightAdjustmentError;
+    const numberPattern = /^[+-]?\d+(\.\d+)?$/;
+    const weightValue = weightField ? weightField.value.trim() : "";
+    const adjustmentValue = adjustmentField ? adjustmentField.value.trim() : "";
+    if (weightError) {
+      weightError.textContent =
+        weightValue && !numberPattern.test(weightValue) ? "Enter a valid weight" : "";
+    }
+    if (adjustmentError) {
+      adjustmentError.textContent =
+        adjustmentValue && !numberPattern.test(adjustmentValue)
+          ? "Use + or - followed by a number"
+          : "";
+    }
+  }
+
+  function updateFulfillmentDirty() {
+    if (!ui.detailsSave) return;
+    const dirty = ORDER_DETAILS_FIELDS.some((key) => {
+      return String(getOrderDetailsValue(key)) !== String(state.orderDetails[key] || "");
+    });
+    state.dirtySections.fulfillment = dirty;
+    setButtonEnabled(ui.detailsSave, dirty && canEditCurrentTab());
+    updateDirtyIndicator();
+  }
+
+  function evaluateCriticalDirty() {
+    state.criticalDirty = CONFIRM_FIELDS.some((field) => {
+      if (!CRITICAL_EDIT_FIELDS.has(field.key)) return false;
+      const current = field.normalize(getEditValue(field.key));
+      const original = state.originalValues[field.key] || "";
+      return current !== original;
+    });
+  }
+
+  function updateDirtyIndicator() {
+    if (!ui.dirtyIndicator) return;
+    const parts = [];
+    if (state.dirtySections.edits) parts.push("Unsaved edits");
+    if (state.dirtySections.fulfillment) parts.push("Unsaved fulfillment");
+    const text = parts.length ? parts.join(" / ") : "All changes saved";
+    ui.dirtyIndicator.textContent = text;
+    ui.dirtyIndicator.classList.toggle("is-dirty", parts.length > 0);
+    updateNextActionText();
+  }
+
+  function updateNextActionText() {
+    if (!ui.nextActionText) return;
+    const missingCount = ui.missingList
+      ? ui.missingList.querySelectorAll(".missing-chip").length
+      : 0;
+    if (missingCount) {
+      ui.nextActionText.textContent = `${missingCount} critical items need attention.`;
+      return;
+    }
+    if (state.criticalDirty) {
+      ui.nextActionText.textContent = "Critical edits pending. Save before actions.";
+      return;
+    }
+    if (state.dirtySections.fulfillment) {
+      ui.nextActionText.textContent = "Save fulfillment details to keep tracking current.";
+      return;
+    }
+    if (state.dirtySections.edits) {
+      ui.nextActionText.textContent = "Review edits and request confirmation.";
+      return;
+    }
+    ui.nextActionText.textContent = "Review edits or choose an action.";
+  }
+
+  function getNotesField() {
+    return getEditField("notes");
+  }
+
+  function insertIntoNotes(text) {
+    const notes = getNotesField();
+    if (!notes) return;
+    const start = notes.selectionStart || 0;
+    const end = notes.selectionEnd || 0;
+    notes.value = `${notes.value.slice(0, start)}${text}${notes.value.slice(end)}`;
+    const caret = start + text.length;
+    notes.setSelectionRange(caret, caret);
+    notes.focus();
+  }
+
+  function insertTimestampMarker() {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, "0");
+    const timestamp = `[${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(
+      now.getHours()
+    )}:${pad(now.getMinutes())} CT] `;
+    insertIntoNotes(timestamp);
+  }
+
+  function insertChecklistTemplate() {
+    const checklist = NOTE_CHECKLIST.map((line) => `- ${line}`).join("\n");
+    insertIntoNotes(`${checklist}\n`);
+  }
+
+  function handleCopyText(label, value) {
+    if (!value) return;
+    copyToClipboard(value);
+    showToast(`${label} copied`);
   }
 
   function getActionConfig(action) {
@@ -1074,6 +1566,73 @@
       .join("");
   }
 
+  function formatActivityTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "--";
+    return date.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+  }
+
+  function renderActivityFeed() {
+    if (!ui.activityFeed) return;
+    if (!activityEvents.length) {
+      ui.activityFeed.innerHTML = '<div class="activity-item muted">No activity yet.</div>';
+      return;
+    }
+    const sorted = [...activityEvents]
+      .sort((a, b) => new Date(b.time) - new Date(a.time))
+      .slice(0, ACTIVITY_LIMIT);
+    ui.activityFeed.innerHTML = sorted
+      .map((event) => {
+        const detail = event.detail
+          ? `<p class="activity-detail">${escapeHtml(event.detail)}</p>`
+          : "";
+        return `<div class="activity-item activity-${event.type || "system"}">
+          <div class="activity-meta">
+            <span class="activity-time">${formatActivityTime(event.time)}</span>
+            <strong class="activity-title">${escapeHtml(event.title || "Updated")}</strong>
+          </div>
+          ${detail}
+        </div>`;
+      })
+      .join("");
+  }
+
+  function addActivityEvent(event) {
+    const timestamp = event.time ? new Date(event.time) : new Date();
+    const normalized = {
+      ...event,
+      time: Number.isNaN(timestamp.getTime()) ? new Date().toISOString() : timestamp.toISOString(),
+    };
+    activityEvents.unshift(normalized);
+    if (activityEvents.length > ACTIVITY_LIMIT) {
+      activityEvents.pop();
+    }
+    renderActivityFeed();
+  }
+
+  function initActivityStream(item) {
+    activityEvents.length = 0;
+    if (!item) {
+      renderActivityFeed();
+      return;
+    }
+    if (item.created_at) {
+      addActivityEvent({
+        time: item.created_at,
+        type: "system",
+        title: "Order created",
+        detail: `Status: ${normalizeStatus(item.status)}`,
+      });
+    }
+    if (item.status) {
+      addActivityEvent({
+        time: new Date().toISOString(),
+        type: "status",
+        title: `Current status: ${normalizeStatus(item.status)}`,
+      });
+    }
+  }
+
   function getEditValue(key) {
     const field = ui.editFields.find((input) => input.dataset.field === key);
     return field ? field.value.trim() : "";
@@ -1152,6 +1711,8 @@
       ui.primaryAction.textContent =
         state.isNewRow && PRICING_TABS.has(state.tab) ? "Add row" : "Save updates";
       ui.primaryAction.disabled = !canEdit || !hasChanges;
+      state.dirtySections.edits = hasChanges;
+      updateDirtyIndicator();
       return;
     }
 
@@ -1159,6 +1720,8 @@
     const changes = collectConfirmChanges();
     state.pendingChanges = changes;
     ui.primaryAction.disabled = !canEdit || changes.length === 0;
+    state.dirtySections.edits = changes.length > 0 || notesChanged;
+    updateDirtyIndicator();
   }
 
   function buildChangeRows(changes) {
@@ -1369,6 +1932,8 @@
     state.selectedId = requestId;
     state.selectedItem = item;
     setOriginalValues(item);
+    state.dirtySections = { edits: false, fulfillment: false };
+    state.criticalDirty = false;
     state.pendingChanges = [];
     state.confirmation = null;
 
@@ -1586,9 +2151,11 @@
       if (!key) return;
       if (key === "notes") {
         field.value = item.notes || "";
+        field.dataset.activityValue = field.value;
         return;
       }
       field.value = item[key] || "";
+      field.dataset.activityValue = field.value;
     });
     updateMetalWeightLabels(item.metal || "");
     setQuoteMetalSelection(item.quote_metal_options || "", item.metal || "");
@@ -1604,6 +2171,15 @@
     renderActions();
     updateActionButtonState();
     updatePrimaryActionState();
+    updateSummaryCard(item);
+    refreshMissingInfo();
+    initActivityStream(item);
+    syncDiscountUiFromFields();
+    updateDiscountPreview();
+    updateMetalWeightFinal();
+    validateMetalWeightInputs();
+    updateFulfillmentDirty();
+    updateDirtyIndicator();
   }
 
   async function loadMe() {
@@ -1794,7 +2370,19 @@
       showToast("Missing record ID", "error");
       return;
     }
-    const notes = getNotesValue();
+    let notes = getNotesValue();
+    if (state.tab === "orders" && ui.discountType) {
+      const typeValue = ui.discountType.value || "none";
+      const percentValue = ui.discountPercent?.value?.trim() || "";
+      if (typeValue !== "none") {
+        const line = `DISCOUNT: ${typeValue}${percentValue ? ` ${percentValue}%` : ""} (internal)`;
+        if (!notes.includes(line)) {
+          notes = notes ? `${notes}\n${line}` : line;
+          const notesField = getEditField("notes");
+          if (notesField) notesField.value = notes;
+        }
+      }
+    }
     const payload = { action: "edit", notes };
     if (
       state.tab === "price-chart" ||
@@ -1816,6 +2404,11 @@
     });
     if (result.ok) {
       showToast("Notes saved");
+      addActivityEvent({
+        type: "notes",
+        title: "Internal notes saved",
+        detail: "Updated internal notes",
+      });
       await loadRecord(state.selectedItem.request_id);
     } else {
       showToast("Notes failed", "error");
@@ -1843,6 +2436,11 @@
     });
     if (result.ok) {
       showToast("Fulfillment details saved");
+      addActivityEvent({
+        type: "fulfillment",
+        title: "Fulfillment details saved",
+        detail: `${details.shipping_carrier || "Carrier"} / ${details.tracking_number || "No tracking"}`,
+      });
       await loadOrderDetails(state.selectedItem.request_id);
     } else {
       showToast("Fulfillment save failed", "error");
@@ -1972,6 +2570,7 @@
         if (!action) return;
         const config = getActionConfig(action);
         if (config && config.confirm && !window.confirm(config.confirm)) return;
+        if (state.criticalDirty && !window.confirm("Proceed without saving critical edits?")) return;
         runAction(action);
       });
     }
@@ -1992,17 +2591,20 @@
     }
 
     ui.editFields.forEach((field) => {
-      const handler = () => {
+      const handler = (event) => {
         const key = field.dataset.field || "";
         if (key === "metal") {
           updateMetalWeightLabels(field.value);
           setQuoteMetalSelection(ui.quoteMetalInput ? ui.quoteMetalInput.value : "", field.value);
         }
-        if (key === "quote_discount_type") {
+        if (key === "quote_discount_type" || key === "quote_discount_percent") {
           applyDiscountControlState();
         }
         if (key === "stone_weight" || key === "diamond_breakdown") {
           applyGoldOnlyQuoteState();
+        }
+        if (key === "stone") {
+          toggleDiamondBreakdownVisibility();
         }
         if (state.tab === "quotes" && key) {
           if (QUOTE_PRICE_FIELDS.has(key)) {
@@ -2017,6 +2619,35 @@
             scheduleQuotePricingUpdate();
           }
         }
+        if (key === "metal_weight" || key === "metal_weight_adjustment") {
+          updateMetalWeightFinal();
+          validateMetalWeightInputs();
+        }
+        if (["price", "quote_discount_type", "quote_discount_percent"].includes(key)) {
+          updateDiscountPreview();
+        }
+        if (state.selectedItem && key) {
+          state.selectedItem[key] = field.value;
+          updateSummaryCard(state.selectedItem);
+        }
+        if (event.type === "change" && key) {
+          const prevValue = field.dataset.activityValue || "";
+          const newValue = field.value.trim();
+          if (prevValue !== newValue) {
+            const labelText =
+              field
+                .closest(".field")
+                ?.querySelector("span")?.textContent?.trim() || key;
+            addActivityEvent({
+              type: "edit",
+              title: `${labelText} updated`,
+              detail: `${prevValue || "--"} -> ${newValue || "--"}`,
+            });
+            field.dataset.activityValue = newValue;
+          }
+        }
+        evaluateCriticalDirty();
+        refreshMissingInfo();
         updatePrimaryActionState();
       };
       field.addEventListener("input", handler);
@@ -2048,6 +2679,8 @@
           return;
         }
         syncDiamondBreakdownField();
+        updateDiamondStats(getDiamondRowsFromDom());
+        updateDiamondRowTotals();
         updatePrimaryActionState();
         scheduleQuotePricingUpdate();
       });
@@ -2058,10 +2691,82 @@
         const row = target.closest("[data-diamond-row]");
         if (row) row.remove();
         syncDiamondBreakdownField();
+        updateDiamondStats(getDiamondRowsFromDom());
+        updateDiamondRowTotals();
         updatePrimaryActionState();
         scheduleQuotePricingUpdate();
         if (!ui.diamondBreakdownRows.querySelector("[data-diamond-row]")) {
           renderDiamondBreakdownRows([]);
+        }
+      });
+    }
+
+    if (ui.missingList) {
+      ui.missingList.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const selector = target.dataset.focusTarget;
+        if (selector) scrollToField(selector);
+      });
+    }
+
+    if (ui.diamondPresets) {
+      ui.diamondPresets.addEventListener("change", () => {
+        applyDiamondPreset(ui.diamondPresets.value);
+        scheduleQuotePricingUpdate();
+        updatePrimaryActionState();
+      });
+    }
+
+    if (ui.discountType) {
+      ui.discountType.addEventListener("change", () => {
+        updateDiscountPreview();
+        updatePrimaryActionState();
+      });
+    }
+    if (ui.discountPercent) {
+      ui.discountPercent.addEventListener("input", () => {
+        updateDiscountPreview();
+        updatePrimaryActionState();
+      });
+    }
+
+    ui.orderDetailsFields.forEach((field) => {
+      ["input", "change"].forEach((eventName) => {
+        field.addEventListener(eventName, (event) => {
+          handleFulfillmentFieldChange(field);
+          if (event.type === "change") {
+            const prevValue = field.dataset.activityValue || "";
+            const newValue = field.value.trim();
+            if (prevValue !== newValue) {
+              const labelText =
+                field
+                  .closest(".field")
+                  ?.querySelector("span")?.textContent?.trim() ||
+                field.dataset.orderDetailsField ||
+                "Fulfillment update";
+              addActivityEvent({
+                type: "edit",
+                title: `${labelText} updated`,
+                detail: `${prevValue || "--"} -> ${newValue || "--"}`,
+              });
+              field.dataset.activityValue = newValue;
+            }
+          }
+        });
+      });
+    });
+
+    trackDirty(ui.orderDetailsSection, () => {
+      refreshMissingInfo();
+      updateFulfillmentDirty();
+    });
+
+    if (ui.openTracking) {
+      ui.openTracking.addEventListener("click", () => {
+        const urlValue = getOrderDetailsValue("tracking_url");
+        if (urlValue) {
+          window.open(urlValue, "_blank");
         }
       });
     }
@@ -2082,6 +2787,7 @@
           if (window.confirm("Save updates to this record?")) saveDetails();
           return;
         }
+        if (state.criticalDirty && !window.confirm("Proceed without saving critical edits?")) return;
         prepareConfirmation();
       });
     }
@@ -2092,11 +2798,68 @@
       });
     }
 
+    if (ui.noteTimestamp) {
+      ui.noteTimestamp.addEventListener("click", () => {
+        insertTimestampMarker();
+        updatePrimaryActionState();
+      });
+    }
+    if (ui.noteTemplate) {
+      ui.noteTemplate.addEventListener("click", () => {
+        insertChecklistTemplate();
+        updatePrimaryActionState();
+      });
+    }
+    ui.noteTags.forEach((tag) => {
+      tag.addEventListener("click", () => {
+        insertIntoNotes(`${tag.dataset.noteTag} `);
+        updatePrimaryActionState();
+      });
+    });
+    if (ui.copyCustomer) {
+      ui.copyCustomer.addEventListener("click", () =>
+        handleCopyText("Customer name", ui.summaryCustomer?.textContent?.trim())
+      );
+    }
+    if (ui.copyEmail) {
+      ui.copyEmail.addEventListener("click", () =>
+        handleCopyText("Email", ui.summaryEmail?.textContent?.trim())
+      );
+    }
+    if (ui.copyPhone) {
+      ui.copyPhone.addEventListener("click", () =>
+        handleCopyText("Phone", ui.summaryPhone?.textContent?.trim())
+      );
+    }
+    if (ui.copyAddress) {
+      ui.copyAddress.addEventListener("click", () =>
+        handleCopyText("Address", ui.summaryAddress?.textContent?.trim())
+      );
+    }
+    if (ui.copySummary) {
+      ui.copySummary.addEventListener("click", () => {
+        const summary = buildSummaryText(state.selectedItem);
+        handleCopyText("Order summary", summary);
+      });
+    }
+
     if (ui.detailsSave) {
       ui.detailsSave.addEventListener("click", () => {
         if (window.confirm("Save fulfillment details?")) saveOrderDetails();
       });
     }
+
+    document.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        const active = document.activeElement;
+        if (active && active.closest("[data-order-details-section]")) {
+          saveOrderDetails();
+        } else {
+          saveNotes();
+        }
+      }
+    });
 
     if (ui.confirmClose) {
       ui.confirmClose.addEventListener("click", closeConfirmModal);
@@ -2110,6 +2873,7 @@
 
     if (ui.confirmSend) {
       ui.confirmSend.addEventListener("click", () => {
+        if (state.criticalDirty && !window.confirm("Proceed without saving critical edits?")) return;
         if (window.confirm("Send confirmation to customer?")) sendConfirmation();
       });
     }
@@ -2139,3 +2903,4 @@
 
   init();
 })();
+
