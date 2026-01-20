@@ -1180,6 +1180,10 @@ const defaultStoneType = (() => {
         const estimatePrice = readEstimatePrice();
         const timelineValue = fieldValue('[data-field="timeline"]') || 'Standard';
         const timeline = normalizeTimeline(timelineValue);
+        const ringSize = fieldValue('[data-field="ringSize"]');
+        const wristSize = fieldValue('[data-field="wristSize"]');
+        const chainLength = fieldValue('[data-field="chainLength"]');
+        const earringPreference = fieldValue('[data-field="earringPreference"]');
         const payload = {
           subject,
           body,
@@ -1195,7 +1199,15 @@ const defaultStoneType = (() => {
           metal: fieldValue('[data-field="metal"]'),
           stone: fieldValue('[data-field="stoneType"]'),
           stoneWeight: '',
-          size: fieldValue('[data-field="ringSize"]') || fieldValue('[data-field="wristSize"]') || fieldValue('[data-field="chainLength"]') || fieldValue('[data-field="earringPreference"]'),
+          size: ringSize || wristSize || chainLength || earringPreference,
+          ringSize,
+          wristSize,
+          chainLength,
+          earringPreference,
+          ring_size: ringSize,
+          wrist_size: wristSize,
+          chain_length: chainLength,
+          earring_preference: earringPreference,
           price: estimatePrice.value,
           timeline,
           addressLine1: fieldValue('[data-field="addressLine1"]'),
