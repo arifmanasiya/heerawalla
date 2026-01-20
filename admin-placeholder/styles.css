@@ -1172,7 +1172,7 @@ button:disabled {
   display: block;
   border-radius: 10px;
   border: 1px solid var(--line);
-  max-height: 240px;
+  max-height: 180px;
   object-fit: contain;
   background: #fff;
 }

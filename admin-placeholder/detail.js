@@ -534,6 +534,11 @@
       item?.notes,
       item?.customer_notes,
       item?.request_notes,
+      item?.body,
+      item?.email_body,
+      item?.email_text,
+      item?.request_body,
+      item?.quote_body,
       item?.summary,
       item?.summary_text,
       item?.details,
@@ -550,10 +555,10 @@
       return match && match[1] ? match[1].trim() : "";
     };
     return {
-      ring: matchValue(/(?:^|\n)\s*ring(?:\s*size)?\s*[:\-]\s*([^\n,;]+)/i),
-      wrist: matchValue(/(?:^|\n)\s*(?:wrist|bracelet)(?:\s*size)?\s*[:\-]\s*([^\n,;]+)/i),
-      neck: matchValue(/(?:^|\n)\s*(?:neck|necklace|chain)(?:\s*(?:size|length))?\s*[:\-]\s*([^\n,;]+)/i),
-      earring: matchValue(/(?:^|\n)\s*earrings?(?:\s*(?:style|type|size))?\s*[:\-]\s*([^\n,;]+)/i),
+      ring: matchValue(/\bring(?:\s*size)?\s*:\s*([^|\n,;]+)/i),
+      wrist: matchValue(/\b(?:wrist|bracelet)(?:\s*size)?\s*:\s*([^|\n,;]+)/i),
+      neck: matchValue(/\b(?:neck|necklace|chain)(?:\s*(?:size|length))?\s*:\s*([^|\n,;]+)/i),
+      earring: matchValue(/\bearrings?(?:\s*(?:style|type|size|preference))?\s*:\s*([^|\n,;]+)/i),
     };
   }
 
