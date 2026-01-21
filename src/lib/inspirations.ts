@@ -35,7 +35,27 @@ export const INSPIRATION_DISCLAIMER =
 
 const DATA_FILE = path.resolve('data/inspirations.csv');
 
-const requiredColumns = sharedCatalogColumns;
+const requiredColumns = [
+  'id',
+  'name',
+  'slug',
+  'hero_image',
+  'short_desc',
+  'long_desc',
+  'estimated_price_usd_vvs1_vvs2_18k',
+  'stone_types',
+  'stone_weight',
+  'metal_weight',
+  'tags',
+  'categories',
+  'gender',
+  'styles',
+  'motifs',
+  'metals',
+  'palette',
+  'takeaways',
+  'translation_notes'
+] as const;
 
 const parseList = (value?: string) => {
   if (!value) return [];

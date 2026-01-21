@@ -34,6 +34,14 @@ function toOptionalFirstListItem(value: string | undefined): string | undefined 
   return trimmed ? trimmed : undefined;
 }
 
+function toOptionalNumberFromList(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const first = toOptionalFirstListItem(value);
+  if (!first) return undefined;
+  const parsed = Number(first.trim());
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 async function readLocalProductCSVs(): Promise<string[]> {
   const entries = await fs.readdir(DATA_DIR);
   const matches = entries.filter((file) => file.startsWith('products-') && file.endsWith('.csv'));
@@ -72,6 +80,13 @@ async function loadCsvFile(source: string, fallbackFile?: string): Promise<Produ
 
   const parsed = records
     .map((row) => {
+      const metalOptions = toOptionalString(row.metal_options || row.metals);
+      const stoneTypeOptions = toOptionalString(row.stone_type_options || row.stone_types);
+      const stoneWeightRange = toOptionalString(row.stone_weight_range || row.stone_weight);
+      const metalWeightRange = toOptionalString(row.metal_weight_range || row.metal_weight);
+      const clarityRange = toOptionalString(row.clarity_range || row.clarity);
+      const colorRange = toOptionalString(row.color_range || row.color);
+      const cutRange = toOptionalString(row.cut_range || row.cut);
       const base = {
         id: row.id,
         name: row.name,
@@ -80,15 +95,22 @@ async function loadCsvFile(source: string, fallbackFile?: string): Promise<Produ
         collection: row.collection,
         category: toOptionalFirstListItem(row.categories) || row.categories || row.category,
         design_code: row.design_code,
-        metal: toOptionalFirstListItem(row.metals) || row.metals || row.metal,
-        stone_types: toOptionalString(row.stone_types),
-        stone_weight: toOptionalNumber(row.stone_weight),
-        metal_weight: toOptionalNumber(row.metal_weight),
-        cut: toOptionalString(row.cut),
-        clarity: toOptionalString(row.clarity),
-        color: toOptionalString(row.color),
-        carat: row.carat ? Number(row.carat) : undefined,
-        price_usd_natural: Number(row.price_usd_natural),
+        metal: toOptionalFirstListItem(metalOptions) || row.metals || row.metal,
+        metal_options: metalOptions || '',
+        stone_types: toOptionalString(stoneTypeOptions),
+        stone_type_options: stoneTypeOptions || '',
+        stone_weight: toOptionalNumber(row.stone_weight) ?? toOptionalNumberFromList(stoneWeightRange),
+        stone_weight_range: stoneWeightRange || '',
+        metal_weight: toOptionalNumber(row.metal_weight) ?? toOptionalNumberFromList(metalWeightRange),
+        metal_weight_range: metalWeightRange || '',
+        cut: toOptionalFirstListItem(cutRange) || toOptionalString(row.cut),
+        cut_range: cutRange || '',
+        clarity: toOptionalFirstListItem(clarityRange) || toOptionalString(row.clarity),
+        clarity_range: clarityRange || '',
+        color: toOptionalFirstListItem(colorRange) || toOptionalString(row.color),
+        color_range: colorRange || '',
+        carat: toOptionalNumber(row.carat),
+        price_usd_natural: toOptionalNumber(row.price_usd_natural) ?? 0,
         lab_discount_pct: toOptionalNumber(row.lab_discount_pct),
         metal_platinum_premium: toOptionalNumber(row.metal_platinum_premium),
         metal_14k_discount_pct: toOptionalNumber(row.metal_14k_discount_pct),

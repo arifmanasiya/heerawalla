@@ -4,6 +4,7 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import { loadProductsWithMedia, type ProductWithMedia } from '../../lib/products';
+import { loadSiteConfig, getConfigValue } from '../../lib/config';
 import { withBase } from '../../lib/paths';
 
 export async function getStaticPaths() {
@@ -15,6 +16,8 @@ export async function getStaticPaths() {
 }
 
 const { product } = Astro.props as { product: ProductWithMedia };
+const config = await loadSiteConfig();
+const atelierApiBase = getConfigValue(config, 'atelier_api_base', 'https://admin-api.heerawalla.com');
 const catalogUrl = import.meta.env.PUBLIC_CATALOG_API_URL || '';
 const catalogMode = (import.meta.env.PUBLIC_CATALOG_MODE || 'hybrid').toLowerCase();
 const primaryMedia = product.media.images[0]?.url || product.media.videos[0]?.url;
@@ -62,7 +65,9 @@ const platinumPremiumPct = product.metal_platinum_premium ?? 10;
 const labUsd = applyDiscount(baseUsd, labDiscountPct);
 const baseUsdRounded = roundTo99(baseUsd);
 const labUsdRounded = roundTo99(labUsd);
-const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
+const stoneTypes = parseList(product.stone_type_options || product.stone_types)
+  .map(normalizeStoneType)
+  .filter(Boolean);
 const naturalAvailable = stoneTypes.some((item) => /natural/i.test(item));
 const labAvailable = stoneTypes.some((item) => /lab/i.test(item));
 const naturalStoneLabel =
@@ -70,60 +75,77 @@ const naturalStoneLabel =
 const labStoneLabel =
   stoneTypes.find((item) => /lab/i.test(item)) || 'Lab Grown Diamond';
 const stoneOptions = [
-  ...(naturalAvailable ? [{ value: 'natural', label: naturalStoneLabel }] : []),
-  ...(labAvailable ? [{ value: 'lab', label: labStoneLabel }] : [])
+  ...(naturalAvailable
+    ? [{ value: naturalStoneLabel, label: naturalStoneLabel, mode: 'natural' }]
+    : []),
+  ...(labAvailable ? [{ value: labStoneLabel, label: labStoneLabel, mode: 'lab' }] : [])
 ];
 const hasStoneOptions = stoneOptions.length > 0;
-const stoneWeightOptions = parseList(product.stone_weight === undefined ? '' : String(product.stone_weight));
+const parseOptionList = (value: unknown) => {
+  if (value === null || value === undefined) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .split('|')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return [String(value)];
+  }
+  return [];
+};
+const stoneWeightOptions = parseOptionList(
+  product.stone_weight_range || (product.stone_weight === undefined ? '' : String(product.stone_weight))
+);
 const hasStoneWeight = stoneWeightOptions.length > 0;
+const metalWeightOptions = parseOptionList(
+  product.metal_weight_range || (product.metal_weight === undefined ? '' : String(product.metal_weight))
+);
+const hasMetalWeight = metalWeightOptions.length > 0;
+const clarityOptions = parseList(product.clarity_range || product.clarity);
+const colorOptions = parseList(product.color_range || product.color);
+const cutOptions = parseList(product.cut_range || product.cut);
 const diamondDefault = hasStoneOptions
   ? labAvailable
-    ? 'lab'
+    ? labStoneLabel
     : naturalAvailable
-      ? 'natural'
-      : 'natural'
-  : 'natural';
-const defaultDiamondUsd = diamondDefault === 'lab' ? labUsd : baseUsd;
-const metalBase = product.metal || '18K Gold';
-const metalColors = (() => {
-  const normalized = metalBase.toLowerCase();
-  const colors = [];
-  if (normalized.includes('yellow')) colors.push('Yellow');
-  if (normalized.includes('white')) colors.push('White');
-  if (normalized.includes('rose')) colors.push('Rose');
-  return colors.length ? colors : ['Yellow', 'White'];
-})();
-const metalOptions = [
-  ...metalColors.map((color) => ({
-    value: `18k-${color.toLowerCase()}`,
-    label: `18K ${color} Gold`
-  })),
-  ...metalColors.map((color) => ({
-    value: `14k-${color.toLowerCase()}`,
-    label: `14K ${color} Gold`
-  })),
-  { value: 'platinum', label: 'Platinum' }
-];
-const defaultMetalValue =
-  metalOptions.find((opt) => opt.value.startsWith('14k'))?.value ||
-  metalOptions[0]?.value ||
-  '18k-yellow';
-const defaultMetalLabel =
-  metalOptions.find((opt) => opt.value === defaultMetalValue)?.label ||
-  metalOptions[0]?.label ||
-  '18K Gold';
+      ? naturalStoneLabel
+      : naturalStoneLabel
+  : naturalStoneLabel;
+const defaultDiamondUsd = /lab/i.test(diamondDefault) ? labUsd : baseUsd;
+const metalOptionLabels = parseList(product.metal_options || product.metals || product.metal);
+const metalOptions =
+  metalOptionLabels.length > 0
+    ? metalOptionLabels.map((label) => ({ value: label, label }))
+    : (() => {
+        const metalBase = product.metal || '18K Gold';
+        const normalized = metalBase.toLowerCase();
+        const colors = [];
+        if (normalized.includes('yellow')) colors.push('Yellow');
+        if (normalized.includes('white')) colors.push('White');
+        if (normalized.includes('rose')) colors.push('Rose');
+        const palette = colors.length ? colors : ['Yellow', 'White'];
+        return [
+          ...palette.map((color) => ({
+            value: `18K ${color} Gold`,
+            label: `18K ${color} Gold`
+          })),
+          ...palette.map((color) => ({
+            value: `14K ${color} Gold`,
+            label: `14K ${color} Gold`
+          })),
+          { value: 'Platinum', label: 'Platinum' }
+        ];
+      })();
+const defaultMetalValue = metalOptions[0]?.value || '18K Gold';
+const defaultMetalLabel = metalOptions[0]?.label || defaultMetalValue;
 const diamondDefaultLabel = diamondDefault === 'lab' ? labStoneLabel : naturalStoneLabel;
-const defaultMetalTier = defaultMetalValue.startsWith('14k')
-  ? '14k'
-  : defaultMetalValue === 'platinum'
-    ? 'platinum'
-    : '18k';
-const defaultUsd = (() => {
-  let price = defaultDiamondUsd;
-  if (defaultMetalTier === '14k') price = applyDiscount(price, metal14DiscountPct);
-  if (defaultMetalTier === 'platinum') price = applyDiscount(price, platinumPremiumPct);
-  return roundTo99(price);
-})();
+const defaultUsd = Number.isFinite(defaultDiamondUsd) && defaultDiamondUsd > 0
+  ? roundTo99(defaultDiamondUsd)
+  : null;
 const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 const designCode = product.design_code || 'Signature';
 const designCodeSlug = designCode.toLowerCase();
@@ -296,17 +318,16 @@ void jsonLdString;
           <div class="flex items-center gap-4">
             <span
               class="text-xl font-semibold"
-              data-price-usd-base={baseUsd}
-              data-lab-discount={labDiscountPct}
-              data-platinum-premium={platinumPremiumPct}
-              data-metal-14k-discount={metal14DiscountPct}
+              data-pricing-api={atelierApiBase}
+              data-price-base={baseUsd}
+              data-lab-discount-pct={labDiscountPct}
+              data-metal-14k-discount-pct={metal14DiscountPct}
+              data-platinum-premium-pct={platinumPremiumPct}
               data-metal-default={defaultMetalValue}
               data-diamond-default={diamondDefault}
-              data-natural-available={naturalAvailable}
-              data-lab-available={labAvailable}
               id="price-display"
             >
-              {usdFormatter.format(defaultUsd)}
+              {defaultUsd ? usdFormatter.format(defaultUsd) : '--'}
             </span>
             <span class="text-sm text-slate-500 flex items-center gap-2">
               <span data-selected-metal>{defaultMetalLabel}</span>
@@ -422,6 +443,79 @@ void jsonLdString;
                   <option value="">Not specified</option>
                 )}
               </select>
+              <span class="text-xs text-slate-500" data-stone-weight-total></span>
+            </label>
+            <label
+              class={`text-sm space-y-1${hasMetalWeight ? '' : ' hidden'}`}
+              data-metal-weight-field
+            >
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Metal Weight</span>
+              <select
+                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                data-metal-weight-select
+                disabled={!hasMetalWeight}
+              >
+                {metalWeightOptions.length ? (
+                  metalWeightOptions.map((option) => (
+                    <option value={option} selected={metalWeightOptions[0] === option}>
+                      {option} g
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Not specified</option>
+                )}
+              </select>
+            </label>
+            <label
+              class={`text-sm space-y-1${clarityOptions.length ? '' : ' hidden'}`}
+              data-clarity-field
+            >
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Clarity</span>
+              <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink" data-clarity-select>
+                {clarityOptions.length ? (
+                  clarityOptions.map((option) => (
+                    <option value={option} selected={clarityOptions[0] === option}>
+                      {option}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Standard</option>
+                )}
+              </select>
+            </label>
+            <label
+              class={`text-sm space-y-1${colorOptions.length ? '' : ' hidden'}`}
+              data-color-field
+            >
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Color</span>
+              <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink" data-color-select>
+                {colorOptions.length ? (
+                  colorOptions.map((option) => (
+                    <option value={option} selected={colorOptions[0] === option}>
+                      {option}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Standard</option>
+                )}
+              </select>
+            </label>
+            <label
+              class={`text-sm space-y-1${cutOptions.length ? '' : ' hidden'}`}
+              data-cut-field
+            >
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Cut</span>
+              <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink" data-cut-select>
+                {cutOptions.length ? (
+                  cutOptions.map((option) => (
+                    <option value={option} selected={cutOptions[0] === option}>
+                      {option}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Standard</option>
+                )}
+              </select>
             </label>
             <label
               class={`text-sm space-y-1${sizeSpec ? '' : ' hidden'}`}
@@ -447,6 +541,7 @@ void jsonLdString;
                   <option value="">Not applicable</option>
                 )}
               </select>
+              <span class="text-xs text-slate-500" data-size-helper></span>
             </label>
           </div>
         </div>
@@ -527,43 +622,50 @@ void jsonLdString;
     (() => {
       const priceEl = document.getElementById('price-display');
       if (!priceEl) return;
-      const readState = () => ({
-        baseUsd: Number(priceEl.dataset.priceUsdBase || 0),
-        labDiscount: Number(priceEl.dataset.labDiscount || -20),
-        platinumPremium: Number(priceEl.dataset.platinumPremium || 10),
-        metal14Discount: Number(priceEl.dataset.metal14kDiscount || -5),
-        naturalAvailable: priceEl.dataset.naturalAvailable !== 'false',
-        labAvailable: priceEl.dataset.labAvailable !== 'false',
-        diamondDefault: priceEl.dataset.diamondDefault || '',
-        metalDefault: priceEl.dataset.metalDefault || ''
-      });
-      let diamondMode = 'natural';
-      let metalMode = '';
       const stoneSelect = document.querySelector('[data-stone-select]');
       const metalSelect = document.querySelector('[data-metal-select]');
       const stoneWeightSelect = document.querySelector('[data-stone-weight-select]');
+      const metalWeightSelect = document.querySelector('[data-metal-weight-select]');
+      const claritySelect = document.querySelector('[data-clarity-select]');
+      const colorSelect = document.querySelector('[data-color-select]');
+      const cutSelect = document.querySelector('[data-cut-select]');
       const sizeSelect = document.querySelector('[data-size-select]');
       const stoneSummary = document.querySelector('[data-stone-summary]');
       const stoneField = document.querySelector('[data-stone-field]');
+      const stoneWeightTotal = document.querySelector('[data-stone-weight-total]');
+      const sizeHelper = document.querySelector('[data-size-helper]');
       const selectedMetal = document.querySelector('[data-selected-metal]');
       const selectedStone = document.querySelector('[data-selected-stone]');
       const bespokeLink = document.querySelector('[data-bespoke-link]');
+      const pricingApi = (priceEl.dataset.pricingApi || '').replace(/\/$/, '');
+      const baseUsd = Number(priceEl.dataset.priceBase || '');
+      const labDiscountPct = Number(priceEl.dataset.labDiscountPct || '');
+      const metal14DiscountPct = Number(priceEl.dataset.metal14kDiscountPct || '');
+      const platinumPremiumPct = Number(priceEl.dataset.platinumPremiumPct || '');
       const bespokeBase = bespokeLink ? (bespokeLink.getAttribute('data-bespoke-base') || bespokeLink.getAttribute('href') || '') : '';
       const sizeLabelEl = document.querySelector('[data-size-label]');
       const sizeWarning = document.querySelector('[data-size-warning]');
       const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-      const applyDiscount = (value, pct) => Math.round(value * (1 + pct / 100) * 100) / 100;
       const roundTo99 = (value) => {
         if (!Number.isFinite(value)) return value;
-        const lower = Math.floor(value / 100) * 100 + 99;
-        const upper = Math.ceil(value / 100) * 100 + 99;
-        return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
+        const rounded = Math.round(value / 100) * 100;
+        return rounded > 0 ? rounded - 1 : value;
       };
-      const metalTier = (value) => {
-        if (!value) return '18k';
-        if (value === 'platinum') return 'platinum';
-        if (value.startsWith('14k')) return '14k';
-        return '18k';
+      const applyPercent = (value, percent) => value * (1 + percent / 100);
+      const computeFallbackPrice = () => {
+        if (!Number.isFinite(baseUsd) || baseUsd <= 0) return null;
+        let price = baseUsd;
+        const stoneLabel = stoneSelect ? stoneSelect.value : '';
+        if (stoneLabel && /lab/i.test(stoneLabel)) {
+          price = applyPercent(price, Number.isFinite(labDiscountPct) ? labDiscountPct : -20);
+        }
+        const metalLabel = metalSelect ? metalSelect.value : '';
+        if (/14k/i.test(metalLabel)) {
+          price = applyPercent(price, Number.isFinite(metal14DiscountPct) ? metal14DiscountPct : -5);
+        } else if (/platinum/i.test(metalLabel)) {
+          price = applyPercent(price, Number.isFinite(platinumPremiumPct) ? platinumPremiumPct : 10);
+        }
+        return roundTo99(price);
       };
       const setSelectValue = (select, value) => {
         if (!select) return;
@@ -571,6 +673,43 @@ void jsonLdString;
         if (!options.length) return;
         const match = options.find((option) => option.value === value);
         select.value = match ? value : options[0].value;
+      };
+      const parseBreakdown = (value) => {
+        if (!value) return [];
+        return String(value)
+          .split(/\\n|;|,|\\|/)
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+          .map((entry) => {
+            const match = entry.match(/([0-9]*\\.?[0-9]+)\\s*(?:ct)?\\s*[xX]\\s*([0-9]*\\.?[0-9]+)/);
+            if (match) {
+              return { weight: Number(match[1]), count: Number(match[2]) };
+            }
+            const numbers = entry.match(/[0-9]*\\.?[0-9]+/g) || [];
+            if (numbers.length >= 2) {
+              const first = Number(numbers[0]);
+              const second = Number(numbers[1]);
+              const weight = first <= second ? first : second;
+              const count = first <= second ? second : first;
+              return { weight, count };
+            }
+            if (numbers.length === 1) {
+              return { weight: Number(numbers[0]), count: 1 };
+            }
+            return { weight: 0, count: 0 };
+          })
+          .filter((entry) => Number.isFinite(entry.weight) && entry.weight > 0 && Number.isFinite(entry.count) && entry.count > 0);
+      };
+      const getStoneWeightTotals = () => {
+        if (!stoneWeightSelect || !stoneWeightSelect.value) return { total: 0, isBreakdown: false };
+        const raw = String(stoneWeightSelect.value || '');
+        const breakdown = parseBreakdown(raw);
+        if (breakdown.length) {
+          const total = breakdown.reduce((sum, piece) => sum + piece.weight * piece.count, 0);
+          return { total, isBreakdown: true };
+        }
+        const numeric = Number(raw.replace(/[^0-9.]/g, ''));
+        return { total: Number.isFinite(numeric) ? numeric : 0, isBreakdown: false };
       };
       const getSelectLabel = (select) => {
         if (!select) return '';
@@ -601,47 +740,101 @@ void jsonLdString;
         }
         return true;
       };
+      const buildPayload = () => ({
+        metal: metalSelect ? metalSelect.value : '',
+        metal_weight: metalWeightSelect ? metalWeightSelect.value : '',
+        stone: stoneSelect ? stoneSelect.value : '',
+        stone_weight: (() => {
+          if (!stoneWeightSelect) return '';
+          const totals = getStoneWeightTotals();
+          if (totals.isBreakdown && totals.total > 0) {
+            return totals.total.toFixed(2);
+          }
+          return stoneWeightSelect.value || '';
+        })(),
+        diamond_breakdown: (() => {
+          if (!stoneWeightSelect) return '';
+          const totals = getStoneWeightTotals();
+          if (totals.isBreakdown) {
+            return stoneWeightSelect.value || '';
+          }
+          return '';
+        })(),
+        size: sizeSelect ? sizeSelect.value : '',
+        size_label: sizeLabelEl ? sizeLabelEl.textContent || '' : '',
+        clarity: claritySelect ? claritySelect.value : '',
+        color: colorSelect ? colorSelect.value : '',
+        cut: cutSelect ? cutSelect.value : ''
+      });
+      let refreshToken = 0;
+      const refreshPrice = async () => {
+        const payload = buildPayload();
+        const fallbackPrice = computeFallbackPrice();
+        if (!pricingApi || !payload.metal_weight) {
+          if (Number.isFinite(fallbackPrice)) {
+            priceEl.textContent = formatter.format(fallbackPrice);
+          } else {
+            priceEl.textContent = '--';
+          }
+          return;
+        }
+        const requestId = ++refreshToken;
+        priceEl.textContent = 'Calculating...';
+        try {
+          const response = await fetch(`${pricingApi}/pricing/estimate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await response.json().catch(() => ({}));
+          if (requestId !== refreshToken) return;
+          if (!response.ok || !data?.ok) {
+            if (Number.isFinite(fallbackPrice)) {
+              priceEl.textContent = formatter.format(fallbackPrice);
+            } else {
+              priceEl.textContent = '--';
+            }
+            return;
+          }
+          priceEl.textContent = formatter.format(data.price || 0);
+        } catch {
+          if (requestId !== refreshToken) return;
+          if (Number.isFinite(fallbackPrice)) {
+            priceEl.textContent = formatter.format(fallbackPrice);
+          } else {
+            priceEl.textContent = '--';
+          }
+        }
+      };
       const apply = (refreshDefaults) => {
-        const state = readState();
-        const hasStoneOptions = state.naturalAvailable || state.labAvailable;
+        const hasStoneOptions = Boolean(stoneSelect && stoneSelect.options.length);
         if (refreshDefaults) {
           if (stoneSelect && hasStoneOptions) {
-            const defaultStone = state.diamondDefault || (state.labAvailable ? 'lab' : 'natural');
+            const defaultStone = priceEl.dataset.diamondDefault || stoneSelect.value;
             setSelectValue(stoneSelect, defaultStone);
           }
           if (metalSelect) {
-            setSelectValue(metalSelect, state.metalDefault || metalSelect.value);
+            setSelectValue(metalSelect, priceEl.dataset.metalDefault || metalSelect.value);
           }
         }
-
         if (stoneField) {
           stoneField.classList.toggle('hidden', !hasStoneOptions);
         }
         if (stoneSummary) {
           stoneSummary.classList.toggle('hidden', !hasStoneOptions);
         }
-
-        const nextStone = stoneSelect ? stoneSelect.value : state.diamondDefault || 'natural';
-        diamondMode = hasStoneOptions ? nextStone : 'natural';
-        if (diamondMode === 'lab' && !state.labAvailable) diamondMode = 'natural';
-        if (diamondMode === 'natural' && !state.naturalAvailable) diamondMode = state.labAvailable ? 'lab' : 'natural';
-
-        const nextMetal = metalSelect ? metalSelect.value : state.metalDefault || '';
-        metalMode = nextMetal;
-        const tier = metalTier(nextMetal);
-
-        let price = state.baseUsd;
-        if (diamondMode === 'lab' && state.labAvailable) {
-          price = applyDiscount(price, state.labDiscount);
+        if (stoneWeightTotal) {
+          const totals = getStoneWeightTotals();
+          if (totals.total > 0) {
+            stoneWeightTotal.textContent = `Total: ${totals.total.toFixed(2)} ct`;
+          } else {
+            stoneWeightTotal.textContent = '';
+          }
         }
-        if (tier === '14k') {
-          price = applyDiscount(price, state.metal14Discount);
+        if (sizeHelper) {
+          sizeHelper.textContent = '';
         }
-        if (tier === 'platinum') {
-          price = applyDiscount(price, state.platinumPremium);
-        }
-        const roundedPrice = roundTo99(price);
-        priceEl.textContent = formatter.format(roundedPrice);
+        refreshPrice();
         if (selectedMetal && metalSelect) {
           selectedMetal.textContent = getSelectLabel(metalSelect);
         }
@@ -650,16 +843,28 @@ void jsonLdString;
         }
         if (bespokeLink && bespokeBase) {
           const params = new URLSearchParams();
-          if (metalMode) params.set('metal', metalMode);
-          if (hasStoneOptions) params.set('stone', diamondMode);
+          if (metalSelect?.value) params.set('metal', metalSelect.value);
+          if (hasStoneOptions && stoneSelect?.value) params.set('stone', stoneSelect.value);
           if (stoneWeightSelect && stoneWeightSelect.value) {
             params.set('stoneWeight', stoneWeightSelect.value);
+          }
+          if (metalWeightSelect && metalWeightSelect.value) {
+            params.set('metalWeight', metalWeightSelect.value);
+          }
+          if (claritySelect && claritySelect.value) {
+            params.set('clarity', claritySelect.value);
+          }
+          if (colorSelect && colorSelect.value) {
+            params.set('color', colorSelect.value);
+          }
+          if (cutSelect && cutSelect.value) {
+            params.set('cut', cutSelect.value);
           }
           if (sizeSelect && sizeSelect.value) {
             params.set('size', sizeSelect.value);
           }
-          if (Number.isFinite(roundedPrice)) {
-            params.set('price', String(roundedPrice));
+          if (priceEl.textContent) {
+            params.set('price', priceEl.textContent.replace(/[^0-9.]/g, ''));
           }
           params.set('source', 'product');
           bespokeLink.setAttribute('href', `${bespokeBase}?${params.toString()}`);
@@ -674,6 +879,18 @@ void jsonLdString;
       }
       if (stoneWeightSelect) {
         stoneWeightSelect.addEventListener('change', () => apply(false));
+      }
+      if (metalWeightSelect) {
+        metalWeightSelect.addEventListener('change', () => apply(false));
+      }
+      if (claritySelect) {
+        claritySelect.addEventListener('change', () => apply(false));
+      }
+      if (colorSelect) {
+        colorSelect.addEventListener('change', () => apply(false));
+      }
+      if (cutSelect) {
+        cutSelect.addEventListener('change', () => apply(false));
       }
       if (sizeSelect) {
         sizeSelect.addEventListener('change', () => apply(false));
@@ -704,6 +921,14 @@ void jsonLdString;
       const metalSelect = document.querySelector('[data-metal-select]');
       const stoneWeightField = document.querySelector('[data-stone-weight-field]');
       const stoneWeightSelect = document.querySelector('[data-stone-weight-select]');
+      const metalWeightField = document.querySelector('[data-metal-weight-field]');
+      const metalWeightSelect = document.querySelector('[data-metal-weight-select]');
+      const clarityField = document.querySelector('[data-clarity-field]');
+      const claritySelect = document.querySelector('[data-clarity-select]');
+      const colorField = document.querySelector('[data-color-field]');
+      const colorSelect = document.querySelector('[data-color-select]');
+      const cutField = document.querySelector('[data-cut-field]');
+      const cutSelect = document.querySelector('[data-cut-select]');
       const sizeField = document.querySelector('[data-size-field]');
       const sizeSelect = document.querySelector('[data-size-select]');
       const sizeLabel = document.querySelector('[data-size-label]');
@@ -712,6 +937,13 @@ void jsonLdString;
         if (!value) return [];
         return String(value)
           .split(/[|,]/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      };
+      const parseOptionList = (value) => {
+        if (!value) return [];
+        return String(value)
+          .split('|')
           .map((item) => item.trim())
           .filter(Boolean);
       };
@@ -732,18 +964,22 @@ void jsonLdString;
         return colors.length ? colors : ['yellow', 'white'];
       };
 
-      const buildMetalOptions = (value) => {
-        const colors = parseMetalColors(value);
+      const buildMetalOptions = (value, fallbackLabel) => {
+        const list = parseList(value);
+        if (list.length) {
+          return list.map((label) => ({ value: label, label }));
+        }
+        const colors = parseMetalColors(fallbackLabel);
         return [
           ...colors.map((color) => ({
-            value: `18k-${color}`,
+            value: `18K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`,
             label: `18K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`
           })),
           ...colors.map((color) => ({
-            value: `14k-${color}`,
+            value: `14K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`,
             label: `14K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`
           })),
-          { value: 'platinum', label: 'Platinum' }
+          { value: 'Platinum', label: 'Platinum' }
         ];
       };
 
@@ -816,42 +1052,45 @@ void jsonLdString;
       };
 
       const updatePricingFromProduct = (item) => {
-        const stoneTypes = parseList(item.stone_types).map(normalizeStoneType).filter(Boolean);
+        const stoneTypes = parseList(item.stone_type_options || item.stone_types)
+          .map(normalizeStoneType)
+          .filter(Boolean);
         const naturalAvailable = stoneTypes.some((entry) => /natural/i.test(entry));
         const labAvailable = stoneTypes.some((entry) => /lab/i.test(entry));
         const naturalStoneLabel =
           stoneTypes.find((entry) => /natural/i.test(entry)) || 'Natural Diamond';
         const labStoneLabel =
           stoneTypes.find((entry) => /lab/i.test(entry)) || 'Lab Grown Diamond';
-        const metalOptions = buildMetalOptions(item.metal || '18K Gold');
-        const defaultMetalValue =
-          metalOptions.find((option) => option.value.startsWith('14k'))?.value ||
-          metalOptions[0]?.value ||
-          '18k-yellow';
+        const metalOptions = buildMetalOptions(item.metal_options || item.metals, item.metal || '18K Gold');
+        const defaultMetalValue = metalOptions[0]?.value || '18K Gold';
         const stoneOptions = [
-          ...(naturalAvailable ? [{ value: 'natural', label: naturalStoneLabel }] : []),
-          ...(labAvailable ? [{ value: 'lab', label: labStoneLabel }] : [])
+          ...(naturalAvailable ? [{ value: naturalStoneLabel, label: naturalStoneLabel }] : []),
+          ...(labAvailable ? [{ value: labStoneLabel, label: labStoneLabel }] : [])
         ];
-        const stoneWeightOptions = parseList(item.stone_weight).map((option) => ({
+        const stoneWeightOptions = parseOptionList(item.stone_weight_range || item.stone_weight).map((option) => ({
+          value: option,
+          label: option
+        }));
+        const metalWeightOptions = parseOptionList(item.metal_weight_range || item.metal_weight).map((option) => ({
+          value: option,
+          label: option
+        }));
+        const clarityOptions = parseList(item.clarity_range || item.clarity).map((option) => ({
+          value: option,
+          label: option
+        }));
+        const colorOptions = parseList(item.color_range || item.color).map((option) => ({
+          value: option,
+          label: option
+        }));
+        const cutOptions = parseList(item.cut_range || item.cut).map((option) => ({
           value: option,
           label: option
         }));
         const sizeSpec = buildSizeSpec(item.tags, item.category || item.categories);
 
-        priceEl.dataset.priceUsdBase = String(parseNumber(item.price_usd_natural) || 0);
-        priceEl.dataset.labDiscount = String(
-          parseNumber(item.lab_discount_pct ?? -20) ?? -20
-        );
-        priceEl.dataset.platinumPremium = String(
-          parseNumber(item.metal_platinum_premium ?? 10) ?? 10
-        );
-        priceEl.dataset.metal14kDiscount = String(
-          parseNumber(item.metal_14k_discount_pct ?? -5) ?? -5
-        );
         if (stoneTypes.length) {
-          priceEl.dataset.naturalAvailable = String(naturalAvailable);
-          priceEl.dataset.labAvailable = String(labAvailable);
-          priceEl.dataset.diamondDefault = labAvailable ? 'lab' : naturalAvailable ? 'natural' : 'natural';
+          priceEl.dataset.diamondDefault = labAvailable ? labStoneLabel : naturalStoneLabel;
         }
         priceEl.dataset.metalDefault = defaultMetalValue;
 
@@ -859,7 +1098,7 @@ void jsonLdString;
           setSelectOptions(
             stoneSelect,
             stoneOptions,
-            priceEl.dataset.diamondDefault || (labAvailable ? 'lab' : 'natural')
+            priceEl.dataset.diamondDefault || (labAvailable ? labStoneLabel : naturalStoneLabel)
           );
           stoneSelect.disabled = stoneOptions.length === 0;
         }
@@ -875,6 +1114,34 @@ void jsonLdString;
         }
         if (stoneWeightField) {
           stoneWeightField.classList.toggle('hidden', stoneWeightOptions.length === 0);
+        }
+        if (metalWeightSelect) {
+          setSelectOptions(metalWeightSelect, metalWeightOptions, metalWeightOptions[0]?.value);
+          metalWeightSelect.disabled = metalWeightOptions.length === 0;
+        }
+        if (metalWeightField) {
+          metalWeightField.classList.toggle('hidden', metalWeightOptions.length === 0);
+        }
+        if (claritySelect) {
+          setSelectOptions(claritySelect, clarityOptions, clarityOptions[0]?.value);
+          claritySelect.disabled = clarityOptions.length === 0;
+        }
+        if (clarityField) {
+          clarityField.classList.toggle('hidden', clarityOptions.length === 0);
+        }
+        if (colorSelect) {
+          setSelectOptions(colorSelect, colorOptions, colorOptions[0]?.value);
+          colorSelect.disabled = colorOptions.length === 0;
+        }
+        if (colorField) {
+          colorField.classList.toggle('hidden', colorOptions.length === 0);
+        }
+        if (cutSelect) {
+          setSelectOptions(cutSelect, cutOptions, cutOptions[0]?.value);
+          cutSelect.disabled = cutOptions.length === 0;
+        }
+        if (cutField) {
+          cutField.classList.toggle('hidden', cutOptions.length === 0);
         }
         if (sizeField && sizeSelect && sizeLabel) {
           if (sizeSpec) {

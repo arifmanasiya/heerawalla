@@ -216,6 +216,7 @@
       "stone",
       "stone_weight",
       "diamond_breakdown",
+      "size",
       "quote_metal_options",
       "quote_option_1_clarity",
       "quote_option_1_color",
@@ -397,6 +398,9 @@
     diamondBreakdown: document.querySelector("[data-diamond-breakdown]"),
     diamondBreakdownRows: document.querySelector("[data-diamond-breakdown-rows]"),
     diamondBreakdownAdd: document.querySelector("[data-diamond-breakdown-add]"),
+    sizeRing: document.querySelector("[data-size-ring] input"),
+    sizeBracelet: document.querySelector("[data-size-bracelet] input"),
+    sizeChain: document.querySelector("[data-size-chain] input"),
     detailsSave: document.querySelector("[data-details-save]"),
     primaryAction: document.querySelector("[data-primary-action]"),
     notesSave: document.querySelector("[data-notes-save]"),
@@ -685,6 +689,105 @@
     return rows;
   }
 
+  function buildSizingSpec(entry) {
+    const category = String(entry?.category || entry?.categories || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+    if (category.includes("set")) {
+      return { ring: true, bracelet: true, chain: true };
+    }
+    return {
+      ring: category.includes("ring") || category.includes("band"),
+      bracelet: category.includes("bracelet") || category.includes("bangle"),
+      chain: category.includes("pendant") || category.includes("necklace") || category.includes("chain"),
+    };
+  }
+
+  let isSyncingSizing = false;
+
+  function buildSizeSummary(values) {
+    const parts = [];
+    if (isFilled(values.ring)) parts.push(`Ring size: ${values.ring}`);
+    if (isFilled(values.bracelet)) parts.push(`Bracelet size: ${values.bracelet}`);
+    if (isFilled(values.chain)) parts.push(`Chain size: ${values.chain}`);
+    return parts.join(" | ");
+  }
+
+  function syncSizingToSizeField() {
+    if (isSyncingSizing) return;
+    const sizeField = getEditField("size");
+    if (!sizeField) return;
+    const values = {
+      ring: ui.sizeRing ? ui.sizeRing.value.trim() : "",
+      bracelet: ui.sizeBracelet ? ui.sizeBracelet.value.trim() : "",
+      chain: ui.sizeChain ? ui.sizeChain.value.trim() : "",
+    };
+    const summary = buildSizeSummary(values);
+    if (summary) {
+      sizeField.value = summary;
+    }
+  }
+
+  function applySizingVisibility(spec) {
+    const toggle = (node, show) => {
+      if (!node) return;
+      const wrapper = node.closest(".field");
+      if (wrapper) wrapper.classList.toggle("is-hidden", !show);
+    };
+    if (state.tab !== "quotes") {
+      toggle(ui.sizeRing, false);
+      toggle(ui.sizeBracelet, false);
+      toggle(ui.sizeChain, false);
+      return;
+    }
+    toggle(ui.sizeRing, Boolean(spec?.ring));
+    toggle(ui.sizeBracelet, Boolean(spec?.bracelet));
+    toggle(ui.sizeChain, Boolean(spec?.chain));
+  }
+
+  async function refreshSizingInputs(item) {
+    if (state.tab !== "quotes") return;
+    const catalog = await loadCatalog();
+    const entry = resolveCatalogEntry(item, catalog);
+    const sizing = getSizingBlob(item);
+    const textSizing = parseSizingFromText(getSizingText(item));
+    isSyncingSizing = true;
+    const ringValue = getSizingValue(item, sizing, textSizing, ["ring_size", "ring", "ringSize"]);
+    const braceletValue = getSizingValue(item, sizing, textSizing, [
+      "wrist_size",
+      "wrist",
+      "bracelet_size",
+      "bracelet",
+    ]);
+    const chainValue = getSizingValue(item, sizing, textSizing, [
+      "neck_size",
+      "neck",
+      "chain_size",
+      "chain_length",
+      "necklace_size",
+      "necklace_length",
+    ]);
+    let spec = buildSizingSpec(entry);
+    if (!spec.ring && !spec.bracelet && !spec.chain) {
+      spec = {
+        ring: isFilled(ringValue),
+        bracelet: isFilled(braceletValue),
+        chain: isFilled(chainValue),
+      };
+    }
+    applySizingVisibility(spec);
+    if (ui.sizeRing) {
+      ui.sizeRing.value = ringValue;
+    }
+    if (ui.sizeBracelet) {
+      ui.sizeBracelet.value = braceletValue;
+    }
+    if (ui.sizeChain) {
+      ui.sizeChain.value = chainValue;
+    }
+    isSyncingSizing = false;
+  }
+
   function getContactNotes(item) {
     if (!item) return "";
     const candidates = [
@@ -914,15 +1017,43 @@
     if (state.tab !== "quotes" || quotePricingInFlight) return;
     const fields = collectQuotePricingFields();
     if (!fields) return;
+    const basePayload = {
+      metal: fields.metal || "",
+      metal_weight: fields.metal_weight || "",
+      stone: fields.stone || "",
+      stone_weight: fields.stone_weight || "",
+      diamond_breakdown: fields.diamond_breakdown || "",
+      timeline: fields.timeline || "",
+      timeline_adjustment_weeks: fields.timeline_adjustment_weeks || "",
+      quote_discount_type: fields.quote_discount_type || "",
+      quote_discount_percent: fields.quote_discount_percent || "",
+      size: getEditValue("size") || "",
+      size_label: "",
+      size_ring: ui.sizeRing ? ui.sizeRing.value.trim() : "",
+      size_bracelet: ui.sizeBracelet ? ui.sizeBracelet.value.trim() : "",
+      size_chain: ui.sizeChain ? ui.sizeChain.value.trim() : "",
+    };
+    const pricingBase = getCatalogBase();
     quotePricingInFlight = true;
     try {
-      const result = await apiFetch("/quotes/price", {
-        method: "POST",
-        body: JSON.stringify({ fields, force: true }),
+      const updates = {};
+      const goldOnly = isGoldOnlyQuote();
+      const requests = QUOTE_OPTION_FIELDS.map(async (option, index) => {
+        const clarity = fields[option.clarity] || "";
+        const color = fields[option.color] || "";
+        if (!clarity && !color && !(goldOnly && index === 0)) return;
+        const payload = { ...basePayload, clarity, color };
+        const response = await fetch(`${pricingBase}/pricing/estimate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.ok) return;
+        updates[option.price] = String(data.price || "");
       });
-      if (result.ok) {
-        applyQuotePricing(result.fields || {});
-      }
+      await Promise.all(requests);
+      applyQuotePricing(updates);
     } catch (error) {
       return;
     } finally {
@@ -1593,6 +1724,7 @@
       ui.detailGrid.innerHTML = renderDetailRows(detailFields);
     }
     refreshQuoteMedia(item);
+    refreshSizingInputs(item);
 
     ui.editFields.forEach((field) => {
       const key = field.dataset.field;
@@ -1683,6 +1815,9 @@
     ui.quoteSection.classList.toggle("is-hidden", state.tab !== "quotes");
     toggleDiamondBreakdownVisibility();
     applyGoldOnlyQuoteState();
+    if (state.tab !== "quotes") {
+      applySizingVisibility(null);
+    }
   }
 
   function syncQuoteMetalInput() {
@@ -2603,6 +2738,17 @@
         scheduleQuotePricingUpdate();
       });
     }
+
+    [ui.sizeRing, ui.sizeBracelet, ui.sizeChain].forEach((input) => {
+      if (!input) return;
+      ["input", "change"].forEach((eventName) => {
+        input.addEventListener(eventName, () => {
+          syncSizingToSizeField();
+          scheduleQuotePricingUpdate();
+          updatePrimaryActionState();
+        });
+      });
+    });
 
     if (ui.primaryAction) {
       ui.primaryAction.addEventListener("click", () => {

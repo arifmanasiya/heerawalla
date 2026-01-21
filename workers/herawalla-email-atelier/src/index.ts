@@ -115,6 +115,92 @@ export default {
       return verifyResponse;
     }
 
+    if (url.pathname === "/pricing/estimate") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+
+      if (request.method !== "POST") {
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+
+      if (!allowedOrigin) {
+        return new Response("Forbidden", { status: 403 });
+      }
+
+      try {
+        const payload = await safeJson(request);
+        if (!isRecord(payload)) {
+          return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const record = {
+          metal: getString(payload.metal),
+          metal_weight: getString(payload.metal_weight || payload.metalWeight),
+          stone: getString(payload.stone),
+          stone_weight: getString(payload.stone_weight || payload.stoneWeight),
+          diamond_breakdown: getString(payload.diamond_breakdown || payload.diamondBreakdown),
+          size: getString(payload.size),
+          size_label: getString(payload.size_label || payload.sizeLabel),
+          size_ring: getString(payload.size_ring || payload.sizeRing),
+          size_bracelet: getString(payload.size_bracelet || payload.sizeBracelet),
+          size_chain: getString(payload.size_chain || payload.sizeChain),
+          size_neck: getString(payload.size_neck || payload.sizeNeck),
+          size_wrist: getString(payload.size_wrist || payload.sizeWrist),
+          quote_discount_type: getString(payload.quote_discount_type || payload.quoteDiscountType),
+          quote_discount_percent: getString(payload.quote_discount_percent || payload.quoteDiscountPercent),
+        };
+        const clarity = getString(payload.clarity);
+        const color = getString(payload.color);
+        const costValues = await loadCostChartValues(env);
+        const diamondPrices = await loadDiamondPriceChart(env);
+        const adjustments = await loadPriceChartAdjustments(env);
+        const discountDetails = resolveDiscountDetails(costValues, record);
+        const result = computeOptionPriceFromCosts(
+          record,
+          clarity,
+          color,
+          costValues,
+          diamondPrices,
+          adjustments,
+          discountDetails
+        );
+        if (!result.ok) {
+          return new Response(JSON.stringify({ ok: false, error: result.error }), {
+            status: 400,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            price: Math.round(result.price),
+            meta: {
+              discountSummary: discountDetails.summary,
+              discountPercent: discountDetails.appliedPercent,
+            },
+            debug: result.debug || null,
+          }),
+          { status: 200, headers: buildCorsHeaders(allowedOrigin, true) }
+        );
+      } catch (error) {
+        const message = String(error);
+        logError("pricing_estimate_error", { message });
+        return new Response(JSON.stringify({ ok: false, error: "pricing_failed" }), {
+          status: 500,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+    }
+
     if (url.pathname === CATALOG_PATH) {
       if (request.method === "OPTIONS") {
         return new Response(null, {
@@ -3081,9 +3167,35 @@ function parsePriceValue(value: string) {
 
 function parseNumberValue(value: string) {
   if (!value) return NaN;
+  if (value.includes("|")) {
+    const parts = value
+      .split("|")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (parts.length) {
+      return parseNumberValue(parts[0]);
+    }
+  }
+  const rangeMatch = value.match(/^\s*([0-9]*\.?[0-9]+)\s*-\s*([0-9]*\.?[0-9]+)\b/);
+  if (rangeMatch) {
+    const min = Number(rangeMatch[1]);
+    const max = Number(rangeMatch[2]);
+    if (Number.isFinite(min) && Number.isFinite(max)) {
+      return (min + max) / 2;
+    }
+  }
   const cleaned = value.replace(/[^0-9.+-]/g, "");
   const numeric = Number(cleaned);
   return Number.isNaN(numeric) ? NaN : numeric;
+}
+
+function parseSizeInches(value: string) {
+  if (!value) return NaN;
+  const cleaned = value.replace(/,/g, " ");
+  const match = cleaned.match(/([0-9]*\.?[0-9]+)/);
+  if (!match) return NaN;
+  const numeric = Number(match[1]);
+  return Number.isFinite(numeric) ? numeric : NaN;
 }
 
 function parsePercentValue(value: string) {
@@ -3132,41 +3244,73 @@ function findAdjustmentMultiplier(adjustments: Record<string, PriceAdjustment>, 
 async function loadPriceChartAdjustments(env: Env): Promise<Record<string, PriceAdjustment>> {
   const config = getPriceChartSheetConfig(env);
   if (!config) return {};
-  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
-  await ensureSheetHeader(env, config, PRICE_CHART_HEADER, cacheKey);
-  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
-  const headerConfig = resolveHeaderConfig(headerRow, PRICE_CHART_HEADER, "metal");
-  const rows = await fetchSheetValues(
-    env,
-    config.sheetId,
-    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
-  );
-  const adjustments: Record<string, PriceAdjustment> = {};
-  rows.forEach((row) => {
-    const record = mapSheetRowToRecord(headerConfig.header, row);
-    const metal = normalizeMetalOption(record.metal || "");
-    if (!metal) return;
-    const adjustmentType = normalizeAdjustmentType(record.adjustment_type || "");
-    const rawValue = getString(record.adjustment_value);
-    const value = parseAdjustmentValue(rawValue || "", adjustmentType);
-    let mode: "delta" | "multiplier" | undefined;
-    if (adjustmentType === "percent") {
-      const numeric = parseNumberValue(rawValue || "");
-      const hasPercent = rawValue.includes("%");
-      if (Number.isFinite(numeric)) {
-        if (numeric < 0) {
-          mode = "delta";
-        } else if (hasPercent || numeric >= 2) {
-          mode = "delta";
-        } else {
-          mode = "multiplier";
+  try {
+    const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+    await ensureSheetHeader(env, config, PRICE_CHART_HEADER, cacheKey);
+    const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+    const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+    const headerConfig = resolveHeaderConfig(headerRow, PRICE_CHART_HEADER, "metal");
+    const rows = await fetchSheetValues(
+      env,
+      config.sheetId,
+      `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+    );
+    const adjustments: Record<string, PriceAdjustment> = {};
+    rows.forEach((row) => {
+      const record = mapSheetRowToRecord(headerConfig.header, row);
+      const metal = normalizeMetalOption(record.metal || "");
+      if (!metal) return;
+      const adjustmentType = normalizeAdjustmentType(record.adjustment_type || "");
+      const rawValue = getString(record.adjustment_value);
+      const value = parseAdjustmentValue(rawValue || "", adjustmentType);
+      let mode: "delta" | "multiplier" | undefined;
+      if (adjustmentType === "percent") {
+        const numeric = parseNumberValue(rawValue || "");
+        const hasPercent = rawValue.includes("%");
+        if (Number.isFinite(numeric)) {
+          if (numeric < 0) {
+            mode = "delta";
+          } else if (hasPercent || numeric >= 2) {
+            mode = "delta";
+          } else {
+            mode = "multiplier";
+          }
         }
       }
+      adjustments[metal] = { type: adjustmentType, value, mode };
+    });
+    return adjustments;
+  } catch {
+    try {
+      const records = await fetchPublicSheetRecords(config, ["metal", "adjustment_type", "adjustment_value"]);
+      const adjustments: Record<string, PriceAdjustment> = {};
+      records.forEach((record) => {
+        const metal = normalizeMetalOption(record.metal || "");
+        if (!metal) return;
+        const adjustmentType = normalizeAdjustmentType(record.adjustment_type || "");
+        const rawValue = getString(record.adjustment_value);
+        const value = parseAdjustmentValue(rawValue || "", adjustmentType);
+        let mode: "delta" | "multiplier" | undefined;
+        if (adjustmentType === "percent") {
+          const numeric = parseNumberValue(rawValue || "");
+          const hasPercent = rawValue.includes("%");
+          if (Number.isFinite(numeric)) {
+            if (numeric < 0) {
+              mode = "delta";
+            } else if (hasPercent || numeric >= 2) {
+              mode = "delta";
+            } else {
+              mode = "multiplier";
+            }
+          }
+        }
+        adjustments[metal] = { type: adjustmentType, value, mode };
+      });
+      return adjustments;
+    } catch {
+      return {};
     }
-    adjustments[metal] = { type: adjustmentType, value, mode };
-  });
-  return adjustments;
+  }
 }
 
 type CostChartValues = Record<string, string>;
@@ -3177,6 +3321,43 @@ type DiamondPriceEntry = {
   weightMax: number;
   pricePerCt: number;
 };
+
+async function fetchPublicSheetRecords(config: SheetConfig, expectedHeaders: string[]) {
+  const candidateNames = [
+    config.sheetName,
+    config.sheetName.replace(/_/g, " "),
+  ].filter((value, index, list) => value && list.indexOf(value) === index);
+  for (const name of candidateNames) {
+    const url = buildSheetsCsvUrlByName(config.sheetId, name);
+    const response = await fetch(url);
+    const csv = await response.text();
+    if (!response.ok) {
+      logError("public_sheet_fetch_failed", {
+        sheet: name,
+        status: response.status,
+        snippet: csv.slice(0, 120),
+      });
+      continue;
+    }
+    const parsed = parseCsvRecordsLoose(csv);
+    if (expectedHeaders.every((header) => parsed.headers.includes(header))) {
+      return parsed.records;
+    }
+    const fallback = parseDelimitedRecords(csv);
+    if (expectedHeaders.every((header) => fallback.headers.includes(header))) {
+      return fallback.records;
+    }
+    const merged = parseMergedHeaderRecords(csv, expectedHeaders);
+    if (merged && expectedHeaders.every((header) => merged.headers.includes(header))) {
+      return merged.records;
+    }
+    logError("public_sheet_headers_missing", {
+      sheet: name,
+      headers: parsed.headers,
+    });
+  }
+  throw new Error("public_sheet_missing_headers");
+}
 
 function normalizeCostKey(value: string) {
   return value
@@ -3198,57 +3379,103 @@ function isDiamondWildcard(value: string) {
 async function loadCostChartValues(env: Env): Promise<CostChartValues> {
   const config = getCostChartSheetConfig(env);
   if (!config) return {};
-  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
-  await ensureSheetHeader(env, config, COST_CHART_HEADER, cacheKey);
-  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
-  const headerConfig = resolveHeaderConfig(headerRow, COST_CHART_HEADER, "key");
-  const rows = await fetchSheetValues(
-    env,
-    config.sheetId,
-    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
-  );
-  const values: CostChartValues = {};
-  rows.forEach((row) => {
-    const record = mapSheetRowToRecord(headerConfig.header, row);
-    const key = normalizeCostKey(record.key || "");
-    if (!key) return;
-    values[key] = record.value || "";
-  });
-  return values;
+  try {
+    const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+    await ensureSheetHeader(env, config, COST_CHART_HEADER, cacheKey);
+    const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+    const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+    const headerConfig = resolveHeaderConfig(headerRow, COST_CHART_HEADER, "key");
+    const rows = await fetchSheetValues(
+      env,
+      config.sheetId,
+      `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+    );
+    const values: CostChartValues = {};
+    rows.forEach((row) => {
+      const record = mapSheetRowToRecord(headerConfig.header, row);
+      const key = normalizeCostKey(record.key || "");
+      if (!key) return;
+      values[key] = record.value || "";
+    });
+    return values;
+  } catch {
+    try {
+      const records = await fetchPublicSheetRecords(config, ["key", "value"]);
+      const values: CostChartValues = {};
+      records.forEach((record) => {
+        const key = normalizeCostKey(record.key || "");
+        if (!key) return;
+        values[key] = record.value || "";
+      });
+      return values;
+    } catch {
+      return {};
+    }
+  }
 }
 
 async function loadDiamondPriceChart(env: Env): Promise<DiamondPriceEntry[]> {
   const config = getDiamondPriceChartSheetConfig(env);
   if (!config) return [];
-  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
-  await ensureSheetHeader(env, config, DIAMOND_PRICE_CHART_HEADER, cacheKey);
-  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
-  const headerConfig = resolveHeaderConfig(headerRow, DIAMOND_PRICE_CHART_HEADER, "price_per_ct");
-  const rows = await fetchSheetValues(
-    env,
-    config.sheetId,
-    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
-  );
-  const entries: DiamondPriceEntry[] = [];
-  rows.forEach((row) => {
-    const record = mapSheetRowToRecord(headerConfig.header, row);
-    const pricePerCt = parseNumberValue(record.price_per_ct || "");
-    if (!Number.isFinite(pricePerCt) || pricePerCt <= 0) return;
-    const weightMin = parseNumberValue(record.weight_min || "");
-    const weightMaxRaw = parseNumberValue(record.weight_max || "");
-    if (!Number.isFinite(weightMin) || weightMin < 0) return;
-    const weightMax = Number.isFinite(weightMaxRaw) && weightMaxRaw > 0 ? weightMaxRaw : Infinity;
-    entries.push({
-      clarity: normalizeDiamondToken(record.clarity || ""),
-      color: normalizeDiamondToken(record.color || ""),
-      weightMin,
-      weightMax,
-      pricePerCt,
+  try {
+    const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+    await ensureSheetHeader(env, config, DIAMOND_PRICE_CHART_HEADER, cacheKey);
+    const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+    const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+    const headerConfig = resolveHeaderConfig(headerRow, DIAMOND_PRICE_CHART_HEADER, "price_per_ct");
+    const rows = await fetchSheetValues(
+      env,
+      config.sheetId,
+      `${config.sheetName}!A${headerConfig.rowStart}:AZ`
+    );
+    const entries: DiamondPriceEntry[] = [];
+    rows.forEach((row) => {
+      const record = mapSheetRowToRecord(headerConfig.header, row);
+      const pricePerCt = parseNumberValue(record.price_per_ct || "");
+      if (!Number.isFinite(pricePerCt) || pricePerCt <= 0) return;
+      const weightMin = parseNumberValue(record.weight_min || "");
+      const weightMaxRaw = parseNumberValue(record.weight_max || "");
+      if (!Number.isFinite(weightMin) || weightMin < 0) return;
+      const weightMax = Number.isFinite(weightMaxRaw) && weightMaxRaw > 0 ? weightMaxRaw : Infinity;
+      entries.push({
+        clarity: normalizeDiamondToken(record.clarity || ""),
+        color: normalizeDiamondToken(record.color || ""),
+        weightMin,
+        weightMax,
+        pricePerCt,
+      });
     });
-  });
-  return entries;
+    return entries;
+  } catch {
+    try {
+      const records = await fetchPublicSheetRecords(config, [
+        "clarity",
+        "color",
+        "weight_min",
+        "weight_max",
+        "price_per_ct",
+      ]);
+      const entries: DiamondPriceEntry[] = [];
+      records.forEach((record) => {
+        const pricePerCt = parseNumberValue(record.price_per_ct || "");
+        if (!Number.isFinite(pricePerCt) || pricePerCt <= 0) return;
+        const weightMin = parseNumberValue(record.weight_min || "");
+        const weightMaxRaw = parseNumberValue(record.weight_max || "");
+        if (!Number.isFinite(weightMin) || weightMin < 0) return;
+        const weightMax = Number.isFinite(weightMaxRaw) && weightMaxRaw > 0 ? weightMaxRaw : Infinity;
+        entries.push({
+          clarity: normalizeDiamondToken(record.clarity || ""),
+          color: normalizeDiamondToken(record.color || ""),
+          weightMin,
+          weightMax,
+          pricePerCt,
+        });
+      });
+      return entries;
+    } catch {
+      return [];
+    }
+  }
 }
 
 function getCostNumber(values: CostChartValues, keys: string[], fallback = 0) {
@@ -3359,7 +3586,7 @@ type DiamondPiece = { weight: number; count: number };
 function parseDiamondBreakdown(input: string): DiamondPiece[] {
   if (!input) return [];
   return input
-    .split(/\n|;|,/)
+    .split(/\n|;|,|\|/)
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
@@ -3413,6 +3640,9 @@ function findDiamondPricePerCt(
 function parseDiamondTokens(value: string) {
   if (!value) return [];
   const normalized = normalizeDiamondToken(value);
+  if (normalized === "VVS1" || normalized === "VVS2") {
+    return [normalized, "IF-VVS"];
+  }
   const rangeMatch = normalized.match(/^([A-Z])\s*-\s*([A-Z])$/);
   if (rangeMatch) {
     const start = rangeMatch[1].charCodeAt(0);
@@ -3446,8 +3676,8 @@ function findDiamondPricePerCtAverage(
   let bestRange = Infinity;
   let sum = 0;
   let count = 0;
+  let nearest: { diff: number; price: number } | null = null;
   for (const entry of entries) {
-    if (weight < entry.weightMin || weight > entry.weightMax) continue;
     const clarityMatch = matchesDiamondToken(entry.clarity, clarityTokens, true);
     const colorMatch = matchesDiamondToken(entry.color, colorTokens, false);
     if (!clarityMatch || !colorMatch) continue;
@@ -3455,18 +3685,25 @@ function findDiamondPricePerCtAverage(
     const colorScore = isDiamondWildcard(entry.color) ? 0 : 1;
     const score = clarityScore + colorScore;
     const range = entry.weightMax - entry.weightMin;
-    if (score > bestScore || (score === bestScore && range < bestRange)) {
-      bestScore = score;
-      bestRange = range;
-      sum = entry.pricePerCt;
-      count = 1;
-    } else if (score === bestScore && range === bestRange) {
-      sum += entry.pricePerCt;
-      count += 1;
+    if (weight >= entry.weightMin && weight <= entry.weightMax) {
+      if (score > bestScore || (score === bestScore && range < bestRange)) {
+        bestScore = score;
+        bestRange = range;
+        sum = entry.pricePerCt;
+        count = 1;
+      } else if (score === bestScore && range === bestRange) {
+        sum += entry.pricePerCt;
+        count += 1;
+      }
+      continue;
+    }
+    const diff = weight < entry.weightMin ? entry.weightMin - weight : weight - entry.weightMax;
+    if (!nearest || diff < nearest.diff || (diff === nearest.diff && score > bestScore)) {
+      nearest = { diff, price: entry.pricePerCt };
     }
   }
-  if (!count) return null;
-  return sum / count;
+  if (count) return sum / count;
+  return nearest ? nearest.price : null;
 }
 
 function computeOptionPriceFromCosts(
@@ -3478,12 +3715,54 @@ function computeOptionPriceFromCosts(
   adjustments?: Record<string, PriceAdjustment>,
   discountDetails?: DiscountDetails
 ) {
-  const metalWeight = parseNumberValue(record.metal_weight || "");
+  let metalWeight = parseNumberValue(record.metal_weight || "");
   if (!Number.isFinite(metalWeight) || metalWeight <= 0) {
     return { ok: false, error: "missing_metal_weight" } as const;
   }
 
-  const breakdown = parseDiamondBreakdown(record.diamond_breakdown || "");
+  const sizeValue = record.size || "";
+  const sizeLabel = record.size_label || "";
+  const sizeText = `${sizeLabel} ${sizeValue}`.toLowerCase();
+  const ringValue = record.size_ring || "";
+  const braceletValue = record.size_bracelet || record.size_wrist || "";
+  const chainValue = record.size_chain || record.size_neck || "";
+  const isChainSize =
+    sizeText.includes("chain") ||
+    sizeValue.includes("\"") ||
+    sizeText.includes("inch") ||
+    sizeText.includes(" in");
+  const isBraceletSize = sizeText.includes("bracelet") || sizeText.includes("wrist");
+  const isRingSize = sizeText.includes("ring");
+  const chainLength = parseSizeInches(chainValue) || (isChainSize ? parseSizeInches(sizeValue) : NaN);
+  const chainStep = getCostNumber(costValues, ["chain_length_weight_step_g"]);
+  const chainBase = getCostNumber(costValues, ["chain_length_base_inches"], 16);
+  const chainAdjustment =
+    Number.isFinite(chainLength) && chainLength > chainBase && chainStep > 0
+      ? (chainLength - chainBase) * chainStep
+      : 0;
+  const braceletLength = parseSizeInches(braceletValue) || (isBraceletSize ? parseSizeInches(sizeValue) : NaN);
+  const braceletStep = getCostNumber(costValues, ["bracelet_size_weight_step_g"]);
+  const braceletBase = getCostNumber(costValues, ["bracelet_size_base"], 0);
+  const braceletAdjustment =
+    Number.isFinite(braceletLength) && braceletLength > braceletBase && braceletStep > 0
+      ? (braceletLength - braceletBase) * braceletStep
+      : 0;
+  const ringSize = parseNumberValue(ringValue) || (isRingSize ? parseNumberValue(sizeValue) : NaN);
+  const ringStep = getCostNumber(costValues, ["ring_size_weight_step_g"]);
+  const ringBase = getCostNumber(costValues, ["ring_size_base"], 0);
+  const ringAdjustment =
+    Number.isFinite(ringSize) && ringSize > ringBase && ringStep > 0
+      ? (ringSize - ringBase) * ringStep
+      : 0;
+  const sizeAdjustment = chainAdjustment + braceletAdjustment + ringAdjustment;
+  if (sizeAdjustment > 0) {
+    metalWeight += sizeAdjustment;
+  }
+
+  let breakdown = parseDiamondBreakdown(record.diamond_breakdown || "");
+  if (!breakdown.length && record.stone_weight) {
+    breakdown = parseDiamondBreakdown(record.stone_weight || "");
+  }
   const fallbackStoneWeight = parseNumberValue(record.stone_weight || "");
   const pieces = breakdown.length
     ? breakdown
@@ -3491,32 +3770,42 @@ function computeOptionPriceFromCosts(
     ? [{ weight: fallbackStoneWeight, count: 1 }]
     : [];
 
-  const goldPricePerGram = getCostNumber(costValues, ["gold_price_per_gram_usd"]);
+  const goldPricePerGram = getCostNumber(costValues, [
+    "gold_price_per_gram_usd",
+    "gold_price_per_gram",
+    "gold_price_gram",
+    "gold_per_gram",
+  ]);
   const requestedMetal = normalizeMetalOption(record.metal || "");
   const baseMetalKey = requestedMetal || "18K";
   let metalCostPerGram = getCostNumber(costValues, [
     "metal_cost_18k_per_gram",
+    "metal_cost_18k_usd_per_gram",
     "metal_cost_per_gram_18k",
     "metal_cost_per_gram",
+    "metal_cost_per_gram_usd",
   ]);
   if ((!Number.isFinite(metalCostPerGram) || metalCostPerGram <= 0) && goldPricePerGram > 0) {
-    const adjustmentMap = adjustments || {};
-    const baseKey = resolveMetalPricingKey(baseMetalKey, requestedMetal);
-    const baseFactor =
-      findAdjustmentMultiplier(adjustmentMap, [
-        baseKey,
-        baseMetalKey,
-        "18K",
-        "18K Yellow Gold",
-        "18K White Gold",
-      ]) || 0;
-    if (baseFactor > 0) {
-      metalCostPerGram = goldPricePerGram * baseFactor;
-    } else {
-      metalCostPerGram = goldPricePerGram * 0.75;
-    }
+    metalCostPerGram = goldPricePerGram;
+  }
+  const metalCostPerGramBase = metalCostPerGram;
+  const adjustmentMap = adjustments || {};
+  const metalAdjustmentKey = resolveMetalPricingKey(baseMetalKey, requestedMetal);
+  const metalAdjustment =
+    adjustmentMap[metalAdjustmentKey] ||
+    adjustmentMap[baseMetalKey] ||
+    adjustmentMap["18K"] ||
+    adjustmentMap["18K Yellow Gold"] ||
+    adjustmentMap["18K White Gold"];
+  if (metalAdjustment && Number.isFinite(metalCostPerGram) && metalCostPerGram > 0) {
+    metalCostPerGram = applyPriceAdjustment(metalCostPerGram, metalAdjustment);
   }
   if (!Number.isFinite(metalCostPerGram) || metalCostPerGram <= 0) {
+    logError("missing_metal_cost", {
+      keys: Object.keys(costValues),
+      goldPricePerGram,
+      metal: record.metal || "",
+    });
     return { ok: false, error: "missing_metal_cost" } as const;
   }
   const metalCost = metalCostPerGram * metalWeight;
@@ -3526,13 +3815,29 @@ function computeOptionPriceFromCosts(
   const colorTokens = parseDiamondTokens(color || "");
   if (pieces.length) {
     for (const piece of pieces) {
-      const pricePerCt = findDiamondPricePerCtAverage(
+      let pricePerCt = findDiamondPricePerCtAverage(
         diamondPrices,
         clarityTokens,
         colorTokens,
         piece.weight
       );
       if (!pricePerCt) {
+        pricePerCt = findDiamondPricePerCtAverage(diamondPrices, [], colorTokens, piece.weight);
+      }
+      if (!pricePerCt) {
+        pricePerCt = findDiamondPricePerCtAverage(diamondPrices, clarityTokens, [], piece.weight);
+      }
+      if (!pricePerCt) {
+        pricePerCt = findDiamondPricePerCtAverage(diamondPrices, [], [], piece.weight);
+      }
+      if (!pricePerCt) {
+        logError("diamond_price_missing", {
+          pieceWeight: piece.weight,
+          pieceCount: piece.count,
+          clarityTokens,
+          colorTokens,
+          availableEntries: diamondPrices.length,
+        });
         return { ok: false, error: "diamond_price_missing" } as const;
       }
       diamondCost += pricePerCt * piece.weight * piece.count;
@@ -3591,7 +3896,31 @@ function computeOptionPriceFromCosts(
   const discount = discountDetails || resolveDiscountDetails(costValues);
   const finalPrice = priceWithMargin * (1 - discount.appliedPercent);
 
-  return { ok: true, price: Math.round(finalPrice), discount } as const;
+  return {
+    ok: true,
+    price: Math.round(finalPrice),
+    discount,
+    debug: {
+      metalCostPerGramBase,
+      metalCostPerGram,
+      metalAdjustmentKey,
+      metalAdjustmentType: metalAdjustment?.type || "",
+      metalAdjustmentValue: metalAdjustment?.value ?? null,
+      metalAdjustmentMode: metalAdjustment?.mode || "",
+      chainAdjustment,
+      chainLength,
+      chainStep,
+      chainBase,
+      braceletAdjustment,
+      braceletLength,
+      braceletStep,
+      braceletBase,
+      ringAdjustment,
+      ringSize,
+      ringStep,
+      ringBase,
+    },
+  } as const;
 }
 
 function buildQuoteOptions(
@@ -4728,21 +5057,28 @@ function parseCsv(input: string) {
       continue;
     }
 
-    if (char === ",") {
+    if (char === "," || char === "\t") {
       row.push(field);
       field = "";
       continue;
     }
 
-    if (char === "\n") {
+    if (
+      char === "\n" ||
+      char === "\r" ||
+      char === "\u000b" ||
+      char === "\u000c" ||
+      char === "\u0085" ||
+      char === "\u2028" ||
+      char === "\u2029"
+    ) {
       row.push(field);
       rows.push(row);
       row = [];
       field = "";
-      continue;
-    }
-
-    if (char === "\r") {
+      if (input[i + 1] === "\n") {
+        i += 1;
+      }
       continue;
     }
 
@@ -4754,6 +5090,124 @@ function parseCsv(input: string) {
     rows.push(row);
   }
   return rows;
+}
+
+function parseCsvRecordsLoose(csv: string) {
+  const rows = parseCsv(csv);
+  if (!rows.length) return { headers: [], records: [] };
+  const headers = rows[0].map((cell) => cell.trim().replace(/^\uFEFF/, ""));
+  const records = rows
+    .slice(1)
+    .filter((row) => row.some((cell) => String(cell || "").trim()))
+    .map((row) => {
+      const record: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        record[header] = (row[index] || "").trim();
+      });
+      return record;
+    });
+  return { headers, records };
+}
+
+function parseDelimitedRecords(input: string) {
+  const normalized = input
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\t/g, ",");
+  const lines = normalized
+    .split(/(?:\n|\u000b|\u000c|\u0085|\u2028|\u2029)/)
+    .filter((line) => line.trim().length > 0);
+  if (!lines.length) return { headers: [], records: [] };
+  const delimiter = ",";
+  const headers = lines[0]
+    .split(delimiter)
+    .map((cell) => cell.trim().replace(/^\uFEFF/, ""));
+  const records = lines.slice(1).map((line) => {
+    const cells = line.split(delimiter);
+    const record: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      record[header] = (cells[index] || "").trim();
+    });
+    return record;
+  });
+  return { headers, records };
+}
+
+function parseMergedHeaderRecords(input: string, expectedHeaders: string[]) {
+  const rows = parseCsv(input);
+  if (!rows.length) return null;
+  const headerCells = rows[0].map((cell) => cell.trim().replace(/^\uFEFF/, ""));
+  const expectedLower = expectedHeaders.map((header) => header.toLowerCase());
+  const headerIndexByExpected = new Map<string, number>();
+  const remainderByExpected = new Map<string, string>();
+
+  headerCells.forEach((cell, index) => {
+    const lower = cell.toLowerCase();
+    expectedLower.forEach((expected) => {
+      if (headerIndexByExpected.has(expected)) return;
+      if (lower === expected) {
+        headerIndexByExpected.set(expected, index);
+        remainderByExpected.set(expected, "");
+      } else if (lower.startsWith(`${expected} `)) {
+        headerIndexByExpected.set(expected, index);
+        remainderByExpected.set(expected, cell.slice(expected.length).trim());
+      }
+    });
+  });
+
+  if (!expectedLower.every((expected) => headerIndexByExpected.has(expected))) return null;
+
+  const metalKeyIndex = expectedLower.indexOf("metal");
+  let groupedRecords: Record<string, string>[] = [];
+  if (metalKeyIndex >= 0) {
+    const metalKey = expectedLower[metalKeyIndex];
+    const remainder = remainderByExpected.get(metalKey) || "";
+    const metalParts = remainder
+      .split(/(?=\b(?:\d{2}K|Platinum)\b)/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (metalParts.length > 1) {
+      const columnParts = expectedLower.map((expected) => {
+        if (expected === metalKey) return metalParts;
+        const value = remainderByExpected.get(expected) || "";
+        const parts = value.split(/\s+/).filter(Boolean);
+        return parts.length === metalParts.length ? parts : Array(metalParts.length).fill(value);
+      });
+      for (let i = 0; i < metalParts.length; i += 1) {
+        const record: Record<string, string> = {};
+        expectedHeaders.forEach((header, idx) => {
+          record[header] = columnParts[idx][i] || "";
+        });
+        groupedRecords.push(record);
+      }
+    }
+  }
+
+  if (!groupedRecords.length) {
+    const record: Record<string, string> = {};
+    expectedHeaders.forEach((header, idx) => {
+      const expected = expectedLower[idx];
+      record[header] = remainderByExpected.get(expected) || "";
+    });
+    groupedRecords = [record];
+  }
+
+  const remainingRecords = rows.slice(1).map((row) => {
+    const record: Record<string, string> = {};
+    expectedHeaders.forEach((header) => {
+      const expected = header.toLowerCase();
+      const index = headerIndexByExpected.get(expected) ?? -1;
+      record[header] = index >= 0 ? (row[index] || "").trim() : "";
+    });
+    return record;
+  });
+
+  return {
+    headers: expectedHeaders,
+    records: [...groupedRecords, ...remainingRecords].filter((record) =>
+      Object.values(record).some((value) => String(value || "").trim())
+    ),
+  };
 }
 
 function parseList(value: string | undefined) {
@@ -4800,6 +5254,11 @@ function parsePalette(value: string | undefined) {
 
 function buildSheetsCsvUrl(sheetId: string, gid: string) {
   return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+}
+
+function buildSheetsCsvUrlByName(sheetId: string, sheetName: string) {
+  const encoded = encodeURIComponent(sheetName);
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encoded}`;
 }
 
 function getCatalogUrl(env: Env, kind: "products" | "inspirations" | "site_config") {
@@ -4863,12 +5322,19 @@ async function loadCatalogPayload(env: Env, params: URLSearchParams) {
           category: categories[0] || row.categories || row.category || "",
           design_code: row.design_code,
           metal: metals[0] || row.metals || row.metal || "",
+          metal_options: row.metal_options || "",
           stone_types: row.stone_types || "",
+          stone_type_options: row.stone_type_options || "",
           stone_weight: parseNumber(row.stone_weight),
+          stone_weight_range: row.stone_weight_range || row.stone_weight || "",
           metal_weight: parseNumber(row.metal_weight),
+          metal_weight_range: row.metal_weight_range || row.metal_weight || "",
           cut: row.cut,
+          cut_range: row.cut_range || "",
           clarity: row.clarity,
+          clarity_range: row.clarity_range || "",
           color: row.color,
+          color_range: row.color_range || "",
           carat: parseNumber(row.carat),
           price_usd_natural: parseNumber(row.price_usd_natural),
           estimated_price_usd_vvs1_vvs2_18k: parseNumber(
