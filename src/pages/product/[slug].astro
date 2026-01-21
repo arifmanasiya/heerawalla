@@ -116,7 +116,7 @@ const diamondDefault = hasStoneOptions
       : naturalStoneLabel
   : naturalStoneLabel;
 const defaultDiamondUsd = /lab/i.test(diamondDefault) ? labUsd : baseUsd;
-const metalOptionLabels = parseList(product.metal_options || product.metals || product.metal);
+const metalOptionLabels = parseList(product.metal_options || product.metal);
 const metalOptions =
   metalOptionLabels.length > 0
     ? metalOptionLabels.map((label) => ({ value: label, label }))
