@@ -45,6 +45,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy-pages.outputs.page_url }}
     env:
+      CSV_SOURCE: remote
+      SITE_CONFIG_CSV_URL: ${{ vars.SITE_CONFIG_CSV_URL }}
+      PRODUCTS_CSV_URL: ${{ vars.PRODUCTS_CSV_URL }}
+      INSPIRATIONS_CSV_URL: ${{ vars.INSPIRATIONS_CSV_URL }}
       PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.PUBLIC_TURNSTILE_SITE_KEY }}
     steps:
       - name: Checkout
