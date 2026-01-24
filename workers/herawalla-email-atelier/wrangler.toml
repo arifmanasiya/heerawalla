@@ -34,6 +34,17 @@ CATALOG_SHEET_ID = "1oFrJpxZmL94GeNXDK95OHHcCqG2zOiQuhOtOZ1y5i6o"
 CATALOG_PRODUCTS_GID = "1604026114"
 CATALOG_INSPIRATIONS_GID = "491031140"
 CATALOG_SITE_CONFIG_GID = "30223103"
+CATALOG_MEDIA_LIBRARY_GID = "460724673"
+CATALOG_PRODUCT_MEDIA_GID = "1719145705"
+CATALOG_INSPIRATION_MEDIA_GID = "1780608024"
+CATALOG_PRODUCTS_SHEET_NAME = "products"
+CATALOG_INSPIRATIONS_SHEET_NAME = "inspirations"
+CATALOG_SITE_CONFIG_SHEET_NAME = "site_config"
+MEDIA_LIBRARY_SHEET_NAME = "media_library"
+PRODUCT_MEDIA_SHEET_NAME = "product_media"
+INSPIRATION_MEDIA_SHEET_NAME = "inspiration_media"
+MEDIA_PUBLIC_BASE_URL = "https://pub-0758b0d6fde14b47943c5b58be0ca424.r2.dev"
+MEDIA_PUBLIC_BASE_URL_LOCAL = "http://localhost:8787"
 ORDER_SHEET_ID = "1Y63fs2Xoj6xGV9OXx8Ywnx7CplZBGxfQTwzgK2u1dnU"
 ORDER_SHEET_NAME = "orders"
 ORDER_DETAILS_SHEET_ID = "1LzFxg4EWm0WiW--xLnKuTEl97vLbHqK0nOcA2MZQMfk"
@@ -76,3 +87,14 @@ allowed_sender_addresses = ["atelier@heerawalla.com", "no-reply@heerawalla.com"]
 [[kv_namespaces]]
 binding = "HEERAWALLA_ACKS"
 id = "d699d7256dfa42a79c7089d4e49e4137"
+preview_id = "029212dfa5734afbb29357b2334817e1"
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "heerawalla-products"
+preview_bucket_name = "heerawalla-products"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "heerawalla"
+database_id = "6b979eaa-8ed9-457e-8df5-e1b1c9f7e5e7"

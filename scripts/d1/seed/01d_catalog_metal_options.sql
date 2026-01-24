@@ -1,0 +1,12 @@
+DELETE FROM catalog_metal_options;
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_hw-003_0', 'hw-003', '2.5', 1, 'small', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_hw-003_1', 'hw-003', '3.0', 0, 'medium', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_hwp-001_0', 'hwp-001', '2.5', 1, 'small', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_hwp-001_1', 'hwp-001', '3', 0, 'medium', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_hw-002_0', 'hw-002', '2.5', 1, 'small', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_hw-002_1', 'hw-002', '3', 0, 'medium', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_insp-0006_0', 'insp-0006', '3', 1, 'small', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_insp-0005_0', 'insp-0005', '2.5', 1, 'small', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_insp-0005_1', 'insp-0005', '3', 0, 'medium', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_insp-0007_0', 'insp-0007', '2.5', 1, 'small', datetime('now'), datetime('now'));
+INSERT OR REPLACE INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at) VALUES ('metalopt_insp-0007_1', 'insp-0007', '3', 0, 'medium', datetime('now'), datetime('now'));

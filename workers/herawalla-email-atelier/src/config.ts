@@ -1,7 +1,9 @@
 export interface Env {
+  DB?: D1Database;
   FORWARD_TO?: string;
   FORWARD_REJECTS_TO?: string;
   HEERAWALLA_ACKS?: KVNamespace;
+  MEDIA_BUCKET?: R2Bucket;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REFRESH_TOKEN?: string;
@@ -22,12 +24,24 @@ export interface Env {
   CATALOG_PRODUCTS_GID?: string;
   CATALOG_INSPIRATIONS_GID?: string;
   CATALOG_SITE_CONFIG_GID?: string;
+  CATALOG_PRODUCTS_SHEET_NAME?: string;
+  CATALOG_INSPIRATIONS_SHEET_NAME?: string;
+  CATALOG_SITE_CONFIG_SHEET_NAME?: string;
+  CATALOG_MEDIA_LIBRARY_GID?: string;
+  CATALOG_PRODUCT_MEDIA_GID?: string;
+  CATALOG_INSPIRATION_MEDIA_GID?: string;
   CATALOG_PRODUCTS_URL?: string;
   CATALOG_INSPIRATIONS_URL?: string;
   CATALOG_SITE_CONFIG_URL?: string;
+  CATALOG_MEDIA_LIBRARY_URL?: string;
+  CATALOG_PRODUCT_MEDIA_URL?: string;
+  CATALOG_INSPIRATION_MEDIA_URL?: string;
   PRODUCTS_CSV_URL?: string;
   INSPIRATIONS_CSV_URL?: string;
   SITE_CONFIG_CSV_URL?: string;
+  MEDIA_LIBRARY_CSV_URL?: string;
+  PRODUCT_MEDIA_CSV_URL?: string;
+  INSPIRATION_MEDIA_CSV_URL?: string;
   ORDER_SHEET_ID?: string;
   ORDER_SHEET_NAME?: string;
   ORDER_SHEET_RANGE?: string;
@@ -55,6 +69,21 @@ export interface Env {
   DIAMOND_PRICE_CHART_SHEET_ID?: string;
   DIAMOND_PRICE_CHART_SHEET_NAME?: string;
   DIAMOND_PRICE_CHART_SHEET_RANGE?: string;
+  MEDIA_LIBRARY_SHEET_ID?: string;
+  MEDIA_LIBRARY_SHEET_NAME?: string;
+  MEDIA_LIBRARY_SHEET_RANGE?: string;
+  PRODUCT_MEDIA_SHEET_ID?: string;
+  PRODUCT_MEDIA_SHEET_NAME?: string;
+  PRODUCT_MEDIA_SHEET_RANGE?: string;
+  INSPIRATION_MEDIA_SHEET_ID?: string;
+  INSPIRATION_MEDIA_SHEET_NAME?: string;
+  INSPIRATION_MEDIA_SHEET_RANGE?: string;
+  MEDIA_PUBLIC_BASE_URL?: string;
+  GITHUB_TOKEN?: string;
+  GITHUB_OWNER?: string;
+  GITHUB_REPO?: string;
+  GITHUB_WORKFLOW?: string;
+  GITHUB_REF?: string;
   ADMIN_ALLOWLIST?: string;
   OPS_ALLOWLIST?: string;
   VIEWER_ALLOWLIST?: string;
@@ -218,6 +247,20 @@ export const CONTACT_SHEET_HEADER = [
   "notes",
   "last_error",
 ];
+export const TICKET_SHEET_HEADER = [
+  "created_at",
+  "request_id",
+  "status",
+  "subject",
+  "summary",
+  "name",
+  "email",
+  "phone",
+  "source",
+  "page_url",
+  "updated_at",
+  "updated_by",
+];
 export const PRICE_CHART_HEADER = ["metal", "adjustment_type", "adjustment_value", "notes"];
 export const COST_CHART_HEADER = ["key", "value", "unit", "notes"];
 export const DIAMOND_PRICE_CHART_HEADER = [
@@ -227,6 +270,71 @@ export const DIAMOND_PRICE_CHART_HEADER = [
   "weight_max",
   "price_per_ct",
   "notes",
+];
+export const PRODUCTS_SHEET_HEADER = [
+  "id",
+  "name",
+  "slug",
+  "description",
+  "long_desc",
+  "categories",
+  "gender",
+  "styles",
+  "motifs",
+  "metals",
+  "stone_types",
+  "stone_weight",
+  "design_code",
+  "cut",
+  "clarity",
+  "color",
+  "is_active",
+  "is_featured",
+  "tags",
+];
+export const INSPIRATIONS_SHEET_HEADER = [
+  "id",
+  "name",
+  "slug",
+  "description",
+  "long_desc",
+  "categories",
+  "gender",
+  "styles",
+  "motifs",
+  "metals",
+  "stone_types",
+  "stone_weight",
+  "design_code",
+  "cut",
+  "clarity",
+  "color",
+  "is_active",
+  "is_featured",
+  "tags",
+];
+export const MEDIA_LIBRARY_SHEET_HEADER = [
+  "media_id",
+  "url",
+  "media_type",
+  "label",
+  "alt",
+  "description",
+  "created_at",
+];
+export const PRODUCT_MEDIA_SHEET_HEADER = [
+  "product_slug",
+  "media_id",
+  "position",
+  "is_primary",
+  "order",
+];
+export const INSPIRATION_MEDIA_SHEET_HEADER = [
+  "inspiration_slug",
+  "media_id",
+  "position",
+  "is_primary",
+  "order",
 ];
 export const UNIFIED_CONTACTS_SHEET_HEADER = [
   "created_at",
@@ -317,6 +425,72 @@ export const EMAIL_HTML = `<!DOCTYPE html>
   </table>
 </body>
 </html>`;
+
+export const ADMIN_ENUMS = {
+  design_codes: [
+    { value: "Axis", label: "Axis" },
+    { value: "Continuum", label: "Continuum" },
+    { value: "Eclipse", label: "Eclipse" },
+    { value: "Meridian", label: "Meridian" },
+    { value: "Helix", label: "Helix" },
+  ],
+  genders: [
+    { value: "male", label: "Male" },
+    { value: "female", label: "Female" },
+    { value: "unisex", label: "Unisex" },
+  ],
+  categories: [],
+  styles: [],
+  motifs: [],
+  metals: [
+    { value: "14K Yellow Gold", label: "14K Yellow Gold" },
+    { value: "14K White Gold", label: "14K White Gold" },
+    { value: "14K Rose Gold", label: "14K Rose Gold" },
+    { value: "18K Yellow Gold", label: "18K Yellow Gold" },
+    { value: "18K White Gold", label: "18K White Gold" },
+    { value: "18K Rose Gold", label: "18K Rose Gold" },
+    { value: "Platinum", label: "Platinum" },
+  ],
+  stone_types: [
+    { value: "Lab Grown Diamond", label: "Lab Grown Diamond" },
+    { value: "Natural Diamond", label: "Natural Diamond" },
+  ],
+  stone_roles: [
+    { value: "center", label: "Center" },
+    { value: "accent", label: "Accent" },
+    { value: "side", label: "Side" },
+    { value: "halo", label: "Halo" },
+  ],
+  cuts: [
+    { value: "Ideal", label: "Ideal" },
+    { value: "Excellent", label: "Excellent" },
+    { value: "Very Good", label: "Very Good" },
+  ],
+  clarities: [
+    { value: "IF", label: "IF" },
+    { value: "VVS1", label: "VVS1" },
+    { value: "VVS2", label: "VVS2" },
+    { value: "VS1", label: "VS1" },
+    { value: "VS2", label: "VS2" },
+    { value: "SI1", label: "SI1" },
+    { value: "SI2", label: "SI2" },
+  ],
+  colors: [
+    { value: "D", label: "D" },
+    { value: "E", label: "E" },
+    { value: "F", label: "F" },
+    { value: "G", label: "G" },
+    { value: "H", label: "H" },
+    { value: "I", label: "I" },
+    { value: "J", label: "J" },
+  ],
+  media_positions: [
+    { value: "hero", label: "Hero" },
+    { value: "gallery", label: "Gallery" },
+    { value: "detail", label: "Detail" },
+  ],
+  tags: [],
+};
 
 export const ORDER_ACK_SUBJECT = "Heerawalla - Order request received";
 export const ORDER_ACK_TEXT = [
@@ -568,6 +742,8 @@ export const ALLOWED_ORIGINS = [
   "https://business.heerawalla.com",
   "https://arifmanasiya.github.io",
   "https://herawalla-email-atelier.arifmanasiya.workers.dev",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
   "http://localhost:4321",
   "http://127.0.0.1:4321",
 ];

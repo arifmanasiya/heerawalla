@@ -1,0 +1,1 @@
+DELETE FROM catalog_stone_options;

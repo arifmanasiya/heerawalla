@@ -1,0 +1,6 @@
+DELETE FROM contacts;
+INSERT OR REPLACE INTO contacts (created_at, email, name, phone, source, updated_at, updated_by) VALUES ('2026-01-16T08:13:14.590Z', 'artmanasiya@yahoo.com', 'Art Manasiya', '5124125580', 'order,ticket', '2026-01-16T08:13:14.590Z', 'import');
+INSERT OR REPLACE INTO contacts (created_at, email, name, phone, source, updated_at, updated_by) VALUES ('2026-01-18T02:35:47.771Z', 'arifmanasiya@gmail.com', 'Aarif', '5124125580', 'order', '2026-01-18T02:35:47.771Z', 'import');
+INSERT OR REPLACE INTO contacts (created_at, email, name, phone, source, updated_at, updated_by) VALUES ('2026-01-20T05:54:00.438Z', 'arifmanasiya@outlook.com', 'Aarif', '5124125580', 'order,quote', '2026-01-22T00:51:51.048Z', 'import');
+INSERT OR REPLACE INTO contacts (created_at, email, name, phone, source, updated_at, updated_by) VALUES ('2026-01-18T03:05:50.391Z', 'lazeenmanasia27@gmail.com', 'Lazeen', NULL, 'ticket', '2026-01-18T03:05:50.391Z', 'import');
+INSERT OR REPLACE INTO contacts (created_at, email, name, phone, source, updated_at, updated_by) VALUES ('2026-01-20T06:02:23.306Z', 'lazeenmanasia@gmail.com', 'Lazeen R Manasia', '15552001111', 'ticket', '2026-01-20T06:02:23.306Z', 'import');

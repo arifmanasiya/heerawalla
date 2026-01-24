@@ -1,30 +1,31 @@
-import { parse } from 'csv-parse/sync';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fetchCsv, getCsvSourceMode, getEnv, parseCsvSources } from './csvFetch';
-import { productSchema, requiredProductColumns, type Product, type ProductInput } from './schema';
+import { getEnv } from './csvFetch';
+import { productSchema, type Product, type ProductInput } from './schema';
 import { getMediaForProduct, type MediaCollection } from './media';
 
-const DATA_DIR = path.resolve('data');
-const SAMPLE_PRODUCTS = path.resolve('data/products.sample.csv');
+const normalizeListValue = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry).trim()).filter(Boolean).join('|');
+  }
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+};
 
 function toBoolean(value: string | undefined): boolean {
   if (!value) return false;
   return ['true', '1', 'yes', 'y'].includes(value.trim().toLowerCase());
 }
 
+function toBooleanValue(value: unknown, fallback = false): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (value === undefined || value === null) return fallback;
+  return toBoolean(String(value));
+}
+
 function toOptionalString(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
-}
-
-function toOptionalNumber(value: string | undefined): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  const trimmed = value.toString().trim();
-  if (!trimmed) return undefined;
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function toOptionalFirstListItem(value: string | undefined): string | undefined {
@@ -42,110 +43,77 @@ function toOptionalNumberFromList(value: string | undefined): number | undefined
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-async function readLocalProductCSVs(): Promise<string[]> {
-  const entries = await fs.readdir(DATA_DIR);
-  const matches = entries.filter((file) => file.startsWith('products-') && file.endsWith('.csv'));
-  if (matches.length === 0) return [SAMPLE_PRODUCTS];
-  return matches.map((f) => path.join(DATA_DIR, f));
+function toOptionalNumberFromUnknown(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  const trimmed = String(value).trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-async function getLocalProductFallback(): Promise<string> {
-  const preferred = path.resolve('data/products-all.csv');
+async function loadProductsFromApi(): Promise<Product[]> {
+  const apiBase = (getEnv('PUBLIC_CATALOG_API_URL') || '').trim();
+  if (!apiBase) {
+    throw new Error('PUBLIC_CATALOG_API_URL is required to load products from D1.');
+  }
+  const joiner = apiBase.includes('?') ? '&' : '?';
+  const isLocal = /localhost|127\.0\.0\.1/i.test(apiBase);
+  const cacheBust = isLocal ? `&bust=${Date.now()}` : '';
+  const url = `${apiBase}${joiner}include=products${cacheBust}`;
   try {
-    await fs.access(preferred);
-    return preferred;
-  } catch {
-    const files = await readLocalProductCSVs();
-    return files[0];
-  }
-}
-
-async function loadCsvFile(source: string, fallbackFile?: string): Promise<Product[]> {
-  const csv = await fetchCsv(source, fallbackFile);
-  const records = parse(csv, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true
-  }) as Record<string, string>[];
-
-  if (!records.length) {
-    return [];
-  }
-  const cols = Object.keys(records[0]);
-  for (const col of requiredProductColumns) {
-    if (!cols.includes(col)) {
-      throw new Error(`Products CSV missing required column: ${col} in ${source}`);
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) {
+      throw new Error(`Catalog API failed (${response.status} ${response.statusText}).`);
     }
+    const data = (await response.json()) as { products?: Record<string, unknown>[] };
+    const rows = Array.isArray(data.products) ? data.products : [];
+    if (!rows.length) return [];
+    const parsed = rows
+      .map((row) => {
+        const metalOptions = normalizeListValue(row.metal_options ?? row.metals ?? row.metal);
+        const stoneTypeOptions = normalizeListValue(row.stone_type_options ?? row.stone_types);
+        const stoneWeightRange = normalizeListValue(row.stone_weight_range ?? row.stone_weight);
+        const metalWeightRange = normalizeListValue(row.metal_weight_range ?? row.metal_weight);
+        const categoryValue = normalizeListValue(row.category ?? row.categories);
+        const genderValue = normalizeListValue(row.gender);
+        const base = {
+          id: String(row.id || ''),
+          name: String(row.name || ''),
+          slug: String(row.slug || ''),
+          description: String(row.description || row.long_desc || ''),
+          category: toOptionalFirstListItem(categoryValue) || categoryValue,
+          gender: genderValue,
+          design_code: String(row.design_code || 'Signature'),
+          metal: toOptionalFirstListItem(metalOptions) || String(row.metal || ''),
+          metal_options: metalOptions || '',
+          stone_types: toOptionalString(stoneTypeOptions),
+          stone_type_options: stoneTypeOptions || '',
+          stone_weight: toOptionalNumberFromUnknown(row.stone_weight) ?? toOptionalNumberFromList(stoneWeightRange),
+          stone_weight_range: stoneWeightRange || '',
+          metal_weight: toOptionalNumberFromUnknown(row.metal_weight) ?? toOptionalNumberFromList(metalWeightRange),
+          metal_weight_range: metalWeightRange || '',
+          cut: String(row.cut || ''),
+          clarity: String(row.clarity || ''),
+          color: String(row.color || ''),
+          carat: toOptionalNumberFromUnknown(row.carat),
+          is_active: toBooleanValue(row.is_active, true),
+          is_featured: toBooleanValue(row.is_featured, false),
+          tags: normalizeListValue(row.tags)
+        };
+        const validated = productSchema.parse(base) as ProductInput;
+        return { ...validated };
+      })
+      .filter((p) => p.is_active);
+    return parsed;
   }
-
-  const parsed = records
-    .map((row) => {
-      const metalOptions = toOptionalString(row.metal_options || row.metals);
-      const stoneTypeOptions = toOptionalString(row.stone_type_options || row.stone_types);
-      const stoneWeightRange = toOptionalString(row.stone_weight_range || row.stone_weight);
-      const metalWeightRange = toOptionalString(row.metal_weight_range || row.metal_weight);
-      const clarityRange = toOptionalString(row.clarity_range || row.clarity);
-      const colorRange = toOptionalString(row.color_range || row.color);
-      const cutRange = toOptionalString(row.cut_range || row.cut);
-      const base = {
-        id: row.id,
-        name: row.name,
-        slug: row.slug,
-        description: row.description,
-        collection: row.collection,
-        category: toOptionalFirstListItem(row.categories) || row.categories || row.category,
-        design_code: row.design_code,
-        metal: toOptionalFirstListItem(metalOptions) || row.metals || row.metal,
-        metal_options: metalOptions || '',
-        stone_types: toOptionalString(stoneTypeOptions),
-        stone_type_options: stoneTypeOptions || '',
-        stone_weight: toOptionalNumber(row.stone_weight) ?? toOptionalNumberFromList(stoneWeightRange),
-        stone_weight_range: stoneWeightRange || '',
-        metal_weight: toOptionalNumber(row.metal_weight) ?? toOptionalNumberFromList(metalWeightRange),
-        metal_weight_range: metalWeightRange || '',
-        cut: toOptionalFirstListItem(cutRange) || toOptionalString(row.cut),
-        cut_range: cutRange || '',
-        clarity: toOptionalFirstListItem(clarityRange) || toOptionalString(row.clarity),
-        clarity_range: clarityRange || '',
-        color: toOptionalFirstListItem(colorRange) || toOptionalString(row.color),
-        color_range: colorRange || '',
-        carat: toOptionalNumber(row.carat),
-        price_usd_natural: toOptionalNumber(row.price_usd_natural) ?? 0,
-        lab_discount_pct: toOptionalNumber(row.lab_discount_pct),
-        metal_platinum_premium: toOptionalNumber(row.metal_platinum_premium),
-        metal_14k_discount_pct: toOptionalNumber(row.metal_14k_discount_pct),
-        is_active: toBoolean(row.is_active),
-        is_featured: toBoolean(row.is_featured),
-        tags: row.tags
-      };
-      const validated = productSchema.parse(base) as ProductInput;
-      return { ...validated };
-    })
-    .filter((p) => p.is_active);
-  return parsed;
+  catch {
+    throw new Error('Failed to load products from D1 catalog API.');
+  }
 }
 
 export async function loadProducts(): Promise<Product[]> {
-  const sources = await readProductSources();
-  const results = await Promise.all(
-    sources.map((entry) => loadCsvFile(entry.source, entry.fallback))
-  );
-  return results.flat();
-}
-
-async function readProductSources(): Promise<Array<{ source: string; fallback?: string }>> {
-  const mode = getCsvSourceMode();
-  if (mode === 'remote') {
-    const urls = parseCsvSources(getEnv('PRODUCTS_CSV_URLS') || getEnv('PRODUCTS_CSV_URL'));
-    if (!urls.length) {
-      throw new Error('PRODUCTS_CSV_URL or PRODUCTS_CSV_URLS is required when CSV_SOURCE=remote.');
-    }
-    const fallback = urls.length === 1 ? await getLocalProductFallback() : undefined;
-    return urls.map((source) => ({ source, fallback }));
-  }
-
-  const files = await readLocalProductCSVs();
-  return files.map((source) => ({ source, fallback: source }));
+  return loadProductsFromApi();
 }
 
 export async function loadProductBySlug(slug: string): Promise<Product | undefined> {
@@ -173,6 +141,6 @@ export async function loadProductBySlugWithMedia(slug: string): Promise<ProductW
 
 export async function loadCollections(products?: Product[]) {
   const items = products ?? (await loadProducts());
-  const collections = new Set(items.map((p) => p.collection).filter(Boolean));
-  return Array.from(collections);
+  const codes = new Set(items.map((p) => p.design_code).filter(Boolean));
+  return Array.from(codes);
 }

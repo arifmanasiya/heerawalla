@@ -2,7 +2,6 @@
 - Install: `npm install`
 - Run dev server: `npm run dev`
 - Build: `npm run build`
-- Update `/data/products-*.csv` and `/data/site_config.sample.csv` with your data.
 - (If using GitHub Pages without a custom domain) set `BASE_PATH` to your repo path, e.g. `/heerawalla`.
 - Push to `main`; GitHub Actions deploys the worker + admin pages to Cloudflare and the site to GitHub Pages.
 
@@ -10,48 +9,33 @@
 
 # Heerawalla - Static Jewelry Catalog (Astro + Tailwind)
 
-This is an inspirational jewelry catalog for **heerawalla.com**, built with Astro, TypeScript, and Tailwind. Product and site configuration data are pulled at build time from CSV files in `/data`. The code is structured to swap in a real backend later (Netlify Functions) without UI rewrites.
+This is an inspirational jewelry catalog for **heerawalla.com**, built with Astro, TypeScript, and Tailwind. Product and site configuration data live in Cloudflare D1. Legacy CSV/Sheets data is still present for reference but is being deprecated.
 
 ## Features
-- Build-time CSV ingest (Products + Site Config) with validation; fails build on missing columns.
+- D1-backed catalog + site config with Worker endpoints for admin and runtime refresh.
 - Pages: Home, Collections (client-side filters), Product detail (dynamic routes), About, Contact (mailto form), Policies.
 - SEO: meta tags, OpenGraph, JSON-LD Product schema, sitemap, robots.txt.
 - Premium minimal design: whitespace, elegant typography, subtle hover states, responsive and accessible.
 - Future-ready integration layer (`src/lib/apiClient.ts`) for orders, checkout, and lead capture.
 
-## Data shape
-### Shared catalog CSV format (Products + Inspirations)
-Products and inspirations use the **same header list** so a single sheet template can feed both.
-Leave unused columns blank for a given row type.
+## Data shape (D1)
+### Catalog items (products + inspirations)
+Both live in the same table: `catalog_items`.
 
-Required columns per file:
-`id, name, slug, description, short_desc, long_desc, hero_image, collection, categories, gender, styles, motifs, metals, stone_types, stone_weight, metal_weight, palette, takeaways, translation_notes, design_code, cut, clarity, color, carat, price_usd_natural, estimated_price_usd_vvs1_vvs2_18k, lab_discount_pct, metal_platinum_premium, metal_14k_discount_pct, is_active, is_featured, tags`
+Columns:
+`id, type, name, slug, categories, gender, styles, motifs, metals, stone_types, design_code, cut, clarity, color, is_active, is_featured, tags, created_at, updated_at, updated_by`
 
-- Products: use `categories` (single path like `women/rings`), `collection`, `design_code`, `metals` (primary metal label), `stone_types` (pipe-separated), stone/metal weights, pricing, and availability fields.
-- Inspirations: use `short_desc`, `long_desc`, `hero_image`, `categories`, `gender`, `styles`, `motifs`, `metals`, `palette`, `takeaways`, and estimate fields.
-- Only rows with `is_active = TRUE` are shown. `is_featured = TRUE` drives the featured section.
-- `categories` should match your folder path under `public/images/products` for product rows, e.g., `women/rings` or `men/bands`.
-- `price_usd_natural` is the 18K/Natural base price.
-- `stone_types` controls availability. Leave blank to hide stone options (use `|` to separate). Example: `Natural Diamond | Lab Grown Diamond`.
-- `stone_weight` is total stone weight (ct). `metal_weight` is grams.
-- `lab_discount_pct` and `metal_14k_discount_pct` are percentage adjustments (negative reduces).
-- `metal_platinum_premium` is a percentage premium (default 10).
+Notes:
+- `type` is `product` or `inspiration`.
+- List-like fields (`categories`, `styles`, `motifs`, `metals`, `tags`, etc.) are stored as JSON arrays.
+- `is_active` and `is_featured` gate visibility.
 
-### Site Config CSV (required columns)
-`key, value`
+### Media
+- `media_library` stores media rows by `media_id`.
+- `catalog_media` links media to a catalog item (by type + slug).
 
-Keys used: `meta_title, meta_description, hero_title, hero_subtitle, hero_cta_label, hero_cta_link, contact_email, about_title, about_description`
-
-Sample files live in `/data/products.sample.csv`, `/data/products-men-bands.csv`, `/data/products-women-rings.csv`, `/data/products-women-pendants.csv`, and `/data/site_config.sample.csv`.
-Optional keys: `orders_email` (used for product inquiry mailto).
-
-## CSV data
-- Products: use a single `/data/products-all.csv` (recommended) or split into multiple `products-*.csv` files.
-- Site config: edit `/data/site_config.sample.csv` or provide your own CSV in `/data`.
-- Inspirations: edit `/data/inspirations.csv` for inspirations pages and bespoke prompts.
-
-### Inspirations CSV (required columns)
-See the shared catalog format above. For inspirations, `name` replaces the old `title` column.
+### Site config
+- `site_config` is `key/value` with `updated_at`.
 
 ## Local development
 ```bash
@@ -63,24 +47,15 @@ npm run dev
 ```bash
 npm run build
 ```
-Build will fail if required CSV columns are missing or data is invalid.
-If you are using remote CSVs, ensure `CSV_SOURCE=remote` and `SITE_CONFIG_CSV_URL` are available in `.env` or `.env.production`.
-
-## CSV source mode (local vs Google Sheets)
-By default, the build reads local CSVs in `/data`. To switch to Google Sheets exports, set:
-- `CSV_SOURCE=remote`
-- `PRODUCTS_CSV_URL` (single CSV) or `PRODUCTS_CSV_URLS` (comma-separated list)
-- `INSPIRATIONS_CSV_URL`
-- `SITE_CONFIG_CSV_URL`
-
-If `CSV_SOURCE` is not `remote`, local CSVs are used even if URLs are set.
+Legacy CSV builds will fail if required columns are missing or data is invalid.
+Legacy CSV/Sheets sources are deprecated and are not used by the D1-backed workflow.
 
 ## Runtime catalog endpoint (optional)
 If you want product/inspiration grids to refresh on page load without rebuilding, set:
 - `PUBLIC_CATALOG_API_URL` (e.g., `https://<worker>.workers.dev/catalog`)
 - `PUBLIC_CATALOG_MODE=hybrid` (set `ssr` to disable runtime refresh)
 
-When set, list pages and detail pages refresh catalog-driven pricing on page load. Set `PUBLIC_CATALOG_MODE=ssr` to disable runtime refresh everywhere.
+When set, list pages and detail pages refresh catalog data on page load. Set `PUBLIC_CATALOG_MODE=ssr` to disable runtime refresh everywhere.
 
 ## TODO (later)
 - Add log sampling and an error-only log view in Cloudflare Workers Logs.
@@ -132,7 +107,6 @@ The concierge booking and contact sync use Google APIs via the worker at `worker
 Add these scopes on the same Google Cloud project:
 - `https://www.googleapis.com/auth/calendar` (concierge booking)
 - `https://www.googleapis.com/auth/contacts` (People API sync)
-- `https://www.googleapis.com/auth/spreadsheets` (order/quote/contact sheet logging)
 
 ### Generate a refresh token (OAuth Playground)
 1) In Google Cloud Console, create an OAuth Client ID (Web).
@@ -147,12 +121,6 @@ Set these secrets on the worker (Wrangler or Cloudflare UI):
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REFRESH_TOKEN` (must include the Contacts scope if People API is used)
 - `GOOGLE_CALENDAR_ID` (calendar to book against)
-- `ORDER_SHEET_ID` (Orders tab)
-- `ORDER_SHEET_NAME` (default `Orders`) or `ORDER_SHEET_RANGE` (e.g. `Orders!A1`)
-- `QUOTE_SHEET_ID` (Quotes tab)
-- `QUOTE_SHEET_NAME` (default `Quotes`) or `QUOTE_SHEET_RANGE`
-- `CONTACTS_SHEET_ID` (Contacts tab)
-- `CONTACTS_SHEET_NAME` (default `Contacts`) or `CONTACTS_SHEET_RANGE`
 
 After updating secrets, redeploy the worker.
 
@@ -215,7 +183,7 @@ Body:
 
 Notes:
 - Contacts can be updated by admin roles (status + notes).
-- Ensure the Sheets header contains `status`, `status_updated_at`, `notes`, and `last_error` for orders, quotes, and contacts.
+- Orders, quotes, and contacts are stored in D1 with last-write-wins updates.
 
 ## Order confirmation flow (customer + admin)
 The order confirmation flow issues a one-time token, sends a confirmation email, and routes the customer to a secure confirmation page.
@@ -226,7 +194,7 @@ Set these in `workers/herawalla-email-atelier/wrangler.toml` or Cloudflare:
 - `ORDER_CONFIRMATION_PAYMENT_URL` (template supports `{requestId}`, `{token}`, `{email}`)
 
 ### Site config (public confirmation page)
-Set this key in your site config CSV:
+Set this key in D1 `site_config`:
 - `order_confirmation_api_base=https://admin-api.heerawalla.com`
 
 ### API endpoints
@@ -281,11 +249,11 @@ data/
 
 ## Placeholders to replace
 - `/public/images/hero.svg` and `/public/images/products/placeholder.svg` with your branded assets.
-- Update sample CSVs with your products and site copy.
+- Legacy CSVs remain for reference during the migration, but D1 is the source of truth.
 - Set `site` in `astro.config.mjs` to your final domain.
 
 ## Product media folders (images & video)
 - Drop media into `public/images/products/<category>/<product_id>/`, e.g. `public/images/products/women/rings/hw-002/image-1.jpg`.
 - File names are free-form; we sort alphabetically. Supported images: jpg/jpeg/png/webp/avif/gif/svg. Videos: mp4/webm/mov/m4v.
-- The product `id` in the CSV links to the folder; `category` can include nested paths (e.g., `men/bands`). If no media is found, the placeholder shows.
-- On product pages, all images are shown first, then videos, in a swipeable horizontal gallery. List cards use the first image as the cover. Natural/Lab and 14K/18K toggles adjust price based on CSV discount percentages.
+- The product `id` links to the folder; `category` can include nested paths (e.g., `men/bands`). If no media is found, the placeholder shows.
+- On product pages, all images are shown first, then videos, in a swipeable horizontal gallery. List cards use the first image as the cover.

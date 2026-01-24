@@ -33,12 +33,9 @@ const normalizeMetal = (value?: string) => {
   if (label.includes('18k')) return value;
   return undefined;
 };
-const defaultMetalPreference =
-  normalizeMetal(item.palette.find((entry) => entry.type === 'metal')?.label) ||
-  normalizeMetal(item.metals[0]) ||
-  '18K Yellow Gold';
+const defaultMetalPreference = normalizeMetal(item.metals[0]) || '18K Yellow Gold';
 const defaultStoneType = (() => {
-  const label = item.palette.find((entry) => entry.type === 'stone')?.label?.toLowerCase() || '';
+  const label = (item.stoneTypes[0] || '').toLowerCase();
   if (label.includes('lab')) return 'Lab diamond';
   if (label.includes('natural')) return 'Natural diamond';
   if (label.includes('diamond')) return 'Lab diamond';
@@ -130,7 +127,6 @@ const defaultStoneType = (() => {
           data-inspiration-title={item.title}
           data-inspiration-image={item.heroImage}
         >
-          <input type="hidden" data-estimate-price value={item.estimatedPriceUsdVvs1Vvs2_18k || ''} />
           <section class="space-y-6" data-step="1">
             <div class="space-y-2">
               <h2 class="font-display text-2xl tracking-tight">Piece</h2>
@@ -522,7 +518,6 @@ const defaultStoneType = (() => {
     const requiresReferenceLinks = !inspirationImageValue || directRequest;
     let workerSubmitEnabled = true;
     let hasSubmitted = false;
-    const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
     const getTurnstileToken = () => {
       const tokenEl = form.querySelector('[name="cf-turnstile-response"]');
       return tokenEl ? (tokenEl.value || '').trim() : '';
@@ -608,15 +603,6 @@ const defaultStoneType = (() => {
       return (el.value || '').trim();
     };
 
-    const readEstimatePrice = () => {
-      const raw = fieldValue('[data-estimate-price]');
-      const value = Number(raw);
-      if (!Number.isFinite(value) || value <= 0) {
-        return { value: '', display: '' };
-      }
-      return { value: String(value), display: usdFormatter.format(value) };
-    };
-
     const normalizeTimeline = (value) => (String(value || '').toLowerCase().includes('rush') ? 'Rush' : 'Standard');
 
     const getLinks = () => {
@@ -641,7 +627,6 @@ const defaultStoneType = (() => {
       const budgetMax = fieldValue('[data-field="budgetMax"]');
       const styleIntensity = fieldValue('[data-field="styleIntensity"]');
       const style = styleFromIntensity(styleIntensity);
-      const estimatePrice = readEstimatePrice();
       const timelineValue = fieldValue('[data-field="timeline"]') || 'Standard';
       const timeline = normalizeTimeline(timelineValue);
       const subject = `Heerawalla Bespoke Request [HW-REQ:${requestId}]`;
@@ -654,9 +639,6 @@ const defaultStoneType = (() => {
         `Style intensity: ${style}`,
         `Budget: ${currency} ${budgetMin || '?'}-${budgetMax || '?'}`
       ];
-      if (estimatePrice.display) {
-        specs.push(`Estimated price: ${estimatePrice.display}`);
-      }
 
       const sizes = [];
       const ringSize = fieldValue('[data-field="ringSize"]');
@@ -807,7 +789,6 @@ const defaultStoneType = (() => {
       const occasion = fieldValue('[data-field="occasion"]') || 'Not specified';
       const timelineValue = fieldValue('[data-field="timeline"]') || 'Standard';
       const timeline = normalizeTimeline(timelineValue);
-      const estimatePrice = readEstimatePrice();
       const currency = fieldValue('[data-field="currency"]') || 'USD';
       const budgetMin = fieldValue('[data-field="budgetMin"]');
       const budgetMax = fieldValue('[data-field="budgetMax"]');
@@ -830,9 +811,6 @@ const defaultStoneType = (() => {
         { label: 'Style', value: style || 'Not specified' },
         { label: 'Budget', value: budget },
       ];
-      if (estimatePrice.display) {
-        specs.push({ label: 'Estimated price', value: estimatePrice.display });
-      }
       const materials = [
         { label: 'Metal', value: fieldValue('[data-field="metal"]') || 'Not specified' },
         { label: 'Stone type', value: fieldValue('[data-field="stoneType"]') || 'Not specified' },
@@ -1180,7 +1158,6 @@ const defaultStoneType = (() => {
           return;
         }
         const { subject, body } = buildEmail();
-        const estimatePrice = readEstimatePrice();
         const timelineValue = fieldValue('[data-field="timeline"]') || 'Standard';
         const timeline = normalizeTimeline(timelineValue);
         const ringSize = fieldValue('[data-field="ringSize"]');
@@ -1219,7 +1196,6 @@ const defaultStoneType = (() => {
           wrist_size: wristSize,
           chain_length: chainLength,
           earring_preference: earringPreference,
-          price: estimatePrice.value,
           timeline,
           addressLine1: fieldValue('[data-field="addressLine1"]'),
           addressLine2: fieldValue('[data-field="addressLine2"]'),

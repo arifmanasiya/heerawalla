@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import { withBase } from '../lib/paths';
+import { HERO_IMAGE_URL, LOGO_MARK_URL } from '../lib/placeholders';
 
 type Crumb = { label: string; href?: string };
 const {
@@ -17,10 +18,14 @@ const {
   breadcrumbs?: Crumb[];
 };
 const siteOrigin = Astro.site?.origin || 'https://heerawalla.com';
-const ogImage = image && image.startsWith('http') ? image : new URL(withBase(image || '/images/hero.png'), siteOrigin).toString();
-const logoImage = new URL(withBase('/images/engraving_mark.svg'), siteOrigin).toString();
+const ogImage = image && image.startsWith('http') ? image : new URL(image || HERO_IMAGE_URL, siteOrigin).toString();
+const logoImage = LOGO_MARK_URL;
 const url = new URL(Astro.url.pathname, siteOrigin).toString();
 const gaMeasurementId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID ?? '';
+const isDev = import.meta.env.DEV;
+const devConnect = isDev ? ' http://localhost:8787' : '';
+const devImg = isDev ? ' http://localhost:8787' : '';
+const csp = `default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://static.cloudflareinsights.com; script-src-elem 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://static.cloudflareinsights.com; script-src-attr 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://herawalla-email-atelier.arifmanasiya.workers.dev https://admin-api.heerawalla.com https://cloudflareinsights.com https://static.cloudflareinsights.com${devConnect}; img-src 'self' data: https:${devImg}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src https://challenges.cloudflare.com;`;
 const titleCase = (value: string) =>
   value
     .split(/[-_]/g)
@@ -105,19 +110,15 @@ void websiteJson;
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://static.cloudflareinsights.com; script-src-elem 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://static.cloudflareinsights.com; script-src-attr 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://herawalla-email-atelier.arifmanasiya.workers.dev https://admin-api.heerawalla.com https://cloudflareinsights.com https://static.cloudflareinsights.com; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src https://challenges.cloudflare.com;"
-    />
-    <link rel="icon" type="image/svg+xml" href={withBase('/images/engraving_mark.svg')} />
-    <link rel="shortcut icon" href={withBase('/images/engraving_mark.svg')} />
-    <link rel="apple-touch-icon" href={withBase('/images/engraving_mark.svg')} />
-    <link rel="mask-icon" href={withBase('/images/engraving_mark.svg')} color="#0B1928" />
+    <meta http-equiv="Content-Security-Policy" content={csp} />
+    <link rel="icon" type="image/svg+xml" href={logoImage} />
+    <link rel="shortcut icon" href={logoImage} />
+    <link rel="apple-touch-icon" href={logoImage} />
+    <link rel="mask-icon" href={logoImage} color="#0B1928" />
     {gaMeasurementId ? (
       <>
         <meta name="ga-measurement-id" content={gaMeasurementId} />
         <script async is:inline src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}></script>
-        <script defer is:inline src={withBase('/scripts/ga.js')}></script>
       </>
     ) : null}
     <script type="application/ld+json" is:inline>

@@ -8,10 +8,16 @@ import {
   ORDER_DETAILS_SHEET_HEADER,
   QUOTE_SHEET_HEADER,
   CONTACT_SHEET_HEADER,
+  TICKET_SHEET_HEADER,
   UNIFIED_CONTACTS_SHEET_HEADER,
   PRICE_CHART_HEADER,
   COST_CHART_HEADER,
   DIAMOND_PRICE_CHART_HEADER,
+  PRODUCTS_SHEET_HEADER,
+  INSPIRATIONS_SHEET_HEADER,
+  MEDIA_LIBRARY_SHEET_HEADER,
+  PRODUCT_MEDIA_SHEET_HEADER,
+  INSPIRATION_MEDIA_SHEET_HEADER,
   EMAIL_TEXT,
   EMAIL_HTML,
   ORDER_ACK_SUBJECT,
@@ -71,6 +77,7 @@ import {
   HOLIDAY_CALENDAR_ID,
   ACK_QUEUE_BATCH_LIMIT,
   ALLOWED_ORIGINS,
+  ADMIN_ENUMS,
   REJECT_SUBJECT,
   REJECT_TEXT,
   REJECT_HTML,
@@ -80,11 +87,140 @@ import {
 type CachedToken = { value: string; expiresAt: number } | null;
 let cachedAccessToken: CachedToken = null;
 
+function hasD1(env: Env): env is Env & { DB: D1Database } {
+  return Boolean(env.DB);
+}
+
+async function d1All(env: Env & { DB: D1Database }, sql: string, params: unknown[] = []) {
+  const statement = env.DB.prepare(sql);
+  const bound = params.length ? statement.bind(...params) : statement;
+  const result = await bound.all();
+  return (result.results || []) as Record<string, string | number | null>[];
+}
+
+async function d1Run(env: Env & { DB: D1Database }, sql: string, params: unknown[] = []) {
+  const statement = env.DB.prepare(sql);
+  const bound = params.length ? statement.bind(...params) : statement;
+  return bound.run();
+}
+
+async function handleMediaRequest(
+  request: Request,
+  env: Env,
+  url: URL,
+  allowedOrigin: string
+) {
+  if (!url.pathname.startsWith("/media/")) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  if (!env.MEDIA_BUCKET) {
+    return new Response("Not Found", {
+      status: 404,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  const key = url.pathname.replace(/^\/media\//, "");
+  if (!key) {
+    return new Response("Not Found", {
+      status: 404,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  let object = await env.MEDIA_BUCKET.get(key);
+  if (!object && !key.startsWith("media/")) {
+    object = await env.MEDIA_BUCKET.get(`media/${key}`);
+  }
+  if (!object) {
+    return new Response("Not Found", {
+      status: 404,
+      headers: buildCorsHeaders(allowedOrigin, true),
+    });
+  }
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  const contentType = headers.get("content-type") || "";
+  if (!contentType || contentType === "application/json") {
+    const ext = key.split(".").pop()?.toLowerCase() || "";
+    const typeMap: Record<string, string> = {
+      svg: "image/svg+xml",
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+      gif: "image/gif",
+      avif: "image/avif",
+    };
+    if (typeMap[ext]) {
+      headers.set("content-type", typeMap[ext]);
+    }
+  }
+  const cors = buildCorsHeaders(allowedOrigin, true);
+  Object.entries(cors).forEach(([header, value]) => headers.set(header, value));
+  return new Response(request.method === "HEAD" ? null : object.body, {
+    status: 200,
+    headers,
+  });
+}
+
+function parseJsonList(value: string | null | undefined) {
+  if (!value) return [];
+  const trimmed = String(value).trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return Array.isArray(parsed) ? parsed.map((entry) => String(entry)) : [];
+    } catch {
+      return [];
+    }
+  }
+  return trimmed
+    .split(/[|,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function toPipeList(value: string | null | undefined) {
+  if (!value) return "";
+  const list = parseJsonList(value);
+  if (list.length) return list.join("|");
+  return String(value).trim();
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "";
-    const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : "";
+    const isLocalHost = url.hostname === "127.0.0.1" || url.hostname === "localhost";
+    const allowedOrigin =
+      ALLOWED_ORIGINS.includes(origin) || isLocalOrigin(origin)
+        ? origin
+        : !origin && isLocalHost
+        ? "*"
+        : "";
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/admin")) {
+      logInfo("admin_preflight", {
+        origin,
+        allowedOrigin,
+        acrh: request.headers.get("Access-Control-Request-Headers") || "",
+        acrm: request.headers.get("Access-Control-Request-Method") || "",
+      });
+    }
+    if (request.method === "OPTIONS" && isLocalOrigin(origin)) {
+      return new Response(null, {
+        status: 200,
+        headers: buildCorsHeaders(origin, true),
+      });
+    }
+    const mediaResponse = await handleMediaRequest(request, env, url, allowedOrigin);
+    if (mediaResponse) {
+      return mediaResponse;
+    }
     const adminResponse = await handleAdminRequest(request, env, url, allowedOrigin, origin);
     if (adminResponse) {
       return adminResponse;
@@ -142,6 +278,9 @@ export default {
             headers: buildCorsHeaders(allowedOrigin, true),
           });
         }
+        const diamondComponents = parseDiamondBreakdownComponentsPayload(
+          payload.diamond_breakdown_components || payload.diamondBreakdownComponents
+        );
         const record = {
           metal: getString(payload.metal),
           metal_weight: getString(payload.metal_weight || payload.metalWeight),
@@ -171,7 +310,8 @@ export default {
           costValues,
           diamondPrices,
           adjustments,
-          discountDetails
+          discountDetails,
+          diamondComponents
         );
         if (!result.ok) {
           return new Response(JSON.stringify({ ok: false, error: result.error }), {
@@ -882,63 +1022,74 @@ export default {
             });
           }
 
-          await syncGoogleContact(env, {
-            email: senderEmail,
-            name,
-            phone,
-            source: "contact",
-            requestId,
-            contactPreference: phonePreferred ? "phone" : "",
-            subscriptionStatus: "subscribed",
-          });
-          try {
-            const now = new Date().toISOString();
-            await appendContactRow(env, [
-              now,
-              senderEmail,
-              name,
-              phone,
-              "contact",
-              requestId,
-              phonePreferred ? "phone" : "",
-              "",
-              resolvedPageUrl,
-              utmSource,
-              utmMedium,
-              utmCampaign,
-              utmTerm,
-              utmContent,
-              referrer,
-              "",
-              "",
-              "",
-              "",
-              "",
-              "",
-              "subscribed",
-              "NEW",
-              now,
-              message,
-              "",
-            ]);
-          } catch (error) {
-            logWarn("contact_sheet_failed", { requestId, error: String(error) });
-          }
-          try {
-            await upsertUnifiedContact(env, {
+            await syncGoogleContact(env, {
               email: senderEmail,
               name,
               phone,
               source: "contact",
-              createdAt: new Date().toISOString(),
+              requestId,
+              contactPreference: phonePreferred ? "phone" : "",
+              subscriptionStatus: "subscribed",
             });
+            try {
+              const now = new Date().toISOString();
+              if (hasD1(env)) {
+                await createTicketFromContact(env, {
+                  requestId,
+                  createdAt: now,
+                  status: "NEW",
+                  subject: subjectInput || "",
+                  summary: message,
+                  name,
+                  email: senderEmail,
+                  phone,
+                  source: "contact",
+                  pageUrl: resolvedPageUrl,
+                });
+                await addTicketDetail(env, {
+                  requestId,
+                  note: message,
+                  kind: "note",
+                  createdAt: now,
+                  updatedBy: "system",
+                });
+              } else {
+                await appendContactRow(env, [
+                  now,
+                  senderEmail,
+                  name,
+                  phone,
+                  "contact",
+                  requestId,
+                  phonePreferred ? "phone" : "",
+                  "",
+                  resolvedPageUrl,
+                  utmSource,
+                  utmMedium,
+                  utmCampaign,
+                  utmTerm,
+                  utmContent,
+                  referrer,
+                  "",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "",
+                  "subscribed",
+                  "NEW",
+                  now,
+                  message,
+                  "",
+                ]);
+              }
+            } catch (error) {
+              logWarn("contact_sheet_failed", { requestId, error: String(error) });
+            }
           } catch (error) {
-            logWarn("unified_contact_failed", { requestId, error: String(error) });
+            logError("contact_submit_send_failed", { requestId, email: maskEmail(senderEmail) });
+            throw error;
           }
-        } catch (error) {
-          logError("contact_submit_send_failed", { requestId, email: maskEmail(senderEmail) });
-          throw error;
-        }
 
         return new Response(JSON.stringify({ ok: true, requestId }), {
           status: 200,
@@ -1469,7 +1620,7 @@ export default {
     if (env.ORDER_DETAILS_SHEET_ID) {
       tasks.push(processShippedOrderUpdates(env));
     }
-    tasks.push(processUnifiedContacts(env));
+      tasks.push(processContactsDirectory(env));
     if (tasks.length) {
       ctx.waitUntil(Promise.all(tasks));
     }
@@ -1821,12 +1972,17 @@ async function verifyTurnstile(secret: string, token: string, ip?: string) {
 function buildCorsHeaders(origin: string, json = false) {
   const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Admin-Email",
   };
   if (origin) {
     headers["Access-Control-Allow-Origin"] = origin;
-    headers["Access-Control-Allow-Credentials"] = "true";
-    headers["Vary"] = "Origin";
+    if (origin !== "*") {
+      headers["Access-Control-Allow-Credentials"] = "true";
+      headers["Vary"] = "Origin";
+    }
+    if (isLocalOrigin(origin) || origin === "*") {
+      headers["X-Dev-Cors"] = "1";
+    }
   }
   if (json) {
     headers["Content-Type"] = "application/json";
@@ -1857,9 +2013,16 @@ async function handleAdminRequest(
 ) {
   if (!url.pathname.startsWith("/admin")) return null;
   if (request.method === "OPTIONS") {
+    const isLocalHost = url.hostname === "127.0.0.1" || url.hostname === "localhost";
+    const debugHeaders = isLocalHost
+      ? {
+          "X-Debug-Origin": origin || "none",
+          "X-Debug-Allow-Origin": allowedOrigin || "none",
+        }
+      : {};
     return new Response(null, {
-      status: 204,
-      headers: buildCorsHeaders(allowedOrigin, true),
+      status: 200,
+      headers: { ...buildCorsHeaders(allowedOrigin, true), ...debugHeaders },
     });
   }
 
@@ -1876,6 +2039,12 @@ async function handleAdminRequest(
     if (request.method === "GET") {
       if (path === "/" || path === "/me") {
         return new Response(JSON.stringify({ ok: true, role, email: adminEmail }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/enums") {
+        return new Response(JSON.stringify(ADMIN_ENUMS), {
           status: 200,
           headers: buildCorsHeaders(allowedOrigin, true),
         });
@@ -1909,15 +2078,85 @@ async function handleAdminRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
-    if (path === "/contacts") {
-      const payload = await buildAdminList(env, "contact", url.searchParams);
-      return new Response(JSON.stringify({ ok: true, ...payload }), {
-        status: 200,
-        headers: buildCorsHeaders(allowedOrigin, true),
-      });
-    }
+      if (path === "/contacts") {
+        const payload = await buildAdminList(env, "contact", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/tickets") {
+        const payload = await buildAdminList(env, "ticket", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/products") {
+        const payload = await buildAdminList(env, "product", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/inspirations") {
+        const payload = await buildAdminList(env, "inspiration", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/media-library") {
+        const payload = await buildAdminList(env, "media_library", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/product-media") {
+        const payload = await buildAdminList(env, "product_media", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/inspiration-media") {
+        const payload = await buildAdminList(env, "inspiration_media", url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/catalog-stone-options") {
+        const payload = await buildCatalogStoneOptionsList(env, url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/catalog-metal-options") {
+        const payload = await buildCatalogMetalOptionsList(env, url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/site-config") {
+        const payload = await buildSiteConfigList(env, url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
       if (path === "/contacts-unified") {
         const payload = await buildUnifiedContactsList(env, url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/tickets/details") {
+        const payload = await buildTicketDetails(env, url.searchParams);
         return new Response(JSON.stringify({ ok: true, ...payload }), {
           status: 200,
           headers: buildCorsHeaders(allowedOrigin, true),
@@ -1965,6 +2204,32 @@ async function handleAdminRequest(
     }
 
   if (request.method === "POST") {
+    if (path === "/media/upload") {
+      if (!canEditCatalog(role)) {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const result = await handleMediaUpload(env, request);
+      return new Response(JSON.stringify(result), {
+        status: result.ok ? 200 : 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/deploy-site") {
+      if (role !== "admin") {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const result = await triggerSiteRebuild(env);
+      return new Response(JSON.stringify(result), {
+        status: result.ok ? 200 : 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
     const payload = await safeJson(request);
     if (!isRecord(payload)) {
       return new Response(JSON.stringify({ ok: false, error: "invalid_payload" }), {
@@ -2026,19 +2291,136 @@ async function handleAdminRequest(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
-    if (path === "/contacts/action") {
-      if (!canEditContacts(role)) {
-        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
-          status: 403,
+      if (path === "/contacts/action") {
+        if (!canEditContacts(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleContactAdminAction(env, payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
           headers: buildCorsHeaders(allowedOrigin, true),
         });
       }
-      const result = await handleContactAdminAction(env, payload);
-      return new Response(JSON.stringify(result), {
-        status: result.ok ? 200 : 400,
-        headers: buildCorsHeaders(allowedOrigin, true),
-      });
-    }
+      if (path === "/tickets/action") {
+        if (!canEditTickets(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleTicketAdminAction(env, payload, adminEmail);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/products/action") {
+        if (!canEditCatalog(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleCatalogAdminAction(env, "product", payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/inspirations/action") {
+        if (!canEditCatalog(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleCatalogAdminAction(env, "inspiration", payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/media-library/action") {
+        if (!canEditCatalog(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleCatalogAdminAction(env, "media_library", payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/product-media/action") {
+        if (!canEditCatalog(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleCatalogAdminAction(env, "product_media", payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/inspiration-media/action") {
+        if (!canEditCatalog(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleCatalogAdminAction(env, "inspiration_media", payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/catalog-stone-options/action") {
+        if (!canEditCatalog(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleCatalogStoneOptionAction(env, payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/catalog-metal-options/action") {
+        if (!canEditCatalog(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleCatalogMetalOptionAction(env, payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/site-config/action") {
+        if (!canEditSiteConfig(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleSiteConfigAdminAction(env, payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
       if (path === "/email") {
         if (!canEditOrders(role)) {
           return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
@@ -2804,11 +3186,54 @@ function getAdminEmail(request: Request, origin: string) {
   if (localOverride && isLocalOrigin(origin)) {
     return normalizeEmailAddress(localOverride);
   }
+  if (isLocalOrigin(origin)) {
+    const url = new URL(request.url);
+    const queryEmail = url.searchParams.get("admin_email") || url.searchParams.get("adminEmail") || "";
+    if (queryEmail) return normalizeEmailAddress(queryEmail);
+  }
   return "";
 }
 
 function isLocalOrigin(origin: string) {
   return origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1");
+}
+
+async function triggerSiteRebuild(env: Env) {
+  const token = (env.GITHUB_TOKEN || "").trim();
+  const owner = (env.GITHUB_OWNER || "").trim();
+  const repo = (env.GITHUB_REPO || "").trim();
+  const workflow = (env.GITHUB_WORKFLOW || "deploy.yml").trim();
+  const ref = (env.GITHUB_REF || "main").trim();
+  if (!token || !owner || !repo || !workflow || !ref) {
+    return { ok: false, error: "missing_github_config" };
+  }
+
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({ ref }),
+    }
+  );
+  if (!response.ok) {
+    const message = await response.text();
+    logError("github_dispatch_failed", {
+      status: response.status,
+      message,
+      owner,
+      repo,
+      workflow,
+      ref,
+    });
+    return { ok: false, error: "github_dispatch_failed", status: response.status };
+  }
+  return { ok: true };
 }
 
 function parseAllowlist(value?: string) {
@@ -2842,23 +3267,181 @@ function canEditContacts(role: string) {
   return role === "admin";
 }
 
+function canEditTickets(role: string) {
+  return role === "admin" || role === "ops";
+}
+
 function canEditPricing(role: string) {
   return role === "admin";
 }
 
-async function buildAdminList(
-  env: Env,
-  kind: "order" | "quote" | "contact",
+function canEditCatalog(role: string) {
+  return role === "admin" || role === "ops";
+}
+
+function canEditSiteConfig(role: string) {
+  return role === "admin";
+}
+
+function mapD1RowToRecord(row: Record<string, unknown>) {
+  const record: Record<string, string> = {};
+  Object.entries(row).forEach(([key, value]) => {
+    record[key] = value === null || value === undefined ? "" : String(value);
+  });
+  return record;
+}
+
+  async function buildAdminList(
+    env: Env,
+    kind:
+      | "order"
+      | "quote"
+      | "contact"
+      | "ticket"
+      | "product"
+      | "inspiration"
+      | "media_library"
+      | "product_media"
+    | "inspiration_media",
   params: URLSearchParams
-) {
-  const config = getSheetConfig(env, kind);
+  ) {
+  if (!hasD1(env) && kind === "ticket") {
+    return { items: [], total: 0, headers: TICKET_SHEET_HEADER };
+  }
+  if (hasD1(env)) {
+    let rows: Record<string, unknown>[] = [];
+    let headerFallback: string[] = [];
+    if (kind === "order") {
+      rows = await d1All(env, "SELECT * FROM orders");
+      headerFallback = ORDER_SHEET_HEADER;
+    } else if (kind === "quote") {
+      rows = await d1All(env, "SELECT * FROM quotes");
+      headerFallback = QUOTE_SHEET_HEADER;
+      } else if (kind === "contact") {
+        rows = await d1All(env, "SELECT * FROM contacts");
+        headerFallback = CONTACT_SHEET_HEADER;
+      } else if (kind === "ticket") {
+        rows = await d1All(env, "SELECT * FROM tickets");
+        headerFallback = TICKET_SHEET_HEADER;
+      } else if (kind === "product") {
+        rows = await d1All(env, "SELECT * FROM catalog_items WHERE type = 'product'");
+        headerFallback = PRODUCTS_SHEET_HEADER;
+      } else if (kind === "inspiration") {
+      rows = await d1All(env, "SELECT * FROM catalog_items WHERE type = 'inspiration'");
+      headerFallback = INSPIRATIONS_SHEET_HEADER;
+    } else if (kind === "media_library") {
+      rows = await d1All(env, "SELECT * FROM media_library");
+      headerFallback = MEDIA_LIBRARY_SHEET_HEADER;
+    } else if (kind === "product_media") {
+      rows = await d1All(
+        env,
+        `SELECT
+           catalog_media.id,
+           catalog_items.slug AS catalog_slug,
+           catalog_media.media_id,
+           catalog_media.position,
+           catalog_media.is_primary,
+           catalog_media.sort_order
+         FROM catalog_media
+         JOIN catalog_items ON catalog_items.id = catalog_media.catalog_id
+         WHERE catalog_items.type = 'product'`
+      );
+      headerFallback = PRODUCT_MEDIA_SHEET_HEADER;
+    } else if (kind === "inspiration_media") {
+      rows = await d1All(
+        env,
+        `SELECT
+           catalog_media.id,
+           catalog_items.slug AS catalog_slug,
+           catalog_media.media_id,
+           catalog_media.position,
+           catalog_media.is_primary,
+           catalog_media.sort_order
+         FROM catalog_media
+         JOIN catalog_items ON catalog_items.id = catalog_media.catalog_id
+         WHERE catalog_items.type = 'inspiration'`
+      );
+      headerFallback = INSPIRATION_MEDIA_SHEET_HEADER;
+    }
+
+    const items = rows.map((row) => {
+      const entry = mapD1RowToRecord(row);
+      if (kind === "product") {
+        entry.type = "product";
+      }
+      if (kind === "inspiration") {
+        entry.type = "inspiration";
+      }
+      if (kind === "product_media") {
+        entry.product_slug = entry.catalog_slug || entry.product_slug || "";
+        entry.order = entry.sort_order || entry.order || "";
+      }
+      if (kind === "inspiration_media") {
+        entry.inspiration_slug = entry.catalog_slug || entry.inspiration_slug || "";
+        entry.order = entry.sort_order || entry.order || "";
+      }
+      entry.row_number =
+        entry.request_id ||
+        entry.email ||
+        entry.slug ||
+        entry.media_id ||
+        entry.id ||
+        "";
+      return entry;
+    });
+
+    const filtered = applyAdminFilters(items, params, kind);
+    const sorted = applyAdminSort(filtered, params);
+    const offset = Math.max(Number(params.get("offset") || 0), 0);
+    const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
+    const paged = sorted.slice(offset, offset + limit);
+
+    return { items: paged, total: sorted.length, headers: headerFallback };
+  }
+
+  const isCatalog =
+    kind === "product" ||
+    kind === "inspiration" ||
+    kind === "media_library" ||
+    kind === "product_media" ||
+    kind === "inspiration_media";
+  const config = isCatalog
+    ? getCatalogSheetConfig(env, kind)
+    : getSheetConfig(env, kind as "order" | "quote" | "contact");
   const headerFallback =
-    kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
+    kind === "order"
+      ? ORDER_SHEET_HEADER
+      : kind === "quote"
+      ? QUOTE_SHEET_HEADER
+      : kind === "contact"
+      ? CONTACT_SHEET_HEADER
+      : kind === "product"
+      ? PRODUCTS_SHEET_HEADER
+      : kind === "inspiration"
+      ? INSPIRATIONS_SHEET_HEADER
+      : kind === "media_library"
+      ? MEDIA_LIBRARY_SHEET_HEADER
+      : kind === "product_media"
+      ? PRODUCT_MEDIA_SHEET_HEADER
+      : INSPIRATION_MEDIA_SHEET_HEADER;
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, headerFallback, cacheKey);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
-  const requiredKey = kind === "contact" ? "email" : "request_id";
+  const requiredKey =
+    kind === "contact"
+      ? "email"
+      : kind === "product"
+      ? "slug"
+      : kind === "inspiration"
+      ? "slug"
+      : kind === "media_library"
+      ? "media_id"
+      : kind === "product_media"
+      ? "product_slug"
+      : kind === "inspiration_media"
+      ? "inspiration_slug"
+      : "request_id";
   const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
   const rows = await fetchSheetValues(
     env,
@@ -2880,13 +3463,80 @@ async function buildAdminList(
     return entry;
   });
 
-  const filtered = applyAdminFilters(items, params);
+  const filtered = applyAdminFilters(items, params, kind);
   const sorted = applyAdminSort(filtered, params);
   const offset = Math.max(Number(params.get("offset") || 0), 0);
   const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
   const paged = sorted.slice(offset, offset + limit);
 
-  return { items: paged, total: sorted.length };
+    return { items: paged, total: sorted.length, headers: headerConfig.header };
+  }
+
+  async function buildCatalogStoneOptionsList(env: Env, params: URLSearchParams) {
+    if (!hasD1(env)) {
+      return { items: [], total: 0, headers: CATALOG_STONE_OPTIONS_HEADER };
+    }
+    const catalogId = (params.get("catalog_id") || params.get("catalogId") || "").trim();
+    let sql = "SELECT * FROM catalog_stone_options";
+    const bindings: string[] = [];
+    if (catalogId) {
+      sql += " WHERE catalog_id = ?";
+      bindings.push(catalogId);
+    }
+    const rows = await d1All(env, sql, bindings);
+    const items = rows.map((row) => {
+      const entry = mapD1RowToRecord(row);
+      entry.row_number = entry.id || "";
+      return entry;
+    });
+    return { items, total: items.length, headers: CATALOG_STONE_OPTIONS_HEADER };
+  }
+
+  async function buildCatalogMetalOptionsList(env: Env, params: URLSearchParams) {
+    if (!hasD1(env)) {
+      return { items: [], total: 0, headers: CATALOG_METAL_OPTIONS_HEADER };
+    }
+    const catalogId = (params.get("catalog_id") || params.get("catalogId") || "").trim();
+    let sql = "SELECT * FROM catalog_metal_options";
+    const bindings: string[] = [];
+    if (catalogId) {
+      sql += " WHERE catalog_id = ?";
+      bindings.push(catalogId);
+    }
+    const rows = await d1All(env, sql, bindings);
+    const items = rows.map((row) => {
+      const entry = mapD1RowToRecord(row);
+      entry.row_number = entry.id || "";
+      return entry;
+    });
+    return { items, total: items.length, headers: CATALOG_METAL_OPTIONS_HEADER };
+  }
+
+  async function buildSiteConfigList(env: Env, params: URLSearchParams) {
+    if (!hasD1(env)) {
+      return { items: [], total: 0, headers: ["key", "value", "updated_at"] };
+    }
+  const rows = await d1All(env, "SELECT key, value, updated_at FROM site_config");
+  const items = rows.map((row) => {
+    const entry = mapD1RowToRecord(row);
+    entry.row_number = entry.key || "";
+    return entry;
+  });
+
+  const q = (params.get("q") || "").trim().toLowerCase();
+  const filtered = q
+    ? items.filter(
+        (item) =>
+          String(item.key || "").toLowerCase().includes(q) ||
+          String(item.value || "").toLowerCase().includes(q)
+      )
+    : items;
+  const sorted = applyAdminSort(filtered, params);
+  const offset = Math.max(Number(params.get("offset") || 0), 0);
+  const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
+  const paged = sorted.slice(offset, offset + limit);
+
+  return { items: paged, total: sorted.length, headers: ["key", "value", "updated_at"] };
 }
 
 async function buildPricingList(
@@ -2894,6 +3544,37 @@ async function buildPricingList(
   kind: "price_chart" | "cost_chart" | "diamond_price_chart",
   params: URLSearchParams
 ) {
+  if (hasD1(env)) {
+    let rows: Record<string, unknown>[] = [];
+    let headerFallback: string[] = [];
+    if (kind === "price_chart") {
+      rows = await d1All(env, "SELECT id, metal, adjustment_type, adjustment_value, notes FROM price_chart");
+      headerFallback = PRICE_CHART_HEADER;
+    } else if (kind === "cost_chart") {
+      rows = await d1All(env, "SELECT id, key, value, unit, notes FROM cost_chart");
+      headerFallback = COST_CHART_HEADER;
+    } else {
+      rows = await d1All(
+        env,
+        "SELECT id, clarity, color, weight_min, weight_max, price_per_ct, notes FROM diamond_price_chart"
+      );
+      headerFallback = DIAMOND_PRICE_CHART_HEADER;
+    }
+
+    const items = rows.map((row) => {
+      const entry = mapD1RowToRecord(row);
+      entry.row_number = entry.id || "";
+      return entry;
+    });
+
+    const filtered = applyPricingFilters(items, params);
+    const sorted = applyAdminSort(filtered, params);
+    const offset = Math.max(Number(params.get("offset") || 0), 0);
+    const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
+    const paged = sorted.slice(offset, offset + limit);
+
+    return { items: paged, total: sorted.length, headers: headerFallback };
+  }
   const config = getPricingSheetConfig(env, kind);
   if (!config) {
     return { items: [], total: 0 };
@@ -2937,6 +3618,35 @@ async function buildPricingList(
 }
 
 async function buildUnifiedContactsList(env: Env, params: URLSearchParams) {
+  if (hasD1(env)) {
+    const rows = await d1All(env, "SELECT * FROM unified_contacts");
+    const items = rows.map((row) => {
+      const entry = mapD1RowToRecord(row);
+      entry.row_number = entry.email || "";
+      return entry;
+    });
+
+    const filtered = applyUnifiedContactsFilters(items, params);
+    const sorted = applyAdminSort(filtered, params);
+    const offset = Math.max(Number(params.get("offset") || 0), 0);
+    const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
+    const paged = sorted.slice(offset, offset + limit);
+
+  return { items: paged, total: sorted.length, headers: UNIFIED_CONTACTS_SHEET_HEADER };
+}
+
+async function buildTicketDetails(env: Env, params: URLSearchParams) {
+  if (!hasD1(env)) return { details: [] as Record<string, string>[] };
+  const requestId = (params.get("request_id") || params.get("ticket_id") || "").trim();
+  if (!requestId) return { details: [] as Record<string, string>[] };
+  const rows = await d1All(
+    env,
+    "SELECT id, request_id, created_at, kind, note, updated_by FROM ticket_details WHERE request_id = ? ORDER BY created_at DESC",
+    [requestId]
+  );
+  const details = rows.map((row) => mapD1RowToRecord(row));
+  return { details };
+}
   const config = getUnifiedContactsSheetConfig(env);
   if (!config) {
     return { items: [], total: 0 };
@@ -2971,11 +3681,29 @@ async function buildUnifiedContactsList(env: Env, params: URLSearchParams) {
   return { items: paged, total: sorted.length };
 }
 
-function applyAdminFilters(items: Array<Record<string, string>>, params: URLSearchParams) {
+function applyAdminFilters(
+  items: Array<Record<string, string>>,
+  params: URLSearchParams,
+    kind?:
+      | "order"
+      | "quote"
+      | "contact"
+      | "ticket"
+      | "product"
+      | "inspiration"
+      | "media_library"
+    | "product_media"
+    | "inspiration_media"
+) {
   const status = (params.get("status") || "").trim().toUpperCase();
   const q = (params.get("q") || "").trim().toLowerCase();
   const email = (params.get("email") || "").trim().toLowerCase();
   const requestId = (params.get("request_id") || "").trim().toLowerCase();
+  const slug = (params.get("slug") || "").trim().toLowerCase();
+  const id = (params.get("id") || "").trim().toLowerCase();
+  const mediaId = (params.get("media_id") || "").trim().toLowerCase();
+  const productSlug = (params.get("product_slug") || "").trim().toLowerCase();
+  const inspirationSlug = (params.get("inspiration_slug") || "").trim().toLowerCase();
 
   return items.filter((item) => {
     if (status) {
@@ -2988,18 +3716,62 @@ function applyAdminFilters(items: Array<Record<string, string>>, params: URLSear
     if (requestId) {
       if (!String(item.request_id || "").toLowerCase().includes(requestId)) return false;
     }
+    if (slug || id) {
+      const slugMatch = slug
+        ? String(item.slug || "").toLowerCase().includes(slug)
+        : false;
+      const idMatch = id
+        ? String(item.id || "").toLowerCase().includes(id)
+        : false;
+      if (slug && id) {
+        if (!slugMatch && !idMatch) return false;
+      } else if (slug && !slugMatch) {
+        return false;
+      } else if (id && !idMatch) {
+        return false;
+      }
+    }
+    if (mediaId) {
+      if (!String(item.media_id || "").toLowerCase().includes(mediaId)) return false;
+    }
+    if (productSlug) {
+      if (!String(item.product_slug || "").toLowerCase().includes(productSlug)) return false;
+    }
+    if (inspirationSlug) {
+      if (!String(item.inspiration_slug || "").toLowerCase().includes(inspirationSlug)) return false;
+    }
     if (q) {
-      const haystack = [
-        item.request_id,
-        item.name,
-        item.email,
-        item.product_name,
-        item.design_code,
+      const isCatalog =
+        kind === "product" ||
+        kind === "inspiration" ||
+        kind === "media_library" ||
+        kind === "product_media" ||
+        kind === "inspiration_media";
+        const haystack = [
+          item.request_id,
+          item.name,
+          item.email,
+          item.subject,
+          item.summary,
+          item.product_name,
+          item.design_code,
+          item.slug,
+          item.id,
+        item.media_id,
+        item.product_slug,
+        item.inspiration_slug,
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      if (!haystack.includes(q)) return false;
+      if (!haystack.includes(q) && isCatalog) {
+        const fallback = Object.values(item)
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!fallback.includes(q)) return false;
+      }
+      if (!haystack.includes(q) && !isCatalog) return false;
     }
     return true;
   });
@@ -3242,6 +4014,36 @@ function findAdjustmentMultiplier(adjustments: Record<string, PriceAdjustment>, 
 }
 
 async function loadPriceChartAdjustments(env: Env): Promise<Record<string, PriceAdjustment>> {
+  if (hasD1(env)) {
+    const rows = await d1All(
+      env,
+      "SELECT metal, adjustment_type, adjustment_value FROM price_chart"
+    );
+    const adjustments: Record<string, PriceAdjustment> = {};
+    rows.forEach((row) => {
+      const metal = normalizeMetalOption(String(row.metal || ""));
+      if (!metal) return;
+      const adjustmentType = normalizeAdjustmentType(String(row.adjustment_type || ""));
+      const rawValue = String(row.adjustment_value ?? "");
+      const value = parseAdjustmentValue(rawValue || "", adjustmentType);
+      let mode: "delta" | "multiplier" | undefined;
+      if (adjustmentType === "percent") {
+        const numeric = parseNumberValue(rawValue || "");
+        const hasPercent = rawValue.includes("%");
+        if (Number.isFinite(numeric)) {
+          if (numeric < 0) {
+            mode = "delta";
+          } else if (hasPercent || numeric >= 2) {
+            mode = "delta";
+          } else {
+            mode = "multiplier";
+          }
+        }
+      }
+      adjustments[metal] = { type: adjustmentType, value, mode };
+    });
+    return adjustments;
+  }
   const config = getPriceChartSheetConfig(env);
   if (!config) return {};
   try {
@@ -3377,6 +4179,16 @@ function isDiamondWildcard(value: string) {
 }
 
 async function loadCostChartValues(env: Env): Promise<CostChartValues> {
+  if (hasD1(env)) {
+    const rows = await d1All(env, "SELECT key, value FROM cost_chart");
+    const values: CostChartValues = {};
+    rows.forEach((row) => {
+      const key = normalizeCostKey(String(row.key || ""));
+      if (!key) return;
+      values[key] = String(row.value ?? "");
+    });
+    return values;
+  }
   const config = getCostChartSheetConfig(env);
   if (!config) return {};
   try {
@@ -3415,6 +4227,29 @@ async function loadCostChartValues(env: Env): Promise<CostChartValues> {
 }
 
 async function loadDiamondPriceChart(env: Env): Promise<DiamondPriceEntry[]> {
+  if (hasD1(env)) {
+    const rows = await d1All(
+      env,
+      "SELECT clarity, color, weight_min, weight_max, price_per_ct FROM diamond_price_chart"
+    );
+    const entries: DiamondPriceEntry[] = [];
+    rows.forEach((row) => {
+      const pricePerCt = parseNumberValue(String(row.price_per_ct ?? ""));
+      if (!Number.isFinite(pricePerCt) || pricePerCt <= 0) return;
+      const weightMin = parseNumberValue(String(row.weight_min ?? ""));
+      const weightMaxRaw = parseNumberValue(String(row.weight_max ?? ""));
+      if (!Number.isFinite(weightMin) || weightMin < 0) return;
+      const weightMax = Number.isFinite(weightMaxRaw) && weightMaxRaw > 0 ? weightMaxRaw : Infinity;
+      entries.push({
+        clarity: normalizeDiamondToken(String(row.clarity || "")),
+        color: normalizeDiamondToken(String(row.color || "")),
+        weightMin,
+        weightMax,
+        pricePerCt,
+      });
+    });
+    return entries;
+  }
   const config = getDiamondPriceChartSheetConfig(env);
   if (!config) return [];
   try {
@@ -3581,7 +4416,15 @@ function resolveDiscountDetails(costValues: CostChartValues, record?: Record<str
   return { label, rawPercent, appliedPercent, summary, source };
 }
 
-type DiamondPiece = { weight: number; count: number };
+type DiamondPiece = { weight: number; count: number; stoneType?: "lab" | "natural" };
+type DiamondBreakdownComponent = { stoneType?: "lab" | "natural"; breakdown: string };
+
+function normalizeStoneTypeToken(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("lab")) return "lab";
+  if (normalized.includes("natural")) return "natural";
+  return "";
+}
 
 function parseDiamondBreakdown(input: string): DiamondPiece[] {
   if (!input) return [];
@@ -3613,6 +4456,106 @@ function parseDiamondBreakdown(input: string): DiamondPiece[] {
     .filter((entry) => Number.isFinite(entry.weight) && entry.weight > 0 && Number.isFinite(entry.count) && entry.count > 0);
 }
 
+function parseDiamondBreakdownWithType(input: string, defaultType: string): DiamondPiece[] {
+  if (!input) return [];
+  const fallbackType = normalizeStoneTypeToken(defaultType);
+  return input
+    .split(/\n|;|,|\|/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      let payload = line;
+      let stoneType = fallbackType;
+      const typeMatch = line.match(
+        /^(lab(?:\s+grown)?|natural)(?:\s+diamond)?\s*[:=-]\s*(.+)$/i
+      );
+      if (typeMatch) {
+        stoneType = normalizeStoneTypeToken(typeMatch[1]) || fallbackType;
+        payload = typeMatch[2];
+      }
+      const match = payload.match(
+        /([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[xA-]\s*([0-9]*\.?[0-9]+)/i
+      );
+      if (match) {
+        const weight = Number(match[1]);
+        const count = Number(match[2]);
+        return { weight, count, stoneType: stoneType || undefined };
+      }
+      const numbers = payload.match(/[0-9]*\.?[0-9]+/g) || [];
+      if (numbers.length >= 2) {
+        const first = Number(numbers[0]);
+        const second = Number(numbers[1]);
+        const weight = first <= second ? first : second;
+        const count = first <= second ? second : first;
+        return { weight, count, stoneType: stoneType || undefined };
+      }
+      if (numbers.length === 1) {
+        const weight = Number(numbers[0]);
+        return { weight, count: 1, stoneType: stoneType || undefined };
+      }
+      return { weight: 0, count: 0, stoneType: stoneType || undefined };
+    })
+    .filter(
+      (entry) =>
+        Number.isFinite(entry.weight) &&
+        entry.weight > 0 &&
+        Number.isFinite(entry.count) &&
+        entry.count > 0
+    );
+}
+
+function parseDiamondBreakdownComponentsPayload(value: unknown): DiamondBreakdownComponent[] {
+  if (!value) return [];
+  let raw = value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as Record<string, unknown>;
+      const stoneType = normalizeStoneTypeToken(
+        getString(record.stone_type || record.stoneType || record.type)
+      );
+      const breakdown = getString(
+        record.diamond_breakdown || record.diamondBreakdown || record.breakdown
+      );
+      if (!breakdown) return null;
+      return { stoneType: stoneType || undefined, breakdown };
+    })
+    .filter(Boolean) as DiamondBreakdownComponent[];
+}
+
+function resolveDiamondPieces(
+  record: Record<string, string>,
+  components?: DiamondBreakdownComponent[]
+) {
+  const stoneLabel = String(record.stone || "").toLowerCase();
+  let defaultType = normalizeStoneTypeToken(stoneLabel);
+  if (!defaultType && stoneLabel.includes("diamond")) {
+    defaultType = "natural";
+  }
+  let pieces: DiamondPiece[] = [];
+  if (components && components.length) {
+    for (const component of components) {
+      const componentType = normalizeStoneTypeToken(component.stoneType || "") || defaultType;
+      pieces = pieces.concat(parseDiamondBreakdownWithType(component.breakdown, componentType));
+    }
+  }
+  if (!pieces.length) {
+    pieces = parseDiamondBreakdownWithType(record.diamond_breakdown || "", defaultType);
+  }
+  if (!pieces.length && record.stone_weight) {
+    pieces = parseDiamondBreakdownWithType(record.stone_weight || "", defaultType);
+  }
+  return { pieces, defaultType };
+}
+
 function findDiamondPricePerCt(
   entries: DiamondPriceEntry[],
   clarity: string,
@@ -3637,9 +4580,20 @@ function findDiamondPricePerCt(
   return best ? best.entry.pricePerCt : null;
 }
 
+const DIAMOND_CLARITY_GROUPS: Record<string, string[]> = {
+  IF: ["IF", "IF-VVS"],
+  VVS: ["IF-VVS", "VVS1", "VVS2"],
+  VS: ["VS1", "VS2"],
+  SI: ["SI1", "SI2", "SI3"],
+  I: ["I1", "I2", "I3"],
+};
+
 function parseDiamondTokens(value: string) {
   if (!value) return [];
   const normalized = normalizeDiamondToken(value);
+  if (DIAMOND_CLARITY_GROUPS[normalized]) {
+    return DIAMOND_CLARITY_GROUPS[normalized];
+  }
   if (normalized === "VVS1" || normalized === "VVS2") {
     return [normalized, "IF-VVS"];
   }
@@ -3713,7 +4667,8 @@ function computeOptionPriceFromCosts(
   costValues: CostChartValues,
   diamondPrices: DiamondPriceEntry[],
   adjustments?: Record<string, PriceAdjustment>,
-  discountDetails?: DiscountDetails
+  discountDetails?: DiscountDetails,
+  diamondComponents?: DiamondBreakdownComponent[]
 ) {
   let metalWeight = parseNumberValue(record.metal_weight || "");
   if (!Number.isFinite(metalWeight) || metalWeight <= 0) {
@@ -3759,16 +4714,13 @@ function computeOptionPriceFromCosts(
     metalWeight += sizeAdjustment;
   }
 
-  let breakdown = parseDiamondBreakdown(record.diamond_breakdown || "");
-  if (!breakdown.length && record.stone_weight) {
-    breakdown = parseDiamondBreakdown(record.stone_weight || "");
+  const { pieces, defaultType } = resolveDiamondPieces(record, diamondComponents);
+  if (!pieces.length) {
+    const fallbackStoneWeight = parseNumberValue(record.stone_weight || "");
+    if (Number.isFinite(fallbackStoneWeight) && fallbackStoneWeight > 0) {
+      pieces.push({ weight: fallbackStoneWeight, count: 1, stoneType: defaultType || undefined });
+    }
   }
-  const fallbackStoneWeight = parseNumberValue(record.stone_weight || "");
-  const pieces = breakdown.length
-    ? breakdown
-    : Number.isFinite(fallbackStoneWeight) && fallbackStoneWeight > 0
-    ? [{ weight: fallbackStoneWeight, count: 1 }]
-    : [];
 
   const goldPricePerGram = getCostNumber(costValues, [
     "gold_price_per_gram_usd",
@@ -3813,6 +4765,8 @@ function computeOptionPriceFromCosts(
   let diamondCost = 0;
   const clarityTokens = parseDiamondTokens(clarity || "");
   const colorTokens = parseDiamondTokens(color || "");
+  const labRelativeCost = getCostPercent(costValues, ["lab_diamonds_relative_cost_pct"]);
+  const labMultiplier = labRelativeCost > 0 ? labRelativeCost : 0.2;
   if (pieces.length) {
     for (const piece of pieces) {
       let pricePerCt = findDiamondPricePerCtAverage(
@@ -3840,15 +4794,10 @@ function computeOptionPriceFromCosts(
         });
         return { ok: false, error: "diamond_price_missing" } as const;
       }
-      diamondCost += pricePerCt * piece.weight * piece.count;
+      const pieceType = normalizeStoneTypeToken(piece.stoneType || "") || defaultType;
+      const multiplier = pieceType === "lab" ? labMultiplier : 1;
+      diamondCost += pricePerCt * piece.weight * piece.count * multiplier;
     }
-  }
-  const stoneLabel = String(record.stone || "").toLowerCase();
-  const isLabDiamond = stoneLabel.includes("lab");
-  if (isLabDiamond && diamondCost > 0) {
-    const relativeCost = getCostPercent(costValues, ["lab_diamonds_relative_cost_pct"]);
-    const multiplier = relativeCost > 0 ? relativeCost : 0.2;
-    diamondCost *= multiplier;
   }
 
   const totalDiamondWeight = pieces.reduce((sum, piece) => sum + piece.weight * piece.count, 0);
@@ -3984,7 +4933,7 @@ async function computeQuoteOptionPrices(
   const fields: Record<string, string> = {};
   const force = Boolean(options?.force);
   let needsPricing = false;
-  const breakdownPieces = parseDiamondBreakdown(record.diamond_breakdown || "");
+  const { pieces: breakdownPieces } = resolveDiamondPieces(record);
   const stoneWeightValue = parseNumberValue(record.stone_weight || "");
   const hasDiamonds =
     breakdownPieces.length > 0 ||
@@ -4046,19 +4995,28 @@ async function computeQuoteOptionPrices(
   };
 }
 
-async function handleOrderAdminAction(
-  env: Env,
-  payload: Record<string, unknown>,
-  adminEmail: string
-) {
-  const requestId = getString(payload.requestId || payload.request_id);
-  if (!requestId) return { ok: false, error: "missing_request_id" };
-  const action = getString(payload.action).toLowerCase();
-  const requestedStatus = getString(payload.status).toUpperCase();
-  const notes = getString(payload.notes);
-  const updates = coerceUpdates(payload.fields, ORDER_UPDATE_FIELDS);
-  const detailUpdates = coerceUpdates(payload.details, ORDER_DETAILS_UPDATE_FIELDS);
-  const lookup = await findSheetRowByRequestId(env, "order", requestId);
+  async function handleOrderAdminAction(
+    env: Env,
+    payload: Record<string, unknown>,
+    adminEmail: string
+  ) {
+    const requestId = getString(payload.requestId || payload.request_id);
+    if (!requestId) return { ok: false, error: "missing_request_id" };
+    const action = getString(payload.action).toLowerCase();
+    if (action === "delete" || action === "remove") {
+      if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
+      const normalizedRequestId = normalizeRequestId(requestId);
+      const lookup = await findSheetRowByRequestId(env, "order", normalizedRequestId);
+      if (!lookup) return { ok: false, error: "request_not_found" };
+      await d1Run(env, "DELETE FROM order_details WHERE request_id = ?", [normalizedRequestId]);
+      await d1Run(env, "DELETE FROM orders WHERE request_id = ?", [normalizedRequestId]);
+      return { ok: true };
+    }
+    const requestedStatus = getString(payload.status).toUpperCase();
+    const notes = getString(payload.notes);
+    const updates = coerceUpdates(payload.fields, ORDER_UPDATE_FIELDS);
+    const detailUpdates = coerceUpdates(payload.details, ORDER_DETAILS_UPDATE_FIELDS);
+    const lookup = await findSheetRowByRequestId(env, "order", requestId);
   if (!lookup) return { ok: false, error: "request_not_found" };
   const record = mapSheetRowToRecord(Array.from(lookup.headerIndex.keys()), lookup.row);
   const currentStatus = getOrderStatusFromRow(lookup);
@@ -4168,14 +5126,22 @@ async function handleOrderAdminAction(
   return updateResult;
 }
 
-async function handleQuoteAdminAction(env: Env, payload: Record<string, unknown>) {
-  const requestId = getString(payload.requestId || payload.request_id);
-  if (!requestId) return { ok: false, error: "missing_request_id" };
-  const action = getString(payload.action).toLowerCase();
-  const status = getString(payload.status).toUpperCase();
-  const notes = getString(payload.notes);
-  const updates = coerceUpdates(payload.fields, QUOTE_UPDATE_FIELDS);
-  if (action === "submit_quote") {
+  async function handleQuoteAdminAction(env: Env, payload: Record<string, unknown>) {
+    const requestId = getString(payload.requestId || payload.request_id);
+    if (!requestId) return { ok: false, error: "missing_request_id" };
+    const action = getString(payload.action).toLowerCase();
+    if (action === "delete" || action === "remove") {
+      if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
+      const normalizedRequestId = normalizeRequestId(requestId);
+      const lookup = await findSheetRowByRequestId(env, "quote", normalizedRequestId);
+      if (!lookup) return { ok: false, error: "request_not_found" };
+      await d1Run(env, "DELETE FROM quotes WHERE request_id = ?", [normalizedRequestId]);
+      return { ok: true };
+    }
+    const status = getString(payload.status).toUpperCase();
+    const notes = getString(payload.notes);
+    const updates = coerceUpdates(payload.fields, QUOTE_UPDATE_FIELDS);
+    if (action === "submit_quote") {
     return await submitQuoteAdmin(env, requestId, updates, notes);
   }
   if (action === "refresh_quote") {
@@ -4323,11 +5289,103 @@ async function handleContactAdminAction(env: Env, payload: Record<string, unknow
   const requestId = getString(payload.requestId || payload.request_id);
   if (!requestId) return { ok: false, error: "missing_request_id" };
   const action = getString(payload.action).toLowerCase();
-  const status = getString(payload.status).toUpperCase();
+  const statusFromAction =
+    action === "mark_pending" ? "PENDING" : action === "mark_resolved" ? "RESOLVED" : "";
+  const status = getString(payload.status || statusFromAction).toUpperCase();
   const notes = getString(payload.notes);
   const updates = coerceUpdates(payload.fields, CONTACT_UPDATE_FIELDS);
   const nextStatus = resolveContactStatus(action, status);
   return await updateAdminRow(env, "contact", requestId, nextStatus, notes, updates);
+}
+
+async function handleTicketAdminAction(
+  env: Env,
+  payload: Record<string, unknown>,
+  adminEmail: string
+) {
+  if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
+  const requestId = getString(payload.requestId || payload.request_id);
+  if (!requestId) return { ok: false, error: "missing_request_id" };
+  const action = getString(payload.action).toLowerCase();
+  const now = new Date().toISOString();
+  if (action === "add_note") {
+    const note = getString(payload.note || payload.notes);
+    if (!note) return { ok: false, error: "missing_note" };
+    await addTicketDetail(env, {
+      requestId,
+      note,
+      kind: "note",
+      createdAt: now,
+      updatedBy: adminEmail,
+    });
+    return { ok: true };
+  }
+  if (action === "send_email") {
+    const subject = getString(payload.subject);
+    const body = getString(payload.body);
+    if (!subject || !body) return { ok: false, error: "missing_email_payload" };
+    const rows = await d1All(env, "SELECT email, name FROM tickets WHERE request_id = ? LIMIT 1", [
+      requestId,
+    ]);
+    if (!rows.length) return { ok: false, error: "ticket_not_found" };
+    const record = rows[0] as Record<string, unknown>;
+    const toEmail = getString(record.email);
+    if (!toEmail) return { ok: false, error: "missing_email" };
+    await sendEmail(env, {
+      to: [toEmail],
+      sender: "Heerawalla <atelier@heerawalla.com>",
+      replyTo: getCustomerReplyTo(),
+      subject,
+      textBody: body,
+      htmlBody: buildPlainEmailHtml(body),
+    });
+    await addTicketDetail(env, {
+      requestId,
+      note: `Email sent: ${subject}\n\n${body}`,
+      kind: "email",
+      createdAt: now,
+      updatedBy: adminEmail,
+    });
+    return { ok: true };
+  }
+  if (action === "delete" || action === "remove") {
+    await d1Run(env, "DELETE FROM tickets WHERE request_id = ?", [requestId]);
+    return { ok: true };
+  }
+  const status = getString(payload.status).toUpperCase();
+  const fields = isRecord(payload.fields) ? payload.fields : {};
+  const subject = getString(fields.subject || payload.subject);
+  const summary = getString(fields.summary || payload.summary);
+  const updates: Array<string> = [];
+  const params: Array<string> = [];
+  if (subject) {
+    updates.push("subject = ?");
+    params.push(subject);
+  }
+  if (summary) {
+    updates.push("summary = ?");
+    params.push(summary);
+  }
+  if (status) {
+    updates.push("status = ?");
+    params.push(status);
+    await addTicketDetail(env, {
+      requestId,
+      note: `Status set to ${status}`,
+      kind: "status",
+      createdAt: now,
+      updatedBy: adminEmail,
+    });
+  }
+  updates.push("updated_at = ?");
+  params.push(now);
+  updates.push("updated_by = ?");
+  params.push(adminEmail);
+  params.push(requestId);
+  if (updates.length) {
+    await d1Run(env, `UPDATE tickets SET ${updates.join(", ")} WHERE request_id = ?`, params);
+  }
+  return { ok: true };
 }
 
 async function handlePricingAdminAction(
@@ -4346,12 +5404,230 @@ async function handlePricingAdminAction(
     await appendPricingRow(env, kind, updates);
     return { ok: true };
   }
-  const rowNumber = Number(getString(payload.rowNumber || payload.row_number || ""));
-  if (!rowNumber || rowNumber < 2) {
+  const rowValue = getString(payload.rowNumber || payload.row_number || "");
+  if (!rowValue) {
     return { ok: false, error: "missing_row_number" };
   }
-  await updatePricingRow(env, kind, rowNumber, updates);
+  const rowNumber = Number(rowValue);
+  if (!hasD1(env) && (!rowNumber || rowNumber < 2)) {
+    return { ok: false, error: "missing_row_number" };
+  }
+  await updatePricingRow(env, kind, hasD1(env) ? Number(rowValue) : rowNumber, updates);
   return { ok: true };
+}
+
+  async function handleCatalogAdminAction(
+    env: Env,
+    kind: "product" | "inspiration" | "media_library" | "product_media" | "inspiration_media",
+    payload: Record<string, unknown>
+  ) {
+    const action = getString(payload.action).toLowerCase();
+    if (action === "delete" || action === "remove") {
+      if (kind !== "product" && kind !== "inspiration") {
+        return { ok: false, error: "unsupported_delete" };
+      }
+      if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
+      const identifier = getString(
+        payload.requestId || payload.request_id || payload.slug || payload.id || ""
+      );
+      if (!identifier) return { ok: false, error: "missing_identifier" };
+      const rows = await d1All(
+        env,
+        "SELECT id, slug FROM catalog_items WHERE type = ? AND (id = ? OR slug = ?) LIMIT 1",
+        [kind, identifier, identifier]
+      );
+      if (!rows.length) return { ok: false, error: "not_found" };
+      const catalogId = getString((rows[0] as Record<string, unknown>).id);
+      if (catalogId) {
+        await d1Run(env, "DELETE FROM catalog_media WHERE catalog_id = ?", [catalogId]);
+      }
+      await d1Run(env, "DELETE FROM catalog_items WHERE type = ? AND (id = ? OR slug = ?)", [
+        kind,
+        identifier,
+        identifier,
+      ]);
+      return { ok: true };
+    }
+    const updates =
+      kind === "product"
+        ? coerceUpdates(payload.fields, PRODUCT_UPDATE_FIELDS)
+        : kind === "inspiration"
+      ? coerceUpdates(payload.fields, INSPIRATION_UPDATE_FIELDS)
+      : kind === "media_library"
+      ? coerceUpdates(payload.fields, MEDIA_LIBRARY_UPDATE_FIELDS)
+      : kind === "product_media"
+      ? coerceUpdates(payload.fields, PRODUCT_MEDIA_UPDATE_FIELDS)
+      : coerceUpdates(payload.fields, INSPIRATION_MEDIA_UPDATE_FIELDS);
+  if (action === "add_row" || action === "add") {
+    await appendCatalogRow(env, kind, updates);
+    return { ok: true };
+  }
+  const rowValue = getString(payload.rowNumber || payload.row_number || "");
+  if (!rowValue) {
+    return { ok: false, error: "missing_row_number" };
+  }
+  const rowNumber = Number(rowValue);
+  if (!hasD1(env) && (!rowNumber || rowNumber < 2)) {
+    return { ok: false, error: "missing_row_number" };
+  }
+    await updateCatalogRow(env, kind, hasD1(env) ? rowValue : rowNumber, updates);
+    return { ok: true };
+  }
+
+  async function handleCatalogStoneOptionAction(env: Env, payload: Record<string, unknown>) {
+    if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
+    const action = getString(payload.action).toLowerCase();
+    const updates = coerceUpdates(payload.fields || payload, CATALOG_STONE_OPTIONS_UPDATE_FIELDS);
+    if (action === "delete" || action === "remove") {
+      const id = getString(payload.id || updates.id);
+      if (!id) return { ok: false, error: "missing_id" };
+      await d1Run(env, "DELETE FROM catalog_stone_options WHERE id = ?", [id]);
+      return { ok: true };
+    }
+
+    const now = new Date().toISOString();
+    if (action === "add_row" || action === "add") {
+      const id = getString(payload.id || "") || crypto.randomUUID();
+      const catalogId = getString(payload.catalog_id || updates.catalog_id);
+      const role = getString(payload.role || updates.role);
+      if (!catalogId) return { ok: false, error: "missing_catalog" };
+      if (!role) return { ok: false, error: "missing_fields" };
+      await d1Run(
+        env,
+        `INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, size_type, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            catalogId,
+            role,
+            updates.carat || null,
+            updates.count || null,
+            updates.is_primary || "0",
+            updates.size_type || null,
+            now,
+            now,
+          ]
+        );
+      return { ok: true, id };
+    }
+
+    if (action === "update" || action === "edit" || action === "save") {
+      const id = getString(payload.id);
+      if (!id) return { ok: false, error: "missing_id" };
+      const fields = { ...updates, updated_at: now };
+      const entries = Object.entries(fields).filter(([, value]) => value !== undefined);
+      if (!entries.length) return { ok: false, error: "missing_updates" };
+      const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
+      const values = entries.map(([, value]) => value);
+      await d1Run(env, `UPDATE catalog_stone_options SET ${setClause} WHERE id = ?`, [...values, id]);
+      return { ok: true };
+    }
+
+    return { ok: false, error: "invalid_action" };
+  }
+
+  async function handleCatalogMetalOptionAction(env: Env, payload: Record<string, unknown>) {
+    if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
+    const action = getString(payload.action).toLowerCase();
+    const updates = coerceUpdates(payload.fields || payload, CATALOG_METAL_OPTIONS_UPDATE_FIELDS);
+    if (action === "delete" || action === "remove") {
+      const id = getString(payload.id || updates.id);
+      if (!id) return { ok: false, error: "missing_id" };
+      await d1Run(env, "DELETE FROM catalog_metal_options WHERE id = ?", [id]);
+      return { ok: true };
+    }
+
+    const now = new Date().toISOString();
+    if (action === "add_row" || action === "add") {
+      const id = getString(payload.id || "") || crypto.randomUUID();
+      const catalogId = getString(payload.catalog_id || updates.catalog_id);
+      const metalWeight = getString(payload.metal_weight || updates.metal_weight);
+      if (!catalogId) return { ok: false, error: "missing_catalog" };
+      if (!metalWeight) return { ok: false, error: "missing_fields" };
+      await d1Run(
+        env,
+        `INSERT INTO catalog_metal_options (id, catalog_id, metal_weight, is_primary, size_type, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            catalogId,
+            metalWeight,
+            updates.is_primary || "0",
+            updates.size_type || null,
+            now,
+            now,
+          ]
+        );
+      return { ok: true, id };
+    }
+
+    if (action === "update" || action === "edit" || action === "save") {
+      const id = getString(payload.id);
+      if (!id) return { ok: false, error: "missing_id" };
+      const fields = { ...updates, updated_at: now };
+      const entries = Object.entries(fields).filter(([, value]) => value !== undefined);
+      if (!entries.length) return { ok: false, error: "missing_updates" };
+      const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
+      const values = entries.map(([, value]) => value);
+      await d1Run(env, `UPDATE catalog_metal_options SET ${setClause} WHERE id = ?`, [
+        ...values,
+        id,
+      ]);
+      return { ok: true };
+    }
+
+    return { ok: false, error: "invalid_action" };
+  }
+
+  async function handleSiteConfigAdminAction(env: Env, payload: Record<string, unknown>) {
+    if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
+    const action = getString(payload.action).toLowerCase();
+    const updates = coerceUpdates(payload.fields || payload, SITE_CONFIG_UPDATE_FIELDS);
+  const key = getString(updates.key || payload.key);
+  if (!key) return { ok: false, error: "missing_key" };
+  if (action === "delete" || action === "remove") {
+    await d1Run(env, "DELETE FROM site_config WHERE key = ?", [key]);
+    return { ok: true };
+  }
+  const value = getString(updates.value ?? payload.value);
+  const now = new Date().toISOString();
+  await d1Run(
+    env,
+    "INSERT INTO site_config (key, value, updated_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+    [key, value, now]
+  );
+  return { ok: true };
+}
+
+async function handleMediaUpload(env: Env, request: Request) {
+  if (!env.MEDIA_BUCKET) return { ok: false, error: "media_bucket_missing" };
+  const baseUrl = (env.MEDIA_PUBLIC_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (!baseUrl) return { ok: false, error: "media_public_base_missing" };
+  const formData = await request.formData();
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { ok: false, error: "missing_file" };
+  const rawId = getString(formData.get("media_id") || formData.get("mediaId"));
+  const label = getString(formData.get("label"));
+  const originalName = file.name || "upload";
+  const extMatch = originalName.match(/\.[a-z0-9]+$/i);
+  const ext = extMatch ? extMatch[0].toLowerCase() : "";
+  const baseId = rawId || label || originalName.replace(ext, "");
+  const normalizedId = slugifyMediaId(baseId);
+  const uniqueSuffix = Date.now().toString(36);
+  const mediaId = rawId || `${normalizedId}-${uniqueSuffix}`;
+  const key = `media/library/${mediaId}${ext || ""}`;
+  const contentType = file.type || "application/octet-stream";
+  await env.MEDIA_BUCKET.put(key, file, { httpMetadata: { contentType } });
+  const url = `${baseUrl}/${key}`;
+  return {
+    ok: true,
+    media: {
+      media_id: mediaId,
+      url,
+      media_type: contentType.startsWith("video/") ? "video" : "image",
+      label,
+    },
+  };
 }
 
 async function handleOrderConfirmationAdmin(env: Env, payload: Record<string, unknown>) {
@@ -4519,6 +5795,46 @@ const DIAMOND_PRICE_CHART_UPDATE_FIELDS = [
   "price_per_ct",
   "notes",
 ] as const;
+const PRODUCT_UPDATE_FIELDS = PRODUCTS_SHEET_HEADER;
+const INSPIRATION_UPDATE_FIELDS = INSPIRATIONS_SHEET_HEADER;
+const MEDIA_LIBRARY_UPDATE_FIELDS = MEDIA_LIBRARY_SHEET_HEADER;
+const PRODUCT_MEDIA_UPDATE_FIELDS = PRODUCT_MEDIA_SHEET_HEADER;
+const INSPIRATION_MEDIA_UPDATE_FIELDS = INSPIRATION_MEDIA_SHEET_HEADER;
+const CATALOG_STONE_OPTIONS_HEADER = [
+  "id",
+  "catalog_id",
+  "role",
+  "carat",
+  "count",
+  "is_primary",
+  "size_type",
+  "created_at",
+  "updated_at",
+];
+const CATALOG_STONE_OPTIONS_UPDATE_FIELDS = [
+  "catalog_id",
+  "role",
+  "carat",
+  "count",
+  "is_primary",
+  "size_type",
+] as const;
+const CATALOG_METAL_OPTIONS_HEADER = [
+  "id",
+  "catalog_id",
+  "metal_weight",
+  "is_primary",
+  "size_type",
+  "created_at",
+  "updated_at",
+];
+const CATALOG_METAL_OPTIONS_UPDATE_FIELDS = [
+  "catalog_id",
+  "metal_weight",
+  "is_primary",
+  "size_type",
+] as const;
+const SITE_CONFIG_UPDATE_FIELDS = ["key", "value"];
 
 const CONTACT_UPDATE_FIELDS = [
   "name",
@@ -4658,6 +5974,45 @@ async function updateAdminRow(
   notes: string,
   updates: Record<string, string>
 ) {
+  if (hasD1(env)) {
+    const table = kind === "order" ? "orders" : kind === "quote" ? "quotes" : "contacts";
+    const now = new Date().toISOString();
+    const updatesToApply: Record<string, string> = { ...updates };
+    if (status) {
+      updatesToApply.status = status;
+      updatesToApply.status_updated_at = now;
+    }
+    if (notes) updatesToApply.notes = notes;
+    updatesToApply.last_error = "";
+    updatesToApply.updated_at = now;
+
+    const entries = Object.entries(updatesToApply).filter(([, value]) => value !== undefined);
+    if (!entries.length) {
+      return { ok: false, error: "no_updates" };
+    }
+    const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value);
+
+    let normalizedRequestId = kind === "contact" ? requestId.trim() : normalizeRequestId(requestId);
+    if (!normalizedRequestId) return { ok: false, error: "missing_request_id" };
+
+    let result = await d1Run(
+      env,
+      `UPDATE ${table} SET ${setClause} WHERE request_id = ?`,
+      [...values, normalizedRequestId]
+    );
+    let changes = (result as { changes?: number }).changes || 0;
+    if (!changes && kind === "contact" && normalizedRequestId.includes("@")) {
+      result = await d1Run(env, `UPDATE ${table} SET ${setClause} WHERE email = ?`, [
+        ...values,
+        normalizeEmailAddress(normalizedRequestId),
+      ]);
+      changes = (result as { changes?: number }).changes || 0;
+    }
+
+    if (!changes) return { ok: false, error: "request_not_found" };
+    return { ok: true, status: status || undefined };
+  }
   const config = getSheetConfig(env, kind);
   const headerFallback =
     kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
@@ -4707,6 +6062,16 @@ async function updatePricingRow(
   rowNumber: number,
   updates: Record<string, string>
 ) {
+  if (hasD1(env)) {
+    if (!Number.isFinite(rowNumber)) return;
+    const table = kind === "price_chart" ? "price_chart" : kind === "cost_chart" ? "cost_chart" : "diamond_price_chart";
+    const entries = Object.entries(updates).filter(([, value]) => value !== undefined);
+    if (!entries.length) return;
+    const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value);
+    await d1Run(env, `UPDATE ${table} SET ${setClause} WHERE id = ?`, [...values, rowNumber]);
+    return;
+  }
   const config = getPricingSheetConfig(env, kind);
   if (!config) {
     throw new Error("pricing_sheet_missing");
@@ -4733,6 +6098,20 @@ async function appendPricingRow(
   kind: "price_chart" | "cost_chart" | "diamond_price_chart",
   updates: Record<string, string>
 ) {
+  if (hasD1(env)) {
+    const table = kind === "price_chart" ? "price_chart" : kind === "cost_chart" ? "cost_chart" : "diamond_price_chart";
+    const header =
+      kind === "price_chart"
+        ? PRICE_CHART_HEADER
+        : kind === "cost_chart"
+        ? COST_CHART_HEADER
+        : DIAMOND_PRICE_CHART_HEADER;
+    const columns = header.filter((key) => key !== "");
+    const values = columns.map((key) => updates[key] || "");
+    const placeholders = columns.map(() => "?").join(", ");
+    await d1Run(env, `INSERT INTO ${table} (${columns.join(", ")}) VALUES (${placeholders})`, values);
+    return;
+  }
   const config = getPricingSheetConfig(env, kind);
   if (!config) {
     throw new Error("pricing_sheet_missing");
@@ -4749,6 +6128,185 @@ async function appendPricingRow(
   const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
   const requiredKey =
     kind === "price_chart" ? "metal" : kind === "cost_chart" ? "key" : "price_per_ct";
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
+  const rowValues = headerConfig.header.map((key) => (key ? updates[key] || "" : ""));
+  await appendSheetRow(env, config, rowValues, headerConfig.header);
+}
+
+async function updateCatalogRow(
+  env: Env,
+  kind: "product" | "inspiration" | "media_library" | "product_media" | "inspiration_media",
+  rowNumber: number | string,
+  updates: Record<string, string>
+) {
+  if (hasD1(env)) {
+    let normalizedUpdates = { ...updates };
+    if (kind === "product_media" || kind === "inspiration_media") {
+      const catalogSlug =
+        updates.catalog_slug || updates.product_slug || updates.inspiration_slug || "";
+      let catalogId = getString(updates.catalog_id || "");
+      if (!catalogId && catalogSlug) {
+        const catalogType = kind === "product_media" ? "product" : "inspiration";
+        const rows = await d1All(
+          env,
+          "SELECT id FROM catalog_items WHERE type = ? AND slug = ? LIMIT 1",
+          [catalogType, catalogSlug]
+        );
+        catalogId = rows.length ? String(rows[0].id || "") : "";
+      }
+      normalizedUpdates = {
+        catalog_id: catalogId || undefined,
+        media_id: updates.media_id || "",
+        position: updates.position || "",
+        is_primary: updates.is_primary || "",
+        sort_order: updates.sort_order || updates.order || "",
+      };
+    }
+    const entries = Object.entries(normalizedUpdates).filter(([, value]) => value !== undefined);
+    if (!entries.length) return;
+    const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
+    const values = entries.map(([, value]) => value);
+    if (kind === "product" || kind === "inspiration") {
+      const slug = updates.slug || String(rowNumber || "");
+      if (!slug) return;
+      await d1Run(env, `UPDATE catalog_items SET ${setClause} WHERE slug = ?`, [...values, slug]);
+      return;
+    }
+    if (kind === "media_library") {
+      const mediaId = updates.media_id || String(rowNumber || "");
+      if (!mediaId) return;
+      await d1Run(env, `UPDATE media_library SET ${setClause} WHERE media_id = ?`, [...values, mediaId]);
+      return;
+    }
+    const id = Number(rowNumber);
+    if (!Number.isFinite(id)) return;
+    await d1Run(env, `UPDATE catalog_media SET ${setClause} WHERE id = ?`, [...values, id]);
+    return;
+  }
+  const config = getCatalogSheetConfig(env, kind);
+  const headerFallback =
+    kind === "product"
+      ? PRODUCTS_SHEET_HEADER
+      : kind === "inspiration"
+      ? INSPIRATIONS_SHEET_HEADER
+      : kind === "media_library"
+      ? MEDIA_LIBRARY_SHEET_HEADER
+      : kind === "product_media"
+      ? PRODUCT_MEDIA_SHEET_HEADER
+      : INSPIRATION_MEDIA_SHEET_HEADER;
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, headerFallback, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const requiredKey =
+    kind === "product"
+      ? "slug"
+      : kind === "inspiration"
+      ? "slug"
+      : kind === "media_library"
+      ? "media_id"
+      : kind === "product_media"
+      ? "product_slug"
+      : "inspiration_slug";
+  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
+  const headerIndex = new Map(headerConfig.header.map((key, idx) => [String(key || ""), idx]));
+  await updateSheetColumns(env, config, headerIndex, rowNumber, updates);
+}
+
+async function appendCatalogRow(
+  env: Env,
+  kind: "product" | "inspiration" | "media_library" | "product_media" | "inspiration_media",
+  updates: Record<string, string>
+) {
+  if (hasD1(env)) {
+    if (kind === "product" || kind === "inspiration") {
+      const columns = kind === "product" ? PRODUCTS_SHEET_HEADER : INSPIRATIONS_SHEET_HEADER;
+      const slug = updates.slug || "";
+      const id = updates.id || (crypto.randomUUID ? crypto.randomUUID() : `cat_${Date.now()}`);
+      const values = columns.map((key) => {
+        if (key === "id") return id;
+        if (key === "slug") return slug;
+        if (key === "is_active") return updates.is_active || "1";
+        if (key === "is_featured") return updates.is_featured || "0";
+        return updates[key] || "";
+      });
+      const placeholders = columns.map(() => "?").join(", ");
+      await d1Run(
+        env,
+        `INSERT INTO catalog_items (${columns.join(", ")}, type) VALUES (${placeholders}, ?)`,
+        [...values, kind]
+      );
+      return;
+    }
+    if (kind === "media_library") {
+      const columns = MEDIA_LIBRARY_SHEET_HEADER;
+      const mediaId =
+        updates.media_id || (crypto.randomUUID ? crypto.randomUUID() : `media_${Date.now()}`);
+      const values = columns.map((key) => {
+        if (key === "media_id") return mediaId;
+        if (key === "created_at") return updates.created_at || new Date().toISOString();
+        return updates[key] || "";
+      });
+      const placeholders = columns.map(() => "?").join(", ");
+      await d1Run(env, `INSERT INTO media_library (${columns.join(", ")}) VALUES (${placeholders})`, values);
+      return;
+    }
+    const catalogType = kind === "product_media" ? "product" : "inspiration";
+    const catalogSlug =
+      updates.catalog_slug ||
+      updates.product_slug ||
+      updates.inspiration_slug ||
+      "";
+    let catalogId = getString(updates.catalog_id || "");
+    if (!catalogId && catalogSlug) {
+      const rows = await d1All(env, "SELECT id FROM catalog_items WHERE type = ? AND slug = ? LIMIT 1", [
+        catalogType,
+        catalogSlug,
+      ]);
+      catalogId = rows.length ? String(rows[0].id || "") : "";
+    }
+    if (!catalogId) return;
+    const isPrimary = updates.is_primary ? (parseBoolean(updates.is_primary) ? 1 : 0) : 0;
+    const sortOrder = parseNumber(updates.sort_order || updates.order) ?? 0;
+    const values = [
+      catalogId,
+      updates.media_id || "",
+      updates.position || "",
+      isPrimary,
+      sortOrder,
+    ];
+    await d1Run(
+      env,
+      "INSERT INTO catalog_media (catalog_id, media_id, position, is_primary, sort_order) VALUES (?, ?, ?, ?, ?)",
+      values
+    );
+    return;
+  }
+  const config = getCatalogSheetConfig(env, kind);
+  const headerFallback =
+    kind === "product"
+      ? PRODUCTS_SHEET_HEADER
+      : kind === "inspiration"
+      ? INSPIRATIONS_SHEET_HEADER
+      : kind === "media_library"
+      ? MEDIA_LIBRARY_SHEET_HEADER
+      : kind === "product_media"
+      ? PRODUCT_MEDIA_SHEET_HEADER
+      : INSPIRATION_MEDIA_SHEET_HEADER;
+  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
+  await ensureSheetHeader(env, config, headerFallback, cacheKey);
+  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
+  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
+  const requiredKey =
+    kind === "product"
+      ? "slug"
+      : kind === "inspiration"
+      ? "slug"
+      : kind === "media_library"
+      ? "media_id"
+      : kind === "product_media"
+      ? "product_slug"
+      : "inspiration_slug";
   const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
   const rowValues = headerConfig.header.map((key) => (key ? updates[key] || "" : ""));
   await appendSheetRow(env, config, rowValues, headerConfig.header);
@@ -4781,6 +6339,39 @@ async function findSheetRowByRequestId(
   kind: "order" | "quote" | "contact",
   requestId: string
 ): Promise<SheetRowLookup | null> {
+  if (hasD1(env)) {
+    const normalizedRequestId = kind === "contact" ? requestId.trim() : normalizeRequestId(requestId);
+    const header =
+      kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
+    const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
+    let rows: Record<string, unknown>[] = [];
+    if (kind === "order") {
+      rows = await d1All(env, "SELECT * FROM orders WHERE request_id = ? LIMIT 1", [normalizedRequestId]);
+    } else if (kind === "quote") {
+      rows = await d1All(env, "SELECT * FROM quotes WHERE request_id = ? LIMIT 1", [normalizedRequestId]);
+    } else {
+      rows = await d1All(env, "SELECT * FROM contacts WHERE request_id = ? LIMIT 1", [normalizedRequestId]);
+      if (!rows.length && normalizedRequestId.includes("@")) {
+        rows = await d1All(env, "SELECT * FROM contacts WHERE email = ? LIMIT 1", [
+          normalizeEmailAddress(normalizedRequestId),
+        ]);
+      }
+    }
+    if (!rows.length) return null;
+    const row = rows[0];
+    const rowValues = header.map((key) => (row as Record<string, unknown>)[key]);
+    return {
+      config: {
+        sheetId: "",
+        sheetName: "",
+        headerRange: "",
+        appendRange: "",
+      },
+      headerIndex,
+      rowNumber: 0,
+      row: rowValues,
+    };
+  }
   const config = getSheetConfig(env, kind);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const headerFallback =
@@ -4855,6 +6446,14 @@ async function findOrderDetailsRowByRequestId(
 }
 
 async function getOrderDetailsRecord(env: Env, requestId: string): Promise<OrderDetailsRecord | null> {
+  if (hasD1(env)) {
+    const normalizedRequestId = normalizeRequestId(requestId);
+    const rows = await d1All(env, "SELECT * FROM order_details WHERE request_id = ? LIMIT 1", [
+      normalizedRequestId,
+    ]);
+    if (!rows.length) return null;
+    return mapD1RowToRecord(rows[0]) as OrderDetailsRecord;
+  }
   try {
     const lookup = await findOrderDetailsRowByRequestId(env, requestId);
     if (!lookup) return null;
@@ -4868,6 +6467,15 @@ async function getOrderDetailsRecord(env: Env, requestId: string): Promise<Order
 
 async function loadOrderDetailsMap(env: Env) {
   const map = new Map<string, OrderDetailsRecord>();
+  if (hasD1(env)) {
+    const rows = await d1All(env, "SELECT * FROM order_details");
+    rows.forEach((row) => {
+      const requestId = getString(row.request_id);
+      if (!requestId) return;
+      map.set(normalizeRequestId(requestId), mapD1RowToRecord(row) as OrderDetailsRecord);
+    });
+    return map;
+  }
   const config = getOrderDetailsSheetConfig(env);
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
@@ -4899,6 +6507,31 @@ async function upsertOrderDetailsRecord(
   status: string,
   updatedBy: string
 ) {
+  if (hasD1(env)) {
+    const now = new Date().toISOString();
+    const updatesToApply: Record<string, string> = { ...updates };
+    updatesToApply.updated_at = now;
+    if (updatedBy) updatesToApply.updated_by = updatedBy;
+    if (status) updatesToApply.status = status;
+    const columns = ["request_id", "created_at", ...Object.keys(updatesToApply)];
+    const uniqueColumns = Array.from(new Set(columns));
+    const values = uniqueColumns.map((key) => {
+      if (key === "request_id") return normalizeRequestId(requestId);
+      if (key === "created_at") return updatesToApply.created_at || now;
+      return updatesToApply[key] || "";
+    });
+    const placeholders = uniqueColumns.map(() => "?").join(", ");
+    const updateSet = uniqueColumns
+      .filter((key) => key !== "request_id" && key !== "created_at")
+      .map((key) => `${key} = excluded.${key}`)
+      .join(", ");
+    await d1Run(
+      env,
+      `INSERT INTO order_details (${uniqueColumns.join(", ")}) VALUES (${placeholders}) ON CONFLICT(request_id) DO UPDATE SET ${updateSet}`,
+      values
+    );
+    return;
+  }
   const config = getOrderDetailsSheetConfig(env);
   const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
   await ensureSheetHeader(env, config, ORDER_DETAILS_SHEET_HEADER, cacheKey, true);
@@ -4941,6 +6574,26 @@ async function upsertOrderDetailsRecord(
 
 async function appendOrderNote(env: Env, requestId: string, note: string) {
   if (!note) return;
+  if (hasD1(env)) {
+    try {
+      const normalizedRequestId = normalizeRequestId(requestId);
+      const rows = await d1All(env, "SELECT notes FROM orders WHERE request_id = ? LIMIT 1", [
+        normalizedRequestId,
+      ]);
+      if (!rows.length) return;
+      const existingNotes = getString(rows[0].notes);
+      const trimmed = existingNotes.trim();
+      const nextNotes = trimmed ? `${trimmed}\n\n${note}` : note;
+      await d1Run(env, "UPDATE orders SET notes = ?, updated_at = ? WHERE request_id = ?", [
+        nextNotes,
+        new Date().toISOString(),
+        normalizedRequestId,
+      ]);
+    } catch (error) {
+      logWarn("order_confirmation_note_failed", { requestId, error: String(error) });
+    }
+    return;
+  }
   try {
     const lookup = await findSheetRowByRequestId(env, "order", requestId);
     if (!lookup) return;
@@ -4960,31 +6613,17 @@ const CATALOG_COLUMNS = [
   "name",
   "slug",
   "description",
-  "short_desc",
   "long_desc",
-  "hero_image",
-  "collection",
   "categories",
   "gender",
   "styles",
   "motifs",
   "metals",
   "stone_types",
-  "stone_weight",
-  "metal_weight",
-  "palette",
-  "takeaways",
-  "translation_notes",
   "design_code",
   "cut",
   "clarity",
   "color",
-  "carat",
-  "price_usd_natural",
-  "estimated_price_usd_vvs1_vvs2_18k",
-  "lab_discount_pct",
-  "metal_platinum_premium",
-  "metal_14k_discount_pct",
   "is_active",
   "is_featured",
   "tags",
@@ -5243,15 +6882,6 @@ function parseStoneTypes(value: string | undefined) {
   return parseList(value).map(normalizeStoneType).filter(Boolean);
 }
 
-function parsePalette(value: string | undefined) {
-  return parseList(value).map((entry) => {
-    const [rawType, ...rest] = entry.split(":");
-    const type = rawType === "stone" ? "stone" : "metal";
-    const label = rest.length ? rest.join(":").trim() : rawType.trim();
-    return { type, label };
-  });
-}
-
 function buildSheetsCsvUrl(sheetId: string, gid: string) {
   return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
 }
@@ -5261,13 +6891,22 @@ function buildSheetsCsvUrlByName(sheetId: string, sheetName: string) {
   return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encoded}`;
 }
 
-function getCatalogUrl(env: Env, kind: "products" | "inspirations" | "site_config") {
+function getCatalogUrl(
+  env: Env,
+  kind: "products" | "inspirations" | "site_config" | "media_library" | "product_media" | "inspiration_media"
+) {
   const direct =
     kind === "products"
       ? env.CATALOG_PRODUCTS_URL || env.PRODUCTS_CSV_URL
       : kind === "inspirations"
       ? env.CATALOG_INSPIRATIONS_URL || env.INSPIRATIONS_CSV_URL
-      : env.CATALOG_SITE_CONFIG_URL || env.SITE_CONFIG_CSV_URL;
+      : kind === "site_config"
+      ? env.CATALOG_SITE_CONFIG_URL || env.SITE_CONFIG_CSV_URL
+      : kind === "media_library"
+      ? env.CATALOG_MEDIA_LIBRARY_URL || env.MEDIA_LIBRARY_CSV_URL
+      : kind === "product_media"
+      ? env.CATALOG_PRODUCT_MEDIA_URL || env.PRODUCT_MEDIA_CSV_URL
+      : env.CATALOG_INSPIRATION_MEDIA_URL || env.INSPIRATION_MEDIA_CSV_URL;
   if (direct) return direct;
   const sheetId = env.CATALOG_SHEET_ID;
   const gid =
@@ -5275,11 +6914,299 @@ function getCatalogUrl(env: Env, kind: "products" | "inspirations" | "site_confi
       ? env.CATALOG_PRODUCTS_GID
       : kind === "inspirations"
       ? env.CATALOG_INSPIRATIONS_GID
-      : env.CATALOG_SITE_CONFIG_GID;
+      : kind === "site_config"
+      ? env.CATALOG_SITE_CONFIG_GID
+      : kind === "media_library"
+      ? env.CATALOG_MEDIA_LIBRARY_GID
+      : kind === "product_media"
+      ? env.CATALOG_PRODUCT_MEDIA_GID
+      : env.CATALOG_INSPIRATION_MEDIA_GID;
   if (sheetId && gid) {
     return buildSheetsCsvUrl(sheetId, gid);
   }
   return "";
+}
+
+type MediaLibraryEntry = {
+  media_id: string;
+  url: string;
+  media_type: string;
+  label?: string;
+  alt?: string;
+  description?: string;
+};
+
+type MediaMapping = {
+  media_id: string;
+  position?: string;
+  is_primary?: boolean;
+  order?: number;
+  product_slug?: string;
+  inspiration_slug?: string;
+};
+
+const MEDIA_POSITION_ORDER = [
+  "hero",
+  "pendant",
+  "earring",
+  "bracelet",
+  "ring",
+  "composition",
+  "feature",
+  "engraving",
+  "gallery",
+  "detail",
+];
+
+function slugifyMediaId(value: string) {
+  const cleaned = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return cleaned || "media";
+}
+
+function parseDelimitedSlugs(value: string) {
+  return value
+    .split("|")
+    .map((slug) => slug.trim())
+    .filter(Boolean);
+}
+
+function normalizeMediaPosition(value: string) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "earrings") return "earring";
+  if (normalized === "bangle" || normalized === "bangles") return "bracelet";
+  if (normalized === "rings") return "ring";
+  return normalized;
+}
+
+function sortMediaMappings(a: MediaMapping, b: MediaMapping) {
+  const primaryA = a.is_primary ? 0 : 1;
+  const primaryB = b.is_primary ? 0 : 1;
+  if (primaryA !== primaryB) return primaryA - primaryB;
+  const positionA = MEDIA_POSITION_ORDER.indexOf(normalizeMediaPosition(a.position || ""));
+  const positionB = MEDIA_POSITION_ORDER.indexOf(normalizeMediaPosition(b.position || ""));
+  if (positionA !== positionB) {
+    const safeA = positionA === -1 ? 99 : positionA;
+    const safeB = positionB === -1 ? 99 : positionB;
+    if (safeA !== safeB) return safeA - safeB;
+  }
+  const orderA = Number.isFinite(a.order) ? a.order : 0;
+  const orderB = Number.isFinite(b.order) ? b.order : 0;
+  if (orderA !== orderB) return orderA - orderB;
+  return String(a.media_id || "").localeCompare(String(b.media_id || ""));
+}
+
+function buildMediaUrl(raw: string) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return "";
+  return trimmed;
+}
+
+async function loadCatalogMedia(env: Env, include: Set<string>) {
+  if (hasD1(env)) {
+    const needsLibrary =
+      include.has("media_library") ||
+      include.has("product_media") ||
+      include.has("inspiration_media") ||
+      include.has("products") ||
+      include.has("inspirations");
+    if (!needsLibrary) {
+      return {
+        library: [] as MediaLibraryEntry[],
+        productMedia: [] as MediaMapping[],
+        inspirationMedia: [] as MediaMapping[],
+      };
+    }
+    const libraryRows = await d1All(
+      env,
+      "SELECT media_id, url, media_type, label, alt, description FROM media_library"
+    );
+    const library = libraryRows
+      .map((row) => ({
+        media_id: String(row.media_id || "").trim(),
+        url: buildMediaUrl(row.url || ""),
+        media_type: String(row.media_type || "image").trim(),
+        label: String(row.label || ""),
+        alt: String(row.alt || ""),
+        description: String(row.description || ""),
+      }))
+      .filter((entry) => entry.media_id && entry.url);
+
+    const productMediaRows =
+      include.has("product_media") || include.has("products")
+        ? await d1All(
+            env,
+            `SELECT
+               catalog_media.media_id,
+               catalog_items.slug AS catalog_slug,
+               catalog_media.position,
+               catalog_media.is_primary,
+               catalog_media.sort_order
+             FROM catalog_media
+             JOIN catalog_items ON catalog_items.id = catalog_media.catalog_id
+             WHERE catalog_items.type = 'product'`
+          )
+        : [];
+    const inspirationMediaRows =
+      include.has("inspiration_media") || include.has("inspirations")
+        ? await d1All(
+            env,
+            `SELECT
+               catalog_media.media_id,
+               catalog_items.slug AS catalog_slug,
+               catalog_media.position,
+               catalog_media.is_primary,
+               catalog_media.sort_order
+             FROM catalog_media
+             JOIN catalog_items ON catalog_items.id = catalog_media.catalog_id
+             WHERE catalog_items.type = 'inspiration'`
+          )
+        : [];
+
+    const productMedia = productMediaRows
+      .map((row) => ({
+        media_id: String(row.media_id || "").trim(),
+        product_slug: String(row.catalog_slug || "").trim(),
+        position: String(row.position || ""),
+        is_primary: Boolean(row.is_primary),
+        order: typeof row.sort_order === "number" ? row.sort_order : parseNumber(String(row.sort_order || "")),
+      }))
+      .filter((entry) => entry.media_id && entry.product_slug);
+
+    const inspirationMedia = inspirationMediaRows
+      .map((row) => ({
+        media_id: String(row.media_id || "").trim(),
+        inspiration_slug: String(row.catalog_slug || "").trim(),
+        position: String(row.position || ""),
+        is_primary: Boolean(row.is_primary),
+        order: typeof row.sort_order === "number" ? row.sort_order : parseNumber(String(row.sort_order || "")),
+      }))
+      .filter((entry) => entry.media_id && entry.inspiration_slug);
+
+    return { library, productMedia, inspirationMedia };
+  }
+
+  const needsLibrary =
+    include.has("media_library") ||
+    include.has("product_media") ||
+    include.has("inspiration_media") ||
+    include.has("products") ||
+    include.has("inspirations");
+  if (!needsLibrary) {
+    return { library: [] as MediaLibraryEntry[], productMedia: [] as MediaMapping[], inspirationMedia: [] as MediaMapping[] };
+  }
+  const librarySource = getCatalogUrl(env, "media_library");
+  const productSource = getCatalogUrl(env, "product_media");
+  const inspirationSource = getCatalogUrl(env, "inspiration_media");
+
+  const [libraryCsv, productCsv, inspirationCsv] = await Promise.all([
+    librarySource ? fetchText(librarySource).catch(() => "") : Promise.resolve(""),
+    productSource ? fetchText(productSource).catch(() => "") : Promise.resolve(""),
+    inspirationSource ? fetchText(inspirationSource).catch(() => "") : Promise.resolve(""),
+  ]);
+
+  const library = libraryCsv
+    ? parseCsvRecordsLoose(libraryCsv).records
+        .map((row) => ({
+          media_id: String(row.media_id || row.id || "").trim(),
+          url: buildMediaUrl(row.url || ""),
+          media_type: String(row.media_type || row.type || "image").trim(),
+          label: row.label || "",
+          alt: row.alt || "",
+          description: row.description || "",
+        }))
+        .filter((entry) => entry.media_id && entry.url)
+    : [];
+
+  const productMedia = productCsv
+    ? parseCsvRecordsLoose(productCsv).records
+        .map((row) => ({
+          media_id: String(row.media_id || "").trim(),
+          product_slug: String(row.product_slug || row.product_slugs || "").trim(),
+          position: row.position || "",
+          is_primary: parseBoolean(row.is_primary),
+          order: parseNumber(row.order),
+        }))
+        .filter((entry) => entry.media_id && entry.product_slug)
+    : [];
+
+  const inspirationMedia = inspirationCsv
+    ? parseCsvRecordsLoose(inspirationCsv).records
+        .map((row) => ({
+          media_id: String(row.media_id || "").trim(),
+          inspiration_slug: String(row.inspiration_slug || row.inspiration_slugs || "").trim(),
+          position: row.position || "",
+          is_primary: parseBoolean(row.is_primary),
+          order: parseNumber(row.order),
+        }))
+        .filter((entry) => entry.media_id && entry.inspiration_slug)
+    : [];
+
+  return { library, productMedia, inspirationMedia };
+}
+
+type NotesBucket = {
+  takeaways: string[];
+  translationNotes: string[];
+  description: string;
+  longDesc: string;
+};
+
+type CatalogNotesState = {
+  byId: Map<string, NotesBucket>;
+  bySlug: Map<string, NotesBucket>;
+};
+
+function buildNotesBucket(): NotesBucket {
+  return { takeaways: [], translationNotes: [], description: "", longDesc: "" };
+}
+
+function addCatalogNote(map: Map<string, NotesBucket>, key: string, kind: string, note: string) {
+  if (!key || !note) return;
+  const bucket = map.get(key) || buildNotesBucket();
+  if (kind === "takeaway") {
+    bucket.takeaways.push(note);
+  } else if (kind === "translation_note") {
+    bucket.translationNotes.push(note);
+  } else if (kind === "description" && !bucket.description) {
+    bucket.description = note;
+  } else if (kind === "long_desc" && !bucket.longDesc) {
+    bucket.longDesc = note;
+  }
+  map.set(key, bucket);
+}
+
+function resolveCatalogNotes(
+  notes: CatalogNotesState,
+  catalogId: string,
+  catalogSlug: string
+) {
+  if (catalogId && notes.byId.has(catalogId)) {
+    return notes.byId.get(catalogId) || buildNotesBucket();
+  }
+  const slugKey = catalogSlug.toLowerCase();
+  return notes.bySlug.get(slugKey) || buildNotesBucket();
+}
+
+async function loadCatalogNotes(env: Env): Promise<CatalogNotesState> {
+  const empty = { byId: new Map<string, NotesBucket>(), bySlug: new Map<string, NotesBucket>() };
+  if (!hasD1(env)) return empty;
+  const rows = await d1All(
+    env,
+    "SELECT catalog_id, catalog_slug, kind, note FROM catalog_notes ORDER BY sort_order, created_at"
+  );
+  rows.forEach((row) => {
+    const id = String(row.catalog_id || "");
+    const slug = String(row.catalog_slug || "");
+    const kind = String(row.kind || "");
+    const note = String(row.note || "");
+    if (id) addCatalogNote(empty.byId, id, kind, note);
+    if (slug) addCatalogNote(empty.bySlug, slug.toLowerCase(), kind, note);
+  });
+  return empty;
 }
 
 async function loadCatalogPayload(env: Env, params: URLSearchParams) {
@@ -5287,7 +7214,14 @@ async function loadCatalogPayload(env: Env, params: URLSearchParams) {
   const includeAll = !includeParam;
   const include = new Set(
     includeAll
-      ? ["products", "inspirations", "site_config"]
+      ? [
+          "products",
+          "inspirations",
+          "site_config",
+          "media_library",
+          "product_media",
+          "inspiration_media",
+        ]
       : includeParam
           .split(",")
           .map((entry) => entry.trim().toLowerCase())
@@ -5298,6 +7232,213 @@ async function loadCatalogPayload(env: Env, params: URLSearchParams) {
     ok: true,
     generatedAt: new Date().toISOString(),
   };
+
+    if (hasD1(env)) {
+      const mediaState = await loadCatalogMedia(env, include);
+      const mediaById = new Map(mediaState.library.map((entry) => [entry.media_id, entry]));
+      const stoneOptionsById = new Map<string, Record<string, unknown>[]>();
+      const metalOptionsById = new Map<string, Record<string, unknown>[]>();
+      const notesState =
+        include.has("products") || include.has("inspirations")
+          ? await loadCatalogNotes(env)
+          : { byId: new Map(), bySlug: new Map() };
+      if (include.has("products") || include.has("inspirations")) {
+        const stoneRows = await d1All(env, "SELECT * FROM catalog_stone_options");
+        stoneRows.forEach((row) => {
+          const option = {
+            id: String(row.id || ""),
+            catalog_id: String(row.catalog_id || ""),
+            role: String(row.role || ""),
+            carat: parseNumber(String(row.carat || "")),
+            count: parseNumber(String(row.count || "")),
+            is_primary: Boolean(row.is_primary),
+            size_type: String(row.size_type || ""),
+          };
+          if (option.catalog_id) {
+            const list = stoneOptionsById.get(option.catalog_id) || [];
+            list.push(option);
+            stoneOptionsById.set(option.catalog_id, list);
+          }
+        });
+        const metalRows = await d1All(env, "SELECT * FROM catalog_metal_options");
+        metalRows.forEach((row) => {
+          const option = {
+            id: String(row.id || ""),
+            catalog_id: String(row.catalog_id || ""),
+            metal_weight: String(row.metal_weight || ""),
+            is_primary: Boolean(row.is_primary),
+            size_type: String(row.size_type || ""),
+          };
+          if (option.catalog_id) {
+            const list = metalOptionsById.get(option.catalog_id) || [];
+            list.push(option);
+            metalOptionsById.set(option.catalog_id, list);
+          }
+        });
+      }
+
+      if (include.has("products")) {
+        const rows = await d1All(
+          env,
+          "SELECT * FROM catalog_items WHERE type = 'product' AND is_active = 1"
+      );
+      const products = rows.map((row) => {
+        const categories = parseJsonList(String(row.categories || ""));
+        const metals = parseJsonList(String(row.metals || ""));
+        const productSlug = String(row.slug || "");
+        const notes = resolveCatalogNotes(notesState, String(row.id || ""), productSlug);
+        const productMedia = mediaState.productMedia
+          .filter((entry) => {
+            const slugs = parseDelimitedSlugs(entry.product_slug || "");
+            return slugs.some((slug) => slug.toLowerCase() === productSlug.toLowerCase());
+          })
+          .sort(sortMediaMappings);
+          const resolvedMedia = productMedia
+            .map((entry) => {
+              const media = mediaById.get(entry.media_id);
+              if (!media) return null;
+              return {
+                ...entry,
+                url: media.url,
+                media_type: media.media_type,
+                label: media.label,
+                alt: media.alt,
+                description: media.description,
+              };
+            })
+            .filter(Boolean);
+          const images = resolvedMedia
+            .filter((entry) => entry.media_type === "image")
+            .map((entry) => entry.url);
+          const heroImage = images[0] || "";
+          const idKey = String(row.id || "");
+          const stoneOptions = stoneOptionsById.get(idKey) || [];
+          const metalOptions = metalOptionsById.get(idKey) || [];
+          const metalOption =
+            metalOptions.find((entry) => entry.is_primary) || metalOptions[0];
+          const metalWeightValue = metalOption
+            ? String((metalOption as Record<string, unknown>).metal_weight || "")
+            : "";
+          return {
+          id: String(row.id || ""),
+          name: String(row.name || ""),
+          slug: productSlug,
+          description: notes.description,
+          long_desc: notes.longDesc,
+          hero_image: heroImage,
+          images,
+          media: resolvedMedia,
+          category: categories[0] || toPipeList(String(row.categories || "")) || String(row.category || ""),
+          gender: toPipeList(String(row.gender || "")),
+          design_code: String(row.design_code || ""),
+          metal: metals[0] || toPipeList(String(row.metals || "")) || String(row.metal || ""),
+          stone_types: toPipeList(String(row.stone_types || "")),
+          stone_weight: parseNumber(String(row.stone_weight || "")),
+            metal_weight: metalWeightValue,
+            cut: String(row.cut || ""),
+            clarity: String(row.clarity || ""),
+            color: String(row.color || ""),
+            is_active: Boolean(row.is_active),
+            is_featured: Boolean(row.is_featured),
+            tags: toPipeList(String(row.tags || "")),
+            stone_options: stoneOptions,
+            metal_weight_options: metalOptions,
+          };
+        });
+        payload.products = products;
+      }
+
+      if (include.has("inspirations")) {
+        const rows = await d1All(
+          env,
+          "SELECT * FROM catalog_items WHERE type = 'inspiration' AND is_active = 1"
+        );
+      payload.inspirations = rows.map((row) => {
+        const inspirationSlug = String(row.slug || "");
+        const notes = resolveCatalogNotes(notesState, String(row.id || ""), inspirationSlug);
+        const idKey = String(row.id || "");
+        const stoneOptions = stoneOptionsById.get(idKey) || [];
+        const metalOptions = metalOptionsById.get(idKey) || [];
+        const metalOption =
+          metalOptions.find((entry) => entry.is_primary) || metalOptions[0];
+        const metalWeightValue = metalOption
+          ? String((metalOption as Record<string, unknown>).metal_weight || "")
+          : "";
+        const inspirationMedia = mediaState.inspirationMedia
+          .filter((entry) => {
+            const slugs = parseDelimitedSlugs(entry.inspiration_slug || "");
+            return slugs.some((slug) => slug.toLowerCase() === inspirationSlug.toLowerCase());
+          })
+          .sort(sortMediaMappings);
+        const resolvedMedia = inspirationMedia
+          .map((entry) => {
+            const media = mediaById.get(entry.media_id);
+            if (!media) return null;
+            return {
+              ...entry,
+              url: media.url,
+              media_type: media.media_type,
+              label: media.label,
+              alt: media.alt,
+              description: media.description,
+            };
+          })
+          .filter(Boolean);
+        const images = resolvedMedia
+          .filter((entry) => entry.media_type === "image")
+          .map((entry) => entry.url);
+        const heroImage = images[0] || "";
+        return {
+          id: String(row.id || ""),
+          title: String(row.name || ""),
+          slug: inspirationSlug,
+          heroImage,
+          images,
+          media: resolvedMedia,
+          description: notes.description,
+          longDesc: notes.longDesc,
+          stoneTypes: parseStoneTypes(toPipeList(String(row.stone_types || ""))),
+          stoneWeight: parseNumber(String(row.stone_weight || "")),
+          metalWeight: metalWeightValue,
+          metalWeightOptions: metalOptions,
+          tags: parseList(toPipeList(String(row.tags || ""))),
+          categories: parseList(toPipeList(String(row.categories || ""))),
+          genders: parseList(toPipeList(String(row.gender || ""))),
+          styles: parseList(toPipeList(String(row.styles || ""))),
+          motifs: parseList(toPipeList(String(row.motifs || ""))),
+          metals: parseList(toPipeList(String(row.metals || ""))),
+          takeaways: notes.takeaways,
+          translationNotes: notes.translationNotes,
+          designCode: String(row.design_code || ""),
+        };
+      });
+    }
+
+    if (include.has("media_library")) {
+      payload.media_library = mediaState.library;
+    }
+    if (include.has("product_media")) {
+      payload.product_media = mediaState.productMedia;
+    }
+    if (include.has("inspiration_media")) {
+      payload.inspiration_media = mediaState.inspirationMedia;
+    }
+
+    if (include.has("site_config")) {
+      const rows = await d1All(env, "SELECT key, value FROM site_config");
+      const config: Record<string, string> = {};
+      rows.forEach((row) => {
+        const key = String(row.key || "");
+        if (key) config[key] = String(row.value || "");
+      });
+      payload.siteConfig = config;
+    }
+
+    return payload;
+  }
+
+  const mediaState = await loadCatalogMedia(env, include);
+  const mediaById = new Map(mediaState.library.map((entry) => [entry.media_id, entry]));
 
   if (include.has("products")) {
     const source = getCatalogUrl(env, "products");
@@ -5310,39 +7451,50 @@ async function loadCatalogPayload(env: Env, params: URLSearchParams) {
       .map((row) => {
         const categories = parseList(row.categories);
         const metals = parseList(row.metals);
+        const productSlug = row.slug;
+        const productMedia = mediaState.productMedia
+          .filter((entry) => {
+            const slugs = parseDelimitedSlugs(entry.product_slug || "");
+            return slugs.some((slug) => slug.toLowerCase() === String(productSlug || "").toLowerCase());
+          })
+          .sort(sortMediaMappings);
+        const resolvedMedia = productMedia
+          .map((entry) => {
+            const media = mediaById.get(entry.media_id);
+            if (!media) return null;
+            return {
+              ...entry,
+              url: media.url,
+              media_type: media.media_type,
+              label: media.label,
+              alt: media.alt,
+              description: media.description,
+            };
+          })
+          .filter(Boolean);
+        const images = resolvedMedia
+          .filter((entry) => entry.media_type === "image")
+          .map((entry) => entry.url);
+        const heroImage = images[0] || "";
         return {
           id: row.id,
           name: row.name,
           slug: row.slug,
           description: row.description,
-          short_desc: row.short_desc,
           long_desc: row.long_desc,
-          hero_image: row.hero_image,
-          collection: row.collection,
+          hero_image: heroImage,
+          images,
+          media: resolvedMedia,
           category: categories[0] || row.categories || row.category || "",
+          gender: row.gender || "",
           design_code: row.design_code,
           metal: metals[0] || row.metals || row.metal || "",
-          metal_options: row.metal_options || "",
           stone_types: row.stone_types || "",
-          stone_type_options: row.stone_type_options || "",
           stone_weight: parseNumber(row.stone_weight),
-          stone_weight_range: row.stone_weight_range || row.stone_weight || "",
           metal_weight: parseNumber(row.metal_weight),
-          metal_weight_range: row.metal_weight_range || row.metal_weight || "",
           cut: row.cut,
-          cut_range: row.cut_range || "",
           clarity: row.clarity,
-          clarity_range: row.clarity_range || "",
           color: row.color,
-          color_range: row.color_range || "",
-          carat: parseNumber(row.carat),
-          price_usd_natural: parseNumber(row.price_usd_natural),
-          estimated_price_usd_vvs1_vvs2_18k: parseNumber(
-            row.estimated_price_usd_vvs1_vvs2_18k
-          ),
-          lab_discount_pct: parseNumber(row.lab_discount_pct),
-          metal_platinum_premium: parseNumber(row.metal_platinum_premium),
-          metal_14k_discount_pct: parseNumber(row.metal_14k_discount_pct),
           is_active: parseBoolean(row.is_active),
           is_featured: parseBoolean(row.is_featured),
           tags: row.tags,
@@ -5359,28 +7511,65 @@ async function loadCatalogPayload(env: Env, params: URLSearchParams) {
     }
     const csv = await fetchText(source);
     const records = parseCsvRecords(csv, source);
-    payload.inspirations = records.map((row) => ({
-      id: row.id,
-      title: row.name,
-      slug: row.slug,
-      heroImage: row.hero_image,
-      shortDesc: row.short_desc,
-      longDesc: row.long_desc,
-      estimatedPriceUsdVvs1Vvs2_18k: parseNumber(row.estimated_price_usd_vvs1_vvs2_18k),
-      stoneTypes: parseStoneTypes(row.stone_types),
-      stoneWeight: parseNumber(row.stone_weight),
-      metalWeight: parseNumber(row.metal_weight),
-      tags: parseList(row.tags),
-      categories: parseList(row.categories),
-      genders: parseList(row.gender),
-      styles: parseList(row.styles),
-      motifs: parseList(row.motifs),
-      metals: parseList(row.metals),
-      palette: parsePalette(row.palette),
-      takeaways: parseList(row.takeaways),
-      translationNotes: parseList(row.translation_notes),
-      designCode: row.design_code,
-    }));
+    payload.inspirations = records.map((row) => {
+      const inspirationSlug = row.slug;
+      const inspirationMedia = mediaState.inspirationMedia
+        .filter((entry) => {
+          const slugs = parseDelimitedSlugs(entry.inspiration_slug || "");
+          return slugs.some((slug) => slug.toLowerCase() === String(inspirationSlug || "").toLowerCase());
+        })
+        .sort(sortMediaMappings);
+      const resolvedMedia = inspirationMedia
+        .map((entry) => {
+          const media = mediaById.get(entry.media_id);
+          if (!media) return null;
+          return {
+            ...entry,
+            url: media.url,
+            media_type: media.media_type,
+            label: media.label,
+            alt: media.alt,
+            description: media.description,
+          };
+        })
+        .filter(Boolean);
+      const images = resolvedMedia
+        .filter((entry) => entry.media_type === "image")
+        .map((entry) => entry.url);
+      const heroImage = images[0] || "";
+      return {
+        id: row.id,
+        title: row.name,
+        slug: row.slug,
+        heroImage,
+        images,
+        media: resolvedMedia,
+        description: row.description,
+        longDesc: row.long_desc,
+        stoneTypes: parseStoneTypes(row.stone_types),
+        stoneWeight: parseNumber(row.stone_weight),
+        metalWeight: parseNumber(row.metal_weight),
+        tags: parseList(row.tags),
+        categories: parseList(row.categories),
+        genders: parseList(row.gender),
+        styles: parseList(row.styles),
+        motifs: parseList(row.motifs),
+        metals: parseList(row.metals),
+        takeaways: parseList(row.takeaways),
+        translationNotes: parseList(row.translation_notes),
+        designCode: row.design_code,
+      };
+    });
+  }
+
+  if (include.has("media_library")) {
+    payload.media_library = mediaState.library;
+  }
+  if (include.has("product_media")) {
+    payload.product_media = mediaState.productMedia;
+  }
+  if (include.has("inspiration_media")) {
+    payload.inspiration_media = mediaState.inspirationMedia;
   }
 
   if (include.has("site_config")) {
@@ -5463,6 +7652,47 @@ function getSheetConfig(env: Env, kind: "order" | "quote" | "contact"): SheetCon
   const resolvedSheetName = appendRange.includes("!")
     ? appendRange.split("!")[0]
     : sheetName;
+  const headerRange = `${resolvedSheetName}!A1:AZ1`;
+  return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
+}
+
+function getCatalogSheetConfig(
+  env: Env,
+  kind: "product" | "inspiration" | "media_library" | "product_media" | "inspiration_media"
+): SheetConfig {
+  const catalogSheetId = (env.CATALOG_SHEET_ID || "").trim();
+  const sheetId = (
+    kind === "media_library"
+      ? env.MEDIA_LIBRARY_SHEET_ID || catalogSheetId
+      : kind === "product_media"
+      ? env.PRODUCT_MEDIA_SHEET_ID || catalogSheetId
+      : kind === "inspiration_media"
+      ? env.INSPIRATION_MEDIA_SHEET_ID || catalogSheetId
+      : catalogSheetId
+  )?.trim();
+  if (!sheetId) {
+    throw new Error("catalog_sheet_missing");
+  }
+  const sheetName =
+    kind === "product"
+      ? (env.CATALOG_PRODUCTS_SHEET_NAME || "products")
+      : kind === "inspiration"
+      ? (env.CATALOG_INSPIRATIONS_SHEET_NAME || "inspirations")
+      : kind === "media_library"
+      ? (env.MEDIA_LIBRARY_SHEET_NAME || "media_library")
+      : kind === "product_media"
+      ? (env.PRODUCT_MEDIA_SHEET_NAME || "product_media")
+      : (env.INSPIRATION_MEDIA_SHEET_NAME || "inspiration_media");
+  const range =
+    kind === "media_library"
+      ? env.MEDIA_LIBRARY_SHEET_RANGE
+      : kind === "product_media"
+      ? env.PRODUCT_MEDIA_SHEET_RANGE
+      : kind === "inspiration_media"
+      ? env.INSPIRATION_MEDIA_SHEET_RANGE
+      : undefined;
+  const appendRange = (range || "").trim() || `${sheetName}!A1`;
+  const resolvedSheetName = appendRange.includes("!") ? appendRange.split("!")[0] : sheetName;
   const headerRange = `${resolvedSheetName}!A1:AZ1`;
   return { sheetId, sheetName: resolvedSheetName, appendRange, headerRange };
 }
@@ -5599,18 +7829,157 @@ async function appendSheetRow(
 }
 
 async function appendOrderRow(env: Env, values: Array<string | number>) {
+  if (hasD1(env)) {
+    const record: Record<string, string> = {};
+    ORDER_SHEET_HEADER.forEach((key, idx) => {
+      record[key] = values[idx] === undefined || values[idx] === null ? "" : String(values[idx]);
+    });
+    record.request_id = normalizeRequestId(record.request_id || "");
+    const columns = ORDER_SHEET_HEADER;
+    const placeholders = columns.map(() => "?").join(", ");
+    const updates = columns
+      .filter((key) => key !== "request_id")
+      .map((key) => `${key} = excluded.${key}`)
+      .join(", ");
+    const params = columns.map((key) => record[key] || "");
+    await d1Run(
+      env,
+      `INSERT INTO orders (${columns.join(", ")}) VALUES (${placeholders}) ON CONFLICT(request_id) DO UPDATE SET ${updates}`,
+      params
+    );
+    return;
+  }
   const config = getSheetConfig(env, "order");
   await appendSheetRow(env, config, values, ORDER_SHEET_HEADER);
 }
 
 async function appendQuoteRow(env: Env, values: Array<string | number>) {
+  if (hasD1(env)) {
+    const record: Record<string, string> = {};
+    QUOTE_SHEET_HEADER.forEach((key, idx) => {
+      record[key] = values[idx] === undefined || values[idx] === null ? "" : String(values[idx]);
+    });
+    record.request_id = normalizeRequestId(record.request_id || "");
+    const columns = QUOTE_SHEET_HEADER;
+    const placeholders = columns.map(() => "?").join(", ");
+    const updates = columns
+      .filter((key) => key !== "request_id")
+      .map((key) => `${key} = excluded.${key}`)
+      .join(", ");
+    const params = columns.map((key) => record[key] || "");
+    await d1Run(
+      env,
+      `INSERT INTO quotes (${columns.join(", ")}) VALUES (${placeholders}) ON CONFLICT(request_id) DO UPDATE SET ${updates}`,
+      params
+    );
+    return;
+  }
   const config = getSheetConfig(env, "quote");
   await appendSheetRow(env, config, values, QUOTE_SHEET_HEADER);
 }
 
 async function appendContactRow(env: Env, values: Array<string | number>) {
+  if (hasD1(env)) {
+    const record: Record<string, string> = {};
+    CONTACT_SHEET_HEADER.forEach((key, idx) => {
+      record[key] = values[idx] === undefined || values[idx] === null ? "" : String(values[idx]);
+    });
+    record.email = normalizeEmailAddress(record.email || "");
+    const columns = CONTACT_SHEET_HEADER;
+    const placeholders = columns.map(() => "?").join(", ");
+    const updates = columns
+      .filter((key) => key !== "email")
+      .map((key) => `${key} = excluded.${key}`)
+      .join(", ");
+    const params = columns.map((key) => record[key] || "");
+    await d1Run(
+      env,
+      `INSERT INTO contacts (${columns.join(", ")}) VALUES (${placeholders}) ON CONFLICT(email) DO UPDATE SET ${updates}`,
+      params
+    );
+    return;
+  }
   const config = getSheetConfig(env, "contact");
   await appendSheetRow(env, config, values, CONTACT_SHEET_HEADER);
+}
+
+type TicketInsertPayload = {
+  requestId: string;
+  createdAt: string;
+  status: string;
+  subject?: string;
+  summary?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  source?: string;
+  pageUrl?: string;
+  updatedBy?: string;
+};
+
+type TicketDetailPayload = {
+  requestId: string;
+  note: string;
+  kind?: string;
+  createdAt?: string;
+  updatedBy?: string;
+};
+
+async function createTicketFromContact(env: Env & { DB: D1Database }, payload: TicketInsertPayload) {
+  const now = payload.createdAt || new Date().toISOString();
+  const columns = [
+    "created_at",
+    "request_id",
+    "status",
+    "subject",
+    "summary",
+    "name",
+    "email",
+    "phone",
+    "source",
+    "page_url",
+    "updated_at",
+    "updated_by",
+  ];
+  const params = [
+    now,
+    payload.requestId,
+    payload.status || "NEW",
+    payload.subject || "",
+    payload.summary || "",
+    payload.name || "",
+    normalizeEmailAddress(payload.email || ""),
+    payload.phone || "",
+    payload.source || "",
+    payload.pageUrl || "",
+    now,
+    payload.updatedBy || "system",
+  ];
+  const placeholders = columns.map(() => "?").join(", ");
+  const updates = columns
+    .filter((key) => key !== "request_id")
+    .map((key) => `${key} = excluded.${key}`)
+    .join(", ");
+  await d1Run(
+    env,
+    `INSERT INTO tickets (${columns.join(", ")}) VALUES (${placeholders}) ON CONFLICT(request_id) DO UPDATE SET ${updates}`,
+    params
+  );
+}
+
+async function addTicketDetail(env: Env & { DB: D1Database }, payload: TicketDetailPayload) {
+  const createdAt = payload.createdAt || new Date().toISOString();
+  await d1Run(
+    env,
+    "INSERT INTO ticket_details (request_id, created_at, kind, note, updated_by) VALUES (?, ?, ?, ?, ?)",
+    [
+      payload.requestId,
+      createdAt,
+      payload.kind || "note",
+      payload.note,
+      payload.updatedBy || "",
+    ]
+  );
 }
 
 type UnifiedContactUpdate = {
@@ -5862,6 +8231,31 @@ async function loadUnifiedContactsState(env: Env): Promise<UnifiedContactsState 
 async function upsertUnifiedContact(env: Env, update: UnifiedContactUpdate) {
   const normalizedEmail = normalizeEmailAddress(update.email);
   if (!normalizedEmail) return;
+  if (hasD1(env)) {
+    const now = new Date().toISOString();
+    const existingRows = await d1All(env, "SELECT * FROM unified_contacts WHERE email = ? LIMIT 1", [
+      normalizedEmail,
+    ]);
+    const existing = existingRows.length ? (mapD1RowToRecord(existingRows[0]) as Record<string, string>) : null;
+    const merged = mergeUnifiedContactRecord(
+      existing,
+      { ...update, email: normalizedEmail },
+      now
+    );
+    const columns = UNIFIED_CONTACTS_SHEET_HEADER;
+    const values = columns.map((key) => merged[key] || "");
+    const placeholders = columns.map(() => "?").join(", ");
+    const updateSet = columns
+      .filter((key) => key !== "email")
+      .map((key) => `${key} = excluded.${key}`)
+      .join(", ");
+    await d1Run(
+      env,
+      `INSERT INTO unified_contacts (${columns.join(", ")}) VALUES (${placeholders}) ON CONFLICT(email) DO UPDATE SET ${updateSet}`,
+      values
+    );
+    return;
+  }
   const state = await loadUnifiedContactsState(env);
   if (!state) return;
   const now = new Date().toISOString();
@@ -5978,6 +8372,76 @@ async function collectUnifiedContacts(
 }
 
 async function processUnifiedContacts(env: Env) {
+  if (hasD1(env)) {
+    const aggregates = new Map<string, UnifiedContactAggregate>();
+    const orderRows = await d1All(env, "SELECT email, name, phone, created_at FROM orders");
+    orderRows.forEach((row) => {
+      applyUnifiedAggregate(aggregates, {
+        email: getString(row.email),
+        name: getString(row.name),
+        phone: getString(row.phone),
+        source: "order",
+        createdAt: getString(row.created_at),
+        isCustomer: true,
+      });
+    });
+    const quoteRows = await d1All(env, "SELECT email, name, phone, created_at FROM quotes");
+    quoteRows.forEach((row) => {
+      applyUnifiedAggregate(aggregates, {
+        email: getString(row.email),
+        name: getString(row.name),
+        phone: getString(row.phone),
+        source: "quote",
+        createdAt: getString(row.created_at),
+        isCustomer: true,
+      });
+    });
+    const contactRows = await d1All(env, "SELECT email, name, phone, created_at FROM contacts");
+    contactRows.forEach((row) => {
+      applyUnifiedAggregate(aggregates, {
+        email: getString(row.email),
+        name: getString(row.name),
+        phone: getString(row.phone),
+        source: "contact",
+        createdAt: getString(row.created_at),
+        isCustomer: false,
+      });
+    });
+
+    if (!aggregates.size) return;
+    const now = new Date().toISOString();
+    for (const [email, aggregate] of aggregates) {
+      const existingRows = await d1All(env, "SELECT * FROM unified_contacts WHERE email = ? LIMIT 1", [email]);
+      const existing = existingRows.length ? (mapD1RowToRecord(existingRows[0]) as Record<string, string>) : null;
+      const merged = mergeUnifiedContactRecord(
+        existing,
+        {
+          email,
+          name: aggregate.name,
+          phone: aggregate.phone,
+          sources: Array.from(aggregate.sources),
+          firstSeenAt: aggregate.firstSeenAt,
+          lastSeenAt: aggregate.lastSeenAt,
+          lastSource: aggregate.lastSource,
+          isCustomer: aggregate.isCustomer,
+        },
+        now
+      );
+      const columns = UNIFIED_CONTACTS_SHEET_HEADER;
+      const values = columns.map((key) => merged[key] || "");
+      const placeholders = columns.map(() => "?").join(", ");
+      const updateSet = columns
+        .filter((key) => key !== "email")
+        .map((key) => `${key} = excluded.${key}`)
+        .join(", ");
+      await d1Run(
+        env,
+        `INSERT INTO unified_contacts (${columns.join(", ")}) VALUES (${placeholders}) ON CONFLICT(email) DO UPDATE SET ${updateSet}`,
+        values
+      );
+    }
+    return;
+  }
   let state: UnifiedContactsState | null = null;
   try {
     state = await loadUnifiedContactsState(env);
@@ -6031,6 +8495,87 @@ async function processUnifiedContacts(env: Env) {
       const values = buildUnifiedRowValues(state.header, merged);
       await appendSheetRow(env, state.config, values, UNIFIED_CONTACTS_SHEET_HEADER);
     }
+  }
+}
+
+async function processContactsDirectory(env: Env) {
+  if (!hasD1(env)) return;
+  const cacheKey = "contacts_directory:last_run";
+  if (env.HEERAWALLA_ACKS) {
+    const lastRun = await env.HEERAWALLA_ACKS.get(cacheKey);
+    if (lastRun) return;
+    await env.HEERAWALLA_ACKS.put(cacheKey, new Date().toISOString(), {
+      expirationTtl: 60 * 60 * 24,
+    });
+  }
+  const [orders, quotes, tickets] = await Promise.all([
+    d1All(env, "SELECT email, name, phone, created_at FROM orders"),
+    d1All(env, "SELECT email, name, phone, created_at FROM quotes"),
+    d1All(env, "SELECT email, name, phone, created_at FROM tickets"),
+  ]);
+  const directory = new Map<
+    string,
+    { email: string; name: string; phone: string; createdAt: string; sources: Set<string> }
+  >();
+  const mergeRow = (row: Record<string, unknown>, source: string) => {
+    const email = normalizeEmailAddress(getString(row.email));
+    if (!email) return;
+    const name = getString(row.name);
+    const phone = getString(row.phone);
+    const createdAt = getString(row.created_at);
+    const existing = directory.get(email);
+    if (!existing) {
+      directory.set(email, {
+        email,
+        name,
+        phone,
+        createdAt,
+        sources: new Set([source]),
+      });
+      return;
+    }
+    if (!existing.name && name) existing.name = name;
+    if (!existing.phone && phone) existing.phone = phone;
+    if (createdAt) {
+      if (!existing.createdAt) {
+        existing.createdAt = createdAt;
+      } else if (new Date(createdAt) < new Date(existing.createdAt)) {
+        existing.createdAt = createdAt;
+      }
+    }
+    existing.sources.add(source);
+  };
+  orders.forEach((row) => mergeRow(row, "order"));
+  quotes.forEach((row) => mergeRow(row, "quote"));
+  tickets.forEach((row) => mergeRow(row, "ticket"));
+  const now = new Date().toISOString();
+  for (const entry of directory.values()) {
+    const source = Array.from(entry.sources.values()).join(",");
+    await d1Run(
+      env,
+      `INSERT INTO contacts (created_at, email, name, phone, source, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(email) DO UPDATE SET
+         name = excluded.name,
+         phone = excluded.phone,
+         source = excluded.source,
+         updated_at = excluded.updated_at,
+         updated_by = excluded.updated_by,
+         created_at = CASE
+           WHEN contacts.created_at IS NULL OR contacts.created_at = ''
+             THEN excluded.created_at
+           ELSE contacts.created_at
+         END`,
+      [
+        entry.createdAt || now,
+        entry.email,
+        entry.name || "",
+        entry.phone || "",
+        source,
+        now,
+        "cron",
+      ]
+    );
   }
 }
 
@@ -7246,6 +9791,127 @@ async function processOrderStatusEmails(env: Env) {
   if (!env.HEERAWALLA_ACKS) return;
   if (!isEnabled(env.SEND_STATUS_UPDATES, true)) return;
 
+  if (hasD1(env)) {
+    const rows = await d1All(
+      env,
+      "SELECT request_id, status, status_updated_at, created_at, email, name, product_name FROM orders"
+    );
+    if (!rows.length) return;
+
+    const intervalMs = getStatusEmailIntervalHours(env) * 60 * 60 * 1000;
+    const invoiceDelayMs = getInvoiceEmailDelayMs(env);
+    const now = Date.now();
+
+    const useResend = Boolean(env.RESEND_API_KEY);
+    const resendThrottleMs = 600;
+    for (const row of rows) {
+      const requestId = getString(row.request_id);
+      const statusRaw = getString(row.status);
+      const status = normalizeOrderStatus(statusRaw);
+      if (!requestId || !status || STATUS_EMAIL_SKIP_STATUSES.has(status)) continue;
+      const email = getString(row.email);
+      if (!email) continue;
+      const name = getString(row.name);
+      const productName = getString(row.product_name);
+      const statusUpdatedAt = getString(row.status_updated_at) || getString(row.created_at) || "";
+      const statusUpdatedMs = Date.parse(statusUpdatedAt);
+
+      const existingRecord = await getOrderStatusEmailRecord(env, requestId, status);
+      const isNewStatus = !existingRecord || existingRecord.statusUpdatedAt !== statusUpdatedAt;
+      const attempts = existingRecord && !isNewStatus ? existingRecord.attempts : 0;
+      const lastSentAt = existingRecord && !isNewStatus ? existingRecord.lastSentAt : "";
+
+      if (attempts >= STATUS_EMAIL_MAX_ATTEMPTS) continue;
+      if (!isNewStatus && !STATUS_EMAIL_REMINDER_STATUSES.has(status)) continue;
+
+      if (!isNewStatus && STATUS_EMAIL_REMINDER_STATUSES.has(status)) {
+        if (!lastSentAt) continue;
+        const lastSentMs = Date.parse(lastSentAt);
+        if (!Number.isFinite(lastSentMs) || now - lastSentMs < intervalMs) {
+          continue;
+        }
+      }
+      if (status === "INVOICED" && isNewStatus && Number.isFinite(statusUpdatedMs)) {
+        if (now - statusUpdatedMs < invoiceDelayMs) {
+          continue;
+        }
+      }
+
+      let confirmationUrl = "";
+      let cancelUrl = "";
+      let changes: ConfirmationChange[] = [];
+      let orderDetails: OrderDetailsRecord | null = null;
+      if (status === "PENDING_CONFIRMATION") {
+        const token = await getOrderConfirmationTokenByRequestId(env, requestId);
+        if (!token) continue;
+        const record = await getOrderConfirmationRecord(env, token);
+        if (!record || record.status !== "pending") continue;
+        confirmationUrl = buildOrderConfirmationPageUrl(env, token);
+        changes = record.changes || [];
+      }
+      if (status === "INVOICED" || status === "INVOICE_EXPIRED") {
+        const cancelRecord = await ensureOrderCancelRecord(env, requestId, email, name, productName);
+        cancelUrl = buildOrderCancelPageUrl(env, cancelRecord.token);
+      }
+      if (status === "INVOICED" || status === "INVOICE_EXPIRED" || status === "SHIPPED" || status === "DELIVERED") {
+        orderDetails = await getOrderDetailsRecord(env, requestId);
+      }
+
+      const paymentUrl =
+        (orderDetails && getString(orderDetails.payment_url)) ||
+        resolveOrderPaymentUrl(env, requestId, email, "");
+      const emailPayload = buildOrderStatusEmail({
+        status,
+        requestId,
+        name,
+        email,
+        productName,
+        confirmationUrl,
+        paymentUrl,
+        cancelUrl,
+        changes,
+        orderDetails,
+        authenticityUrl: status === "DELIVERED" ? buildOrderAuthenticityPageUrl(env) : "",
+      });
+      if (!emailPayload) continue;
+
+      try {
+        await sendEmail(env, {
+          to: [email],
+          sender: "Heerawalla <atelier@heerawalla.com>",
+          replyTo: getCustomerReplyTo(),
+          subject: emailPayload.subject,
+          textBody: emailPayload.textBody,
+          htmlBody: emailPayload.htmlBody,
+        });
+        const nextAttempts = attempts + 1;
+        const sentAt = new Date().toISOString();
+        await storeOrderStatusEmailRecord(env, requestId, status, {
+          status,
+          statusUpdatedAt,
+          lastSentAt: sentAt,
+          attempts: nextAttempts,
+        });
+        const noteType = isNewStatus ? "Status email sent" : "Reminder sent";
+        await appendOrderNote(
+          env,
+          requestId,
+          `${noteType}: ${status} (attempt ${nextAttempts}/${STATUS_EMAIL_MAX_ATTEMPTS}) on ${sentAt}.`
+        );
+        if (useResend && resendThrottleMs > 0) {
+          await sleep(resendThrottleMs);
+        }
+      } catch (error) {
+        const errorMessage = String(error);
+        logWarn("order_status_email_failed", { requestId, status, error: errorMessage });
+        if (useResend && isResendRateLimitError(errorMessage)) {
+          break;
+        }
+      }
+    }
+    return;
+  }
+
   const config = getSheetConfig(env, "order");
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
   const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
@@ -7398,6 +10064,70 @@ async function processShippedOrderUpdates(env: Env) {
     return;
   }
   if (!detailsMap.size) return;
+
+  if (hasD1(env)) {
+    const rows = await d1All(env, "SELECT request_id, status, notes FROM orders WHERE status = 'SHIPPED'");
+    if (!rows.length) return;
+    const intervalMs = ORDER_SHIPPING_CHECK_INTERVAL_HOURS * 60 * 60 * 1000;
+    const now = Date.now();
+    const checkedAt = new Date(now).toISOString();
+
+    for (const row of rows) {
+      const requestId = getString(row.request_id);
+      if (!requestId) continue;
+      const status = normalizeOrderStatus(getString(row.status));
+      if (status !== "SHIPPED") continue;
+      const details = detailsMap.get(normalizeRequestId(requestId));
+      if (!details) continue;
+
+      const lastCheckRaw = getString(details.last_shipping_check_at);
+      if (lastCheckRaw) {
+        const lastCheckMs = Date.parse(lastCheckRaw);
+        if (Number.isFinite(lastCheckMs) && now - lastCheckMs < intervalMs) {
+          continue;
+        }
+      }
+
+      const shippingSnapshot = buildShippingSnapshot(details);
+      const shouldAppend = await shouldAppendShippingNote(env, requestId, shippingSnapshot);
+      const shippingNote = shouldAppend ? buildShippingUpdateNote(details, checkedAt) : "";
+      const delivered = isDeliveredShippingStatus(details.shipping_status || "");
+
+      if (delivered) {
+        const existingNotes = getString(row.notes);
+        const combinedNotes = appendNote(
+          appendNote(existingNotes, shippingNote),
+          buildStatusAuditNote("DELIVERED")
+        );
+        await updateAdminRow(env, "order", requestId, "DELIVERED", combinedNotes, {});
+        await upsertOrderDetailsRecord(
+          env,
+          requestId,
+          {
+            delivered_at: getString(details.delivered_at) || checkedAt,
+            shipping_status: getString(details.shipping_status) || "Delivered",
+            last_shipping_check_at: checkedAt,
+          },
+          "DELIVERED",
+          "cron"
+        );
+        continue;
+      }
+
+      if (shippingNote) {
+        await appendOrderNote(env, requestId, shippingNote);
+      }
+
+      await upsertOrderDetailsRecord(
+        env,
+        requestId,
+        { last_shipping_check_at: checkedAt },
+        status,
+        "cron"
+      );
+    }
+    return;
+  }
 
   const config = getSheetConfig(env, "order");
   const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
@@ -9234,6 +11964,22 @@ async function sendResend(
     throw new Error(`resend_failed:${response.status}:${errorText}`);
   }
   await discardResponse(response);
+}
+
+function buildPlainEmailHtml(body: string) {
+  const safeBody = escapeHtml(body).replace(/\n/g, "<br>");
+  return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
+  <body style="margin:0;padding:24px;background:#f8fafc;color:#0f172a;font-family:-apple-system, Segoe UI, Helvetica, Arial, sans-serif;">
+    <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;padding:24px;line-height:1.6;">
+      ${safeBody}
+    </div>
+  </body>
+</html>`;
 }
 
 function buildRawEmail({

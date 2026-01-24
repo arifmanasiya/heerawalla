@@ -38,6 +38,9 @@
     quotes: ["NEW", "ACKNOWLEDGED", "QUOTED", "QUOTE_ACTIONED", "DROPPED"],
     tickets: ["NEW", "PENDING", "RESOLVED"],
     contacts: [],
+    products: [],
+    inspirations: [],
+    "media-library": [],
     "price-chart": [],
     "cost-chart": [],
     "diamond-price-chart": [],
@@ -52,6 +55,7 @@
       { key: "price", label: "Price" },
       { key: "timeline", label: "Timeline" },
       { key: "view", label: "" },
+      { key: "delete", label: "" },
     ],
     quotes: [
       { key: "created_at", label: "Created" },
@@ -61,14 +65,16 @@
       { key: "price", label: "Price" },
       { key: "timeline", label: "Timeline" },
       { key: "view", label: "" },
+      { key: "delete", label: "" },
     ],
     tickets: [
       { key: "created_at", label: "Created" },
+      { key: "request_id", label: "Request ID" },
       { key: "name", label: "Name" },
       { key: "email", label: "Email" },
-      { key: "phone", label: "Phone" },
-      { key: "interests", label: "Interests" },
       { key: "status", label: "Status" },
+      { key: "subject", label: "Subject" },
+      { key: "summary", label: "Summary" },
       { key: "view", label: "" },
     ],
     contacts: [
@@ -76,9 +82,34 @@
       { key: "name", label: "Name" },
       { key: "email", label: "Email" },
       { key: "phone", label: "Phone" },
-      { key: "type", label: "Type" },
-      { key: "subscribed", label: "Subscribed" },
-      { key: "sources", label: "Sources" },
+      { key: "source", label: "Source" },
+      { key: "request_id", label: "Request ID" },
+      { key: "view", label: "" },
+    ],
+    products: [
+      { key: "id", label: "ID" },
+      { key: "name", label: "Name" },
+      { key: "slug", label: "Slug" },
+      { key: "category", label: "Category" },
+      { key: "design_code", label: "Design code" },
+      { key: "is_active", label: "Active" },
+      { key: "view", label: "" },
+      { key: "delete", label: "" },
+    ],
+    inspirations: [
+      { key: "id", label: "ID" },
+      { key: "name", label: "Name" },
+      { key: "slug", label: "Slug" },
+      { key: "categories", label: "Category" },
+      { key: "design_code", label: "Design code" },
+      { key: "is_active", label: "Active" },
+      { key: "view", label: "" },
+    ],
+    "media-library": [
+      { key: "media_id", label: "Media ID" },
+      { key: "label", label: "Label" },
+      { key: "media_type", label: "Type" },
+      { key: "url", label: "URL" },
       { key: "view", label: "" },
     ],
     "price-chart": [
@@ -130,13 +161,32 @@
       { value: "status", label: "Status" },
       { value: "name", label: "Name" },
       { value: "email", label: "Email" },
+      { value: "subject", label: "Subject" },
     ],
     contacts: [
       { value: "created_at", label: "Created" },
       { value: "name", label: "Name" },
       { value: "email", label: "Email" },
-      { value: "type", label: "Type" },
-      { value: "subscribed", label: "Subscribed" },
+      { value: "source", label: "Source" },
+    ],
+    products: [
+      { value: "name", label: "Name" },
+      { value: "slug", label: "Slug" },
+      { value: "category", label: "Category" },
+      { value: "design_code", label: "Design code" },
+      { value: "is_active", label: "Active" },
+    ],
+    inspirations: [
+      { value: "name", label: "Name" },
+      { value: "slug", label: "Slug" },
+      { value: "categories", label: "Category" },
+      { value: "design_code", label: "Design code" },
+      { value: "is_active", label: "Active" },
+    ],
+    "media-library": [
+      { value: "media_id", label: "Media ID" },
+      { value: "label", label: "Label" },
+      { value: "media_type", label: "Type" },
     ],
     "price-chart": [
       { value: "row_number", label: "Row" },
@@ -162,6 +212,9 @@
     quotes: { sort: "created_at", dir: "desc" },
     tickets: { sort: "created_at", dir: "desc" },
     contacts: { sort: "created_at", dir: "desc" },
+    products: { sort: "name", dir: "asc" },
+    inspirations: { sort: "name", dir: "asc" },
+    "media-library": { sort: "media_id", dir: "asc" },
     "price-chart": { sort: "row_number", dir: "asc" },
     "cost-chart": { sort: "row_number", dir: "asc" },
     "diamond-price-chart": { sort: "row_number", dir: "asc" },
@@ -177,6 +230,7 @@
       { action: "mark_shipped", label: "Mark shipped", confirm: "Mark as shipped?" },
       { action: "mark_delivered", label: "Mark delivered", confirm: "Mark as delivered?" },
       { action: "cancel", label: "Cancel order", confirm: "Cancel this order?" },
+      { action: "delete", label: "Delete", confirm: "Delete this order? This cannot be undone." },
     ],
     quotes: [
       { action: "acknowledge", label: "Acknowledge", confirm: "Mark as acknowledged?" },
@@ -184,12 +238,16 @@
       { action: "refresh_quote", label: "Refresh quote link", confirm: "Send a refreshed quote link?" },
       { action: "mark_actioned", label: "Mark quote actioned", confirm: "Mark quote as actioned?" },
       { action: "drop", label: "Drop", confirm: "Drop this quote?" },
+      { action: "delete", label: "Delete", confirm: "Delete this quote? This cannot be undone." },
     ],
     tickets: [
       { action: "mark_pending", label: "Mark pending", confirm: "Mark as pending?" },
       { action: "mark_resolved", label: "Mark resolved", confirm: "Mark as resolved?" },
     ],
     contacts: [],
+    products: [{ action: "delete", label: "Delete", confirm: "Delete this product? This cannot be undone." }],
+    inspirations: [],
+    "media-library": [],
     "price-chart": [],
     "cost-chart": [],
     "diamond-price-chart": [],
@@ -233,6 +291,9 @@
     ],
     tickets: ["notes"],
     contacts: [],
+    products: [],
+    inspirations: [],
+    "media-library": [],
     "price-chart": ["metal", "adjustment_type", "adjustment_value", "notes"],
     "cost-chart": ["key", "value", "unit", "notes"],
     "diamond-price-chart": ["clarity", "color", "weight_min", "weight_max", "price_per_ct", "notes"],
@@ -308,12 +369,16 @@
     quotes: "Quote",
     tickets: "Customer ticket",
     contacts: "Contact",
+    products: "Product",
+    inspirations: "Inspiration",
+    "media-library": "Media library",
     "price-chart": "Price chart",
     "cost-chart": "Cost chart",
     "diamond-price-chart": "Diamond price chart",
   };
 
   const PRICING_TABS = new Set(["price-chart", "cost-chart", "diamond-price-chart"]);
+  const CATALOG_TABS = new Set(["products", "inspirations", "media-library"]);
   const QUOTE_OPTION_FIELDS = [
     { clarity: "quote_option_1_clarity", color: "quote_option_1_color", price: "quote_option_1_price_18k" },
     { clarity: "quote_option_2_clarity", color: "quote_option_2_color", price: "quote_option_2_price_18k" },
@@ -348,7 +413,7 @@
       return state.role === "admin" || state.role === "ops";
     }
     if (state.tab === "tickets") {
-      return state.role === "admin";
+      return state.role === "admin" || state.role === "ops";
     }
     if (
       state.tab === "price-chart" ||
@@ -356,6 +421,9 @@
       state.tab === "diamond-price-chart"
     ) {
       return state.role === "admin";
+    }
+    if (CATALOG_TABS.has(state.tab)) {
+      return state.role === "admin" || state.role === "ops";
     }
     return false;
   }
@@ -401,6 +469,8 @@
     sizeRing: document.querySelector("[data-size-ring] input"),
     sizeBracelet: document.querySelector("[data-size-bracelet] input"),
     sizeChain: document.querySelector("[data-size-chain] input"),
+    triggerDeploy: document.querySelector("[data-trigger-deploy]"),
+    deployStatus: document.querySelector("[data-deploy-status]"),
     detailsSave: document.querySelector("[data-details-save]"),
     primaryAction: document.querySelector("[data-primary-action]"),
     notesSave: document.querySelector("[data-notes-save]"),
@@ -413,8 +483,12 @@
     toast: document.querySelector("[data-toast]"),
   };
 
-  const storedBase = localStorage.getItem("adminApiBase") || "";
-  const apiBase = storedBase || document.body.dataset.apiBase || "";
+  function getApiBase() {
+    if (typeof window === "undefined") return "";
+    const stored = localStorage.getItem("adminApiBase") || "";
+    return stored || document.body.dataset.apiBase || "";
+  }
+  const apiBase = getApiBase();
   const siteBase = (document.body.dataset.siteBase || "https://www.heerawalla.com").replace(/\/$/, "");
   let syncStatus = "Connecting";
   let lastSync = "";
@@ -424,6 +498,85 @@
   let quotePricingInFlight = false;
   const catalogCache = { data: null, promise: null };
   const mediaCache = new Map();
+
+  function getLocalAdminEmail() {
+    if (typeof window === "undefined") return "";
+    const origin = window.location.origin || "";
+    if (!origin.startsWith("http://localhost") && !origin.startsWith("http://127.0.0.1")) {
+      return "";
+    }
+    const stored = localStorage.getItem("adminEmail") || "";
+    if (stored) return stored;
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = params.get("adminEmail") || params.get("admin_email") || "";
+    if (fromQuery && fromQuery.includes("@")) {
+      localStorage.setItem("adminEmail", fromQuery);
+      return fromQuery;
+    }
+    return "";
+  }
+
+  function getStoredAdminEmail() {
+    if (typeof window === "undefined") return "";
+    try {
+      return localStorage.getItem("adminEmail") || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function buildAdminHeaders(extra = {}, explicitEmail = "") {
+    const headers = { "Content-Type": "application/json", ...extra };
+    const localEmail = explicitEmail || getLocalAdminEmail();
+    if (localEmail) {
+      headers["X-Admin-Email"] = localEmail;
+    }
+    return headers;
+  }
+
+  function ensureLocalAdminAccess() {
+    if (typeof window === "undefined") return true;
+    const origin = window.location.origin || "";
+    const isLocal = origin.startsWith("http://localhost") || origin.startsWith("http://127.0.0.1");
+    if (!isLocal) return true;
+    if (getLocalAdminEmail()) return true;
+    renderLocalAdminPrompt();
+    return false;
+  }
+
+  function renderLocalAdminPrompt() {
+    if (document.querySelector("[data-local-admin-prompt]")) return;
+    const banner = document.createElement("div");
+    banner.className = "local-admin-banner";
+    banner.setAttribute("data-local-admin-prompt", "true");
+    banner.innerHTML = `
+      <div class="local-admin-card">
+        <div>
+          <div class="local-admin-title">Local admin access</div>
+          <div class="local-admin-sub">Enter an allowlisted email to enable local data.</div>
+        </div>
+        <div class="local-admin-form">
+          <input type="email" placeholder="admin@email.com" aria-label="Admin email" />
+          <button class="btn" type="button">Save</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(banner);
+    const input = banner.querySelector("input");
+    const button = banner.querySelector("button");
+    if (input && button) {
+      button.addEventListener("click", () => {
+        const value = String(input.value || "").trim();
+        if (!value || !value.includes("@")) return;
+        localStorage.setItem("adminEmail", value);
+        window.location.reload();
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") button.click();
+      });
+      input.focus();
+    }
+  }
 
   function updateSyncLine() {
     if (!ui.syncLine) return;
@@ -491,6 +644,18 @@
       ui.toast.style.background = "var(--ink)";
     }
     setTimeout(() => ui.toast.classList.remove("is-visible"), 2400);
+  }
+
+  function setButtonEnabled(button, enabled) {
+    if (!button) return;
+    button.disabled = !enabled;
+    button.classList.toggle("is-disabled", !enabled);
+    button.setAttribute("aria-disabled", enabled ? "false" : "true");
+  }
+
+  function setDeployStatus(message) {
+    if (!ui.deployStatus) return;
+    ui.deployStatus.textContent = message;
   }
 
   function setSyncStatus(status) {
@@ -1250,14 +1415,18 @@
     if (key === "price") return formatPrice(item[key]);
     if (key === "status") return item[key] || "--";
     if (key === "phone") return formatPhone(item[key]);
+    if (key === "is_active") return String(item[key] || "").toLowerCase() === "true" ? "Yes" : "No";
     return item[key] || "--";
   }
 
   function getTabEndpoint(tab) {
     if (tab === "orders") return "/orders";
     if (tab === "quotes") return "/quotes";
-    if (tab === "tickets") return "/contacts";
-    if (tab === "contacts") return "/contacts-unified";
+    if (tab === "tickets") return "/tickets";
+    if (tab === "contacts") return "/contacts";
+    if (tab === "products") return "/products";
+    if (tab === "inspirations") return "/inspirations";
+    if (tab === "media-library") return "/media-library";
     if (tab === "price-chart") return "/price-chart";
     if (tab === "cost-chart") return "/cost-chart";
     if (tab === "diamond-price-chart") return "/diamond-price-chart";
@@ -1267,7 +1436,11 @@
   function getActionEndpoint() {
     if (state.tab === "orders") return "/orders/action";
     if (state.tab === "quotes") return "/quotes/action";
-    if (state.tab === "tickets") return "/contacts/action";
+    if (state.tab === "tickets") return "/tickets/action";
+    if (state.tab === "contacts") return "/contacts/action";
+    if (state.tab === "products") return "/products/action";
+    if (state.tab === "inspirations") return "/inspirations/action";
+    if (state.tab === "media-library") return "/media-library/action";
     if (state.tab === "price-chart") return "/price-chart/action";
     if (state.tab === "cost-chart") return "/cost-chart/action";
     if (state.tab === "diamond-price-chart") return "/diamond-price-chart/action";
@@ -1275,7 +1448,30 @@
   }
 
   function getItemKey(item) {
-    return item.request_id || item.email || item.row_number || "";
+    if (state.tab === "products" || state.tab === "inspirations") {
+      return (
+        item.slug ||
+        item.id ||
+        item.row_number ||
+        item.request_id ||
+        item.email ||
+        item.media_id ||
+        item.name ||
+        ""
+      );
+    }
+    if (state.tab === "media-library") {
+      return item.media_id || item.row_number || item.id || "";
+    }
+    return (
+      item.request_id ||
+      item.email ||
+      item.row_number ||
+      item.slug ||
+      item.id ||
+      item.media_id ||
+      ""
+    );
   }
 
   function getSelectedRecordId() {
@@ -1284,17 +1480,37 @@
       state.selectedItem.request_id ||
       state.selectedItem.email ||
       state.selectedItem.row_number ||
+      state.selectedItem.slug ||
+      state.selectedItem.id ||
+      state.selectedItem.media_id ||
       ""
     );
   }
 
+  function buildDeletePayload(tab, recordId) {
+    if (tab === "orders" || tab === "quotes") {
+      return { action: "delete", requestId: recordId };
+    }
+    if (tab === "products") {
+      return { action: "delete", id: recordId, slug: recordId };
+    }
+    return { action: "delete", requestId: recordId };
+  }
+
   async function apiFetch(path, options = {}) {
-    if (!apiBase) throw new Error("Missing API base");
-    const base = apiBase.endsWith("/") ? apiBase : `${apiBase}/`;
+    const resolvedBase = getApiBase();
+    if (!resolvedBase) throw new Error("Missing API base");
+    const base = resolvedBase.endsWith("/") ? resolvedBase : `${resolvedBase}/`;
     const url = new URL(path.replace(/^\//, ""), base);
+    const isLocalApi = base.startsWith("http://localhost") || base.startsWith("http://127.0.0.1");
+    const localEmail = isLocalApi ? getStoredAdminEmail() : getLocalAdminEmail();
+    const headers = buildAdminHeaders(options.headers || {}, localEmail);
+    if (isLocalApi && localEmail) {
+      url.searchParams.set("admin_email", localEmail);
+    }
     const response = await fetch(url.toString(), {
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      credentials: isLocalApi ? "omit" : "include",
+      headers,
       ...options,
     });
     if (!response.ok) {
@@ -1320,6 +1536,54 @@
     }
   }
 
+  async function requestDeploy() {
+    const resolvedBase = getApiBase();
+    if (!resolvedBase) throw new Error("Missing API base");
+    const base = resolvedBase.endsWith("/") ? resolvedBase : `${resolvedBase}/`;
+    const url = new URL("deploy-site", base);
+    const isLocalApi = base.startsWith("http://localhost") || base.startsWith("http://127.0.0.1");
+    const localEmail = isLocalApi ? getStoredAdminEmail() : getLocalAdminEmail();
+    if (isLocalApi && localEmail) {
+      url.searchParams.set("admin_email", localEmail);
+    }
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      credentials: isLocalApi ? "omit" : "include",
+      headers: buildAdminHeaders({}, localEmail),
+      body: "{}",
+    });
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    if (!response.ok) {
+      const message = payload?.error || response.statusText;
+      throw new Error(message);
+    }
+    return payload;
+  }
+
+  async function triggerSiteRebuild() {
+    if (!ui.triggerDeploy) return;
+    const ok = window.confirm("Trigger a site rebuild? This will run the deploy workflow.");
+    if (!ok) return;
+    setDeployStatus("Dispatching...");
+    setButtonEnabled(ui.triggerDeploy, false);
+    try {
+      await requestDeploy();
+      const stamp = new Date().toLocaleTimeString();
+      setDeployStatus(`Queued ${stamp}`);
+      showToast("Rebuild triggered");
+    } catch (error) {
+      setDeployStatus("Failed");
+      showToast("Rebuild failed", "error");
+    } finally {
+      setButtonEnabled(ui.triggerDeploy, true);
+    }
+  }
+
   function updateTabVisibility() {
     if (!ui.adminTabs.length) return;
     const isAdmin = state.role === "admin";
@@ -1340,8 +1604,9 @@
 
   function updateAddRowVisibility() {
     if (!ui.addRowWrap) return;
-    const isAdmin = state.role === "admin";
-    const show = isAdmin && PRICING_TABS.has(state.tab);
+    const canAdd = state.role === "admin" || state.role === "ops";
+    const show =
+      canAdd && (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab));
     ui.addRowWrap.classList.toggle("is-hidden", !show);
   }
 
@@ -1402,9 +1667,9 @@
   function renderHeader() {
     if (!ui.listHeader) return;
     const columns = LIST_COLUMNS[state.tab];
-    const template = columns
-      .map((col) => (col.key === "view" ? "90px" : "minmax(120px, 1fr)"))
-      .join(" ");
+      const template = columns
+        .map((col) => (col.key === "view" || col.key === "delete" ? "90px" : "minmax(120px, 1fr)"))
+        .join(" ");
     ui.listHeader.style.gridTemplateColumns = template;
     ui.listHeader.innerHTML = columns
       .map((col) => `<div>${col.label || ""}</div>`)
@@ -1420,17 +1685,31 @@
       return;
     }
     const columns = LIST_COLUMNS[state.tab];
-    const template = columns
-      .map((col) => (col.key === "view" ? "90px" : "minmax(120px, 1fr)"))
-      .join(" ");
+      const template = columns
+        .map((col) => (col.key === "view" || col.key === "delete" ? "90px" : "minmax(120px, 1fr)"))
+        .join(" ");
     ui.list.innerHTML = state.items
       .map((item) => {
         const key = getItemKey(item);
+        const rowId =
+          key ||
+          item.slug ||
+          item.id ||
+          item.request_id ||
+          item.email ||
+          item.row_number ||
+          item.media_id ||
+          "";
         const cells = columns
           .map((col) => {
-            if (col.key === "view") {
-              return `<div class="cell"><button class="btn btn-ghost" data-view="${key}">View</button></div>`;
-            }
+              if (col.key === "view") {
+                const disabled = key ? "" : "disabled";
+                return `<div class="cell"><button class="btn btn-ghost" data-view="${key}" ${disabled}>View</button></div>`;
+              }
+              if (col.key === "delete") {
+                const disabled = canEditCurrentTab() ? "" : "disabled";
+                return `<div class="cell"><button class="btn btn-ghost" data-delete="${key}" ${disabled}>Delete</button></div>`;
+              }
             if (col.key === "status") {
               const status = item.status || "NEW";
               return `<div class="cell"><span class="cell-label">${col.label}</span><span class="badge" data-status="${status}">${status}</span></div>`;
@@ -1439,7 +1718,11 @@
             return `<div class="cell"><span class="cell-label">${col.label}</span><span>${value}</span></div>`;
           })
           .join("");
-        return `<div class="list-row" data-row="${key}" style="grid-template-columns:${template}">${cells}</div>`;
+        return `<div class="list-row" data-row="${escapeAttribute(
+          rowId
+        )}" data-slug="${escapeAttribute(item.slug || "")}" data-id="${escapeAttribute(
+          item.id || ""
+        )}" style="grid-template-columns:${template}">${cells}</div>`;
       })
       .join("");
     ui.results.textContent = `Showing ${state.items.length} of ${state.total}`;
@@ -2174,9 +2457,10 @@
     const canEdit = canEditCurrentTab();
     const actions =
       state.tab === "orders" && state.selectedItem
-        ? ACTIONS.orders.filter((action) =>
-            (ORDER_ACTION_FLOW[normalizeStatus(state.selectedItem.status)] || []).includes(action.action)
-          )
+        ? ACTIONS.orders.filter((action) => {
+            if (action.action === "delete") return true;
+            return (ORDER_ACTION_FLOW[normalizeStatus(state.selectedItem.status)] || []).includes(action.action);
+          })
         : ACTIONS[state.tab];
     ui.actionButtons.innerHTML = actions
       .map((action) => {
@@ -2209,10 +2493,45 @@
     });
   }
 
+  function getDetailPath(tab) {
+    switch (tab) {
+      case "orders":
+        return "order_detail";
+      case "quotes":
+        return "quote_detail";
+      case "tickets":
+        return "ticket_detail";
+      case "products":
+        return "product_detail";
+      case "inspirations":
+        return "inspiration_detail";
+      case "contacts":
+        return "contact_detail";
+      case "media-library":
+        return "media_detail";
+      case "price-chart":
+        return "price_chart_detail";
+      case "cost-chart":
+        return "cost_chart_detail";
+      case "diamond-price-chart":
+        return "diamond_price_chart_detail";
+      default:
+        return "detail";
+    }
+  }
+
   function detailUrl(requestId) {
-    const tab = encodeURIComponent(state.tab);
-    const id = encodeURIComponent(requestId);
-    return `/detail.html?tab=${tab}&id=${id}`;
+    const tab = state.tab || "orders";
+    const id = requestId || "";
+    try {
+      localStorage.setItem("adminDetailTab", tab);
+      localStorage.setItem("adminDetailId", id);
+    } catch {
+      // ignore storage errors
+    }
+    const url = new URL(getDetailPath(tab), window.location.href);
+    url.searchParams.set("id", id);
+    return url.toString();
   }
 
   function closeDrawer() {
@@ -2339,6 +2658,26 @@
     const recordId = getSelectedRecordId();
     if (!recordId) {
       showToast("Missing record ID", "error");
+      return;
+    }
+    if (state.tab === "tickets") {
+      const note = getNotesValue();
+      if (!note) {
+        showToast("Add a comment first.", "error");
+        return;
+      }
+      const result = await apiFetch("/tickets/action", {
+        method: "POST",
+        body: JSON.stringify({ action: "add_note", requestId: recordId, note }),
+      });
+      if (result.ok) {
+        showToast("Comment added");
+        const notesField = getEditField("notes");
+        if (notesField) notesField.value = "";
+        await loadList();
+      } else {
+        showToast("Comment failed", "error");
+      }
       return;
     }
     const notes = getNotesValue();
@@ -2604,17 +2943,52 @@
       });
     }
 
+    if (ui.triggerDeploy) {
+      ui.triggerDeploy.addEventListener("click", triggerSiteRebuild);
+    }
+
     ui.list.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      const deleteId = target.dataset.delete;
+      if (deleteId) {
+        if (!canEditCurrentTab()) return;
+        if (!window.confirm("Delete this record? This cannot be undone.")) return;
+        const endpoint = getActionEndpoint();
+        if (!endpoint) {
+          showToast("No actions available.", "error");
+          return;
+        }
+        apiFetch(endpoint, {
+          method: "POST",
+          body: JSON.stringify(buildDeletePayload(state.tab, deleteId)),
+        })
+          .then((result) => {
+            if (result.ok) {
+              showToast("Record deleted");
+              loadList();
+              return;
+            }
+            showToast("Delete failed", "error");
+          })
+          .catch(() => {
+            showToast("Delete failed", "error");
+          });
+        return;
+      }
       const viewId = target.dataset.view;
       if (viewId) {
         window.location.href = detailUrl(viewId);
         return;
       }
       const row = target.closest(".list-row");
-      if (row && row.dataset.row) {
-        window.location.href = detailUrl(row.dataset.row);
+      if (row) {
+        const rowId = row.dataset.row || row.dataset.slug || row.dataset.id || "";
+        if (rowId) {
+          window.location.href = detailUrl(rowId);
+        } else {
+          showToast("Missing record ID for detail view.", "error");
+        }
       }
     });
 
@@ -2806,6 +3180,7 @@
     updateSortOptions();
     bindEvents();
     updateSyncLine();
+    if (!ensureLocalAdminAccess()) return;
     await loadMe();
     await loadList();
     setInterval(() => {

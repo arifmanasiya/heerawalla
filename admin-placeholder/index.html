@@ -10,7 +10,10 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Manrope:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="icon" href="https://www.heerawalla.com/favicon.ico" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20128%20128%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2264%22%20r%3D%2246%22%20stroke%3D%22%2340475b%22%20stroke-width%3D%2210%22%20fill%3D%22none%22/%3E%3Cline%20x1%3D%2264%22%20y1%3D%2210%22%20x2%3D%2264%22%20y2%3D%22118%22%20stroke%3D%22%2340475b%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body data-api-base="https://admin-api.heerawalla.com/admin" data-site-base="https://www.heerawalla.com">
@@ -34,6 +37,13 @@
           <span class="status-label">Sync</span>
           <span class="status-value" data-sync-line>Connecting</span>
         </div>
+        <div class="status-item" data-admin-only>
+          <span class="status-label">Site</span>
+          <div class="status-inline">
+            <button class="btn btn-ghost" data-trigger-deploy type="button">Trigger rebuild</button>
+            <span class="status-value" data-deploy-status>Idle</span>
+          </div>
+        </div>
         <label class="status-toggle">
           <span>Auto-refresh</span>
           <input type="checkbox" data-auto-refresh checked />
@@ -52,6 +62,9 @@
         <button class="tab" data-tab="quotes" type="button">Quotes</button>
         <button class="tab" data-tab="tickets" type="button">Customer Tickets</button>
         <button class="tab" data-tab="contacts" type="button">Contacts</button>
+        <button class="tab" data-tab="products" type="button">Products</button>
+        <button class="tab" data-tab="inspirations" type="button">Inspirations</button>
+        <button class="tab" data-tab="media-library" type="button">Media Library</button>
         <button class="tab" data-tab="price-chart" data-admin-only type="button">Price Chart</button>
         <button class="tab" data-tab="cost-chart" data-admin-only type="button">Cost Chart</button>
         <button class="tab" data-tab="diamond-price-chart" data-admin-only type="button">Diamond Pricing</button>

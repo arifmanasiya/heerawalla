@@ -5,10 +5,13 @@ import Footer from '../components/Footer.astro';
 import ProductCard from '../components/ProductCard.astro';
 import { loadProductsWithMedia } from '../lib/products';
 import { withBase } from '../lib/paths';
+import { MEDIA_PLACEHOLDER_URL } from '../lib/placeholders';
 
 const editionLabel = "Men's Jewelry";
 const editionKey = 'men';
 const products = (await loadProductsWithMedia()).filter((product) => {
+  const gender = (product.gender || '').toLowerCase();
+  if (gender) return gender === editionKey || gender === 'unisex';
   const category = product.category || '';
   return category.startsWith(`${editionKey}/`) || category.startsWith('unisex/');
 });
@@ -17,6 +20,7 @@ const heroImageById = Object.fromEntries(
     .map((product) => [product.id, product.media.images[0]?.url])
     .filter((entry) => Boolean(entry[1]))
 );
+const placeholderImage = MEDIA_PLACEHOLDER_URL;
 const seo = {
   primary: "men's jewelry",
   secondary: [
@@ -116,13 +120,20 @@ const breadcrumbs = [
   <Footer />
 </BaseLayout>
 
-<script is:inline define:vars={{ catalogUrl, catalogMode, basePath, editionKey, heroImageById }}>
+<script is:inline define:vars={{ catalogUrl, catalogMode, basePath, editionKey, heroImageById, placeholderImage }}>
   (() => {
-    const catalogUrlValue = String(catalogUrl || '');
+    let catalogUrlValue = String(catalogUrl || '');
     const catalogModeValue = String(catalogMode || '').toLowerCase();
+    if (!catalogUrlValue) {
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        catalogUrlValue = 'http://localhost:8787/catalog';
+      }
+    }
     const basePathValue = String(basePath || '/');
     const editionKeyValue = String(editionKey || '');
     const heroImageByIdValue = heroImageById || {};
+    const placeholderImageValue = String(placeholderImage || '');
     const grid = document.querySelector('[data-product-grid]');
     const empty = document.querySelector('[data-product-empty]');
     const container = document.querySelector('[data-design-filter]');
@@ -171,17 +182,6 @@ const breadcrumbs = [
         .replace(/\\s+/g, ' ')
         .trim();
 
-    const roundTo99 = (value) => {
-      if (!Number.isFinite(value)) return value;
-      const lower = Math.floor(value / 100) * 100 + 99;
-      const upper = Math.ceil(value / 100) * 100 + 99;
-      return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
-    };
-
-    const applyDiscount = (value, pct) => {
-      const ratio = 1 + (pct || 0) / 100;
-      return Math.round(value * ratio * 100) / 100;
-    };
 
     const formatCarat = (value) => {
       if (!value || Number.isNaN(value)) return '';
@@ -232,39 +232,18 @@ const breadcrumbs = [
         .join('/');
 
     const buildImageFallbacks = (product) => {
-      const categorySlug = slugify(product.category || 'uncategorized');
-      const folder = `/images/products/${categorySlug}/${product.id}`;
-      const baseFolder = withBase(folder);
-      const override = heroImageByIdValue[product.id] || product.hero_image;
+      const override = product.hero_image || heroImageByIdValue[product.id];
       if (override) {
         const overrideUrl =
           override.startsWith('http') || override.startsWith('/')
             ? override
-            : `${baseFolder}/${override}`;
-        return [overrideUrl, withBase('/images/products/placeholder.svg')];
+            : override;
+        return [overrideUrl, placeholderImageValue];
       }
-      const candidates = [
-        'img-hero-1.png',
-        'img-hero-1.jpeg',
-        'img-hero-1.jpg',
-        'img-hero-2.png',
-        'img-hero-2.jpeg',
-        'img-hero-2.jpg',
-        'img-hero-03.jpeg',
-        'img-1.png',
-        'img-1.jpeg',
-        'img-1.jpg',
-        'image-1.svg',
-      ];
-      const urls = candidates.map((file) => `${baseFolder}/${file}`);
-      urls.push(withBase(`/images/products/${categorySlug}/image-1.svg`));
-      urls.push(withBase('/images/products/placeholder.svg'));
-      return urls;
+      return [placeholderImageValue];
     };
 
-    const usdFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-
-    const buildEstimateTooltip = (product, priceOptions) => {
+    const buildEstimateTooltip = (product) => {
       const sections = [];
       const ariaParts = [];
       const diamondParts = [];
@@ -308,64 +287,28 @@ const breadcrumbs = [
         ariaParts.push(`Metal Options. ${metalOptionItems.join('; ')}.`);
       }
 
-      if (priceOptions.length) {
-        const optionItems = priceOptions.map(
-          (option) => `${option.label}: ${usdFormatter.format(option.price)}`
-        );
-        sections.push({ label: 'Price Options', items: optionItems });
-        ariaParts.push(`Price Options. ${optionItems.join('; ')}.`);
-      }
-
       if (!sections.length) return null;
       return { sections, ariaLabel: ariaParts.join(' ') };
     };
 
     const buildProductCard = (product) => {
-      const baseUsd = parseNumber(product.price_usd_natural) || 0;
-      const labDiscountPct = parseNumber(product.lab_discount_pct);
-      const metal14DiscountPct = parseNumber(product.metal_14k_discount_pct);
-      const platinumPremiumPct = parseNumber(product.metal_platinum_premium);
       const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
-      const naturalAvailable = stoneTypes.some((item) => /natural/i.test(item));
-      const labAvailable = stoneTypes.some((item) => /lab/i.test(item));
-      const priceOptions = [];
-      if (naturalAvailable) {
-        priceOptions.push({ label: '18K Natural', price: roundTo99(baseUsd) });
-        priceOptions.push({
-          label: '14K Natural',
-          price: roundTo99(applyDiscount(baseUsd, metal14DiscountPct || -5)),
-        });
-        priceOptions.push({
-          label: 'Platinum Natural',
-          price: roundTo99(applyDiscount(baseUsd, platinumPremiumPct || 10)),
-        });
-      }
-      if (labAvailable) {
-        const labUsd = applyDiscount(baseUsd, labDiscountPct || -20);
-        priceOptions.push({ label: '18K Lab Grown', price: roundTo99(labUsd) });
-        priceOptions.push({
-          label: '14K Lab Grown',
-          price: roundTo99(applyDiscount(labUsd, metal14DiscountPct || -5)),
-        });
-        priceOptions.push({
-          label: 'Platinum Lab Grown',
-          price: roundTo99(applyDiscount(labUsd, platinumPremiumPct || 10)),
-        });
-      }
-      const startingPrice = priceOptions.length
-        ? priceOptions.reduce((best, option) => (option.price < best.price ? option : best))
-        : { label: '18K Natural', price: roundTo99(baseUsd) };
+      const priceLabel = 'Pricing on request';
 
       const editionLabel = (() => {
+        const gender = String(product.gender || '').toLowerCase();
+        if (gender === 'women') return "Women's Edition";
+        if (gender === 'men') return "Men's Edition";
+        if (gender === 'unisex') return 'Unisex Edition';
         const category = product.category || '';
         const group = category.split('/')[0] || '';
         if (group === 'women') return "Women's Edition";
         if (group === 'men') return "Men's Edition";
         if (group === 'unisex') return 'Unisex Edition';
-        return product.collection || product.category || '';
+        return product.design_code || product.category || '';
       })();
 
-      const tooltip = buildEstimateTooltip(product, priceOptions);
+      const tooltip = buildEstimateTooltip(product);
       const tooltipHtml = tooltip
         ? `<button type="button" class="estimate-info" aria-label="${escapeHtml(
             tooltip.ariaLabel
@@ -429,9 +372,9 @@ const breadcrumbs = [
                   ${escapeHtml(product.name || '')}
                 </a>
                 <span class="flex items-center gap-2">
-                  <span class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap">
-                    ${escapeHtml(`Starting ${usdFormatter.format(startingPrice.price)}`)}
-                  </span>
+                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap">
+                  ${escapeHtml(priceLabel)}
+                </span>
                   ${tooltipHtml}
                 </span>
               </div>
@@ -525,13 +468,18 @@ const breadcrumbs = [
     const fetchCatalog = async () => {
       if (!catalogUrlValue || catalogModeValue === 'ssr') return;
       const joiner = catalogUrlValue.includes('?') ? '&' : '?';
-      const url = `${catalogUrlValue}${joiner}include=products`;
+      const cacheBust = /localhost|127\\.0\\.0\\.1/i.test(catalogUrlValue)
+        ? `&bust=${Date.now()}`
+        : '';
+      const url = `${catalogUrlValue}${joiner}include=products${cacheBust}`;
       try {
         const response = await fetch(url, { cache: 'no-store' });
         if (!response.ok) return;
         const data = await response.json();
         if (!data || !Array.isArray(data.products)) return;
         const items = data.products.filter((product) => {
+          const gender = String(product.gender || '').toLowerCase();
+          if (gender) return gender === editionKeyValue || gender === 'unisex';
           const category = String(product.category || '').toLowerCase();
           return category.startsWith(`${editionKeyValue}/`) || category.startsWith('unisex/');
         });

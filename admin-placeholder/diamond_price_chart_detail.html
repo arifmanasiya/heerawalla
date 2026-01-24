@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Heerawalla Business Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Manrope:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20128%20128%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Ccircle%20cx%3D%2264%22%20cy%3D%2264%22%20r%3D%2246%22%20stroke%3D%22%2340475b%22%20stroke-width%3D%2210%22%20fill%3D%22none%22/%3E%3Cline%20x1%3D%2264%22%20y1%3D%2210%22%20x2%3D%2264%22%20y2%3D%22118%22%20stroke%3D%22%2340475b%22%20stroke-width%3D%229%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-api-base="https://admin-api.heerawalla.com/admin" data-site-base="https://www.heerawalla.com" data-detail-tab="diamond-price-chart">
+    <div class="page detail-page">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">Heerawalla</span>
+          <span class="brand-tag">Business Portal</span>
+        </div>
+        <div class="user">
+          <div class="user-meta">
+            <span class="role" data-user-role>Loading role</span>
+            <span class="email" data-user-email>Checking access...</span>
+          </div>
+          <a class="btn btn-ghost back-link" href="/cdn-cgi/access/logout?redirect=/">Log out</a>
+        </div>
+      </header>
+
+      <section class="detail-shell">
+        <div class="drawer-panel detail-panel">
+          <div class="drawer-top" data-detail-header>
+            <div>
+              <p class="drawer-eyebrow" data-detail-type>Order details</p>
+              <h2 data-detail-title>--</h2>
+              <p class="drawer-sub" data-detail-sub>--</p>
+              <p class="muted" data-detail-error></p>
+            </div>
+            <div class="corner-status">
+              <span class="badge" data-detail-status-corner>--</span>
+            </div>
+          </div>
+
+          <div class="action-row" data-action-row>
+            <div class="action-row-main">
+              <a class="btn btn-ghost back-link" data-back-link href="/">Back to list</a>
+              <label class="field">
+                <span>Actions</span>
+                <select data-action-select></select>
+              </label>
+              <button class="btn btn-ghost" data-action-run type="button">Run action</button>
+              <div class="dirty-indicator" data-dirty-indicator>All changes saved</div>
+            </div>
+            <div class="action-row-tools">
+              <button class="btn" data-primary-action type="button">Get Customer Confirmation</button>
+              <button class="btn btn-ghost" data-notes-save type="button">Save notes</button>
+              <div class="status-item">
+                <span class="status-label">Record</span>
+                <span class="status-value" data-sync-line>Loading</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-layout">
+            <div class="detail-main">
+              <div class="drawer-section callout-section" data-missing-panel>
+                <div class="section-heading">
+                  <h3>Missing critical info</h3>
+                  <p class="muted">Resolve or acknowledge before running actions.</p>
+                </div>
+                <div class="chip-list" data-missing-list>
+                  <span class="muted">No missing details.</span>
+                </div>
+              </div>
+
+              <div class="drawer-section" data-activity-section>
+                <div class="section-heading">
+                  <h3>Timeline &amp; activity</h3>
+                  <p class="muted">Created timestamps, status shifts, local edits, and fulfillment notes.</p>
+                </div>
+                <div class="timeline-feed" data-activity-feed>
+                  <div class="activity-item muted">Loading activity...</div>
+                </div>
+              </div>
+
+              <div class="drawer-section" data-overview-section>
+                <h3>Overview</h3>
+                <div class="detail-grid" data-detail-grid></div>
+              </div>
+
+              <div class="drawer-section is-hidden" data-catalog-section>
+                <div class="section-heading">
+                  <h3 data-catalog-title>Catalog details</h3>
+                  <p class="muted">Edit catalog attributes and save updates.</p>
+                </div>
+                <div class="edit-grid catalog-grid" data-catalog-fields></div>
+              </div>
+
+              <div class="drawer-section is-hidden" data-catalog-media-section>
+                <div class="section-heading">
+                  <h3>Media gallery</h3>
+                  <p class="muted">Upload to R2 and link media to this item.</p>
+                </div>
+                <div class="catalog-media-list" data-catalog-media-list></div>
+                <div class="catalog-media-actions">
+                  <div class="catalog-media-form">
+                    <label class="field">
+                      <span>Upload file</span>
+                      <input type="file" data-media-file accept="image/*,video/*" />
+                    </label>
+                    <label class="field">
+                      <span>Label</span>
+                      <input type="text" data-media-label placeholder="Hero angle 1" />
+                    </label>
+                    <label class="field">
+                      <span>Alt text</span>
+                      <input type="text" data-media-alt placeholder="Pendant close up" />
+                    </label>
+                    <label class="field full-span">
+                      <span>Description</span>
+                      <textarea rows="2" data-media-description placeholder="Description for carousel copy."></textarea>
+                    </label>
+                    <label class="field">
+                      <span>Position</span>
+                      <select data-media-position>
+                        <option value="">Select</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Order</span>
+                      <input type="number" data-media-order placeholder="1" />
+                    </label>
+                    <label class="field">
+                      <span>Primary</span>
+                      <select data-media-primary>
+                        <option value="true">Yes</option>
+                        <option value="">No</option>
+                      </select>
+                    </label>
+                    <button class="btn" type="button" data-media-upload>Upload &amp; link</button>
+                  </div>
+                  <div class="catalog-media-form">
+                    <label class="field">
+                      <span>Existing media ID</span>
+                      <input type="text" data-media-id placeholder="azure-ring-hero-01" />
+                    </label>
+                    <label class="field">
+                      <span>Position</span>
+                      <select data-media-position-existing>
+                        <option value="">Select</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Order</span>
+                      <input type="number" data-media-order-existing placeholder="2" />
+                    </label>
+                    <label class="field">
+                      <span>Primary</span>
+                      <select data-media-primary-existing>
+                        <option value="">No</option>
+                        <option value="true">Yes</option>
+                      </select>
+                    </label>
+                    <button class="btn btn-ghost" type="button" data-media-link>Link existing media</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="drawer-section" data-edit-section>
+                <h3>Edit details</h3>
+                <div class="edit-block">
+                  <p class="drawer-eyebrow">Timing &amp; pricing</p>
+                  <div class="edit-grid">
+                    <label class="field">
+                      <span>Price</span>
+                      <input type="text" data-field="price" placeholder="2999" />
+                    </label>
+                    <label class="field">
+                      <span>Timeline</span>
+                      <input type="text" data-field="timeline" placeholder="Standard or Rush" />
+                    </label>
+                    <label class="field">
+                      <span>Timeline delay (weeks)</span>
+                      <select data-field="timeline_adjustment_weeks">
+                        <option value="">No delay</option>
+                        <option value="1">+1 week</option>
+                        <option value="2">+2 weeks</option>
+                        <option value="3">+3 weeks</option>
+                        <option value="4">+4 weeks</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="edit-block">
+                  <p class="drawer-eyebrow">Core pricing inputs</p>
+                  <div class="edit-grid">
+                    <label class="field">
+                      <span>Metal</span>
+                      <input type="text" data-field="metal" placeholder="18K White Gold" />
+                    </label>
+                    <label class="field">
+                      <span data-metal-weight-label>Metal weight (g)</span>
+                      <input type="text" data-field="metal_weight" placeholder="12.4" />
+                      <span class="field-error" data-metal-weight-error></span>
+                    </label>
+                    <label class="field">
+                      <span data-metal-weight-adjustment-label>Final Metal weight difference (g)</span>
+                      <input type="text" data-field="metal_weight_adjustment" placeholder="+0.5 or -0.3" />
+                      <span class="field-error" data-metal-weight-adjustment-error></span>
+                    </label>
+                    <div class="field read-only">
+                      <span>Final metal weight</span>
+                      <div class="read-only-value" data-metal-weight-final>--</div>
+                    </div>
+                    <label class="field">
+                      <span>Stone</span>
+                      <select data-field="stone">
+                        <option value="">Select</option>
+                        <option value="Lab diamond">Lab diamond</option>
+                        <option value="Natural diamond">Natural diamond</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Stone weight</span>
+                      <input type="text" data-field="stone_weight" placeholder="1.5" />
+                    </label>
+                    <label class="field full-span is-hidden" data-breakdown-raw>
+                      <span>Diamond breakdown (ct x count)</span>
+                      <textarea
+                        rows="2"
+                        data-field="diamond_breakdown"
+                        placeholder="0.10 x 10&#10;1.00 x 1"
+                      ></textarea>
+                    </label>
+                  </div>
+                  <div class="edit-grid quote-extras" data-quote-extras>
+                    <label class="field">
+                      <span>Price chart adjustment type</span>
+                      <select data-field="adjustment_type">
+                        <option value="">Select</option>
+                        <option value="percent">Percent</option>
+                        <option value="flat">Flat</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Price chart adjustment value</span>
+                      <input type="text" data-field="adjustment_value" placeholder="10 or -5" />
+                    </label>
+                    <label class="field">
+                      <span>Cost chart key</span>
+                      <input type="text" data-field="key" placeholder="metal_cost_18k_per_gram" />
+                    </label>
+                    <label class="field">
+                      <span>Cost chart value</span>
+                      <input type="text" data-field="value" placeholder="54.5" />
+                    </label>
+                    <label class="field">
+                      <span>Cost chart unit</span>
+                      <input type="text" data-field="unit" placeholder="USD/gram" />
+                    </label>
+                    <label class="field">
+                      <span>Diamond clarity</span>
+                      <input type="text" data-field="clarity" placeholder="VS" />
+                    </label>
+                    <label class="field">
+                      <span>Diamond color</span>
+                      <input type="text" data-field="color" placeholder="E-F" />
+                    </label>
+                    <label class="field">
+                      <span>Diamond weight min (ct)</span>
+                      <input type="text" data-field="weight_min" placeholder="0.3" />
+                    </label>
+                    <label class="field">
+                      <span>Diamond weight max (ct)</span>
+                      <input type="text" data-field="weight_max" placeholder="0.39" />
+                    </label>
+                    <label class="field">
+                      <span>Diamond price per ct</span>
+                      <input type="text" data-field="price_per_ct" placeholder="1800" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="diamond-breakdown is-hidden" data-diamond-breakdown>
+                  <div class="diamond-breakdown-head">
+                    <span>Diamond pieces</span>
+                    <div class="diamond-breakdown-actions">
+                      <button class="btn btn-ghost" type="button" data-breakdown-raw-toggle>Raw view</button>
+                      <select data-diamond-presets>
+                        <option value="">Quick preset</option>
+                        <option value="1.00x1">Solitaire 1.00 x 1</option>
+                        <option value="0.50x2">Twin 0.50 x 2</option>
+                        <option value="0.10x10">10-stone 0.10 x 10</option>
+                      </select>
+                      <button class="btn btn-ghost" type="button" data-diamond-breakdown-add>Add row</button>
+                    </div>
+                  </div>
+                  <div class="diamond-breakdown-stats">
+                    <div>
+                      <span>Total pieces</span>
+                      <strong data-diamond-piece-count>0</strong>
+                    </div>
+                    <div>
+                      <span>Total carats</span>
+                      <strong data-diamond-carat-total>0 ct</strong>
+                    </div>
+                  </div>
+                  <div class="diamond-breakdown-rows" data-diamond-breakdown-rows></div>
+                  <p class="muted">Stored as: 0.10 x 10 (ct x count)</p>
+                </div>
+
+                <div class="edit-block" data-size-block>
+                  <p class="drawer-eyebrow">Sizing</p>
+                  <div class="edit-grid">
+                    <label class="field" data-size-ring>
+                      <span>Ring size</span>
+                      <input type="text" placeholder="6" />
+                    </label>
+                    <label class="field" data-size-bracelet>
+                      <span>Bracelet size</span>
+                      <input type="text" placeholder="6.5 in" />
+                    </label>
+                    <label class="field" data-size-chain>
+                      <span>Chain/neck size</span>
+                      <input type="text" placeholder="18 in" />
+                    </label>
+                    <label class="field is-hidden">
+                      <span>Size (storage)</span>
+                      <input type="text" data-field="size" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="quote-options" data-quote-section>
+                  <p class="drawer-eyebrow">Quote options</p>
+                  <label class="field">
+                    <span>Metal options</span>
+                    <input type="hidden" data-field="quote_metal_options" />
+                    <div class="option-group" data-quote-metals>
+                      <label><input type="checkbox" value="14K" />14K</label>
+                      <label><input type="checkbox" value="18K" />18K</label>
+                      <label><input type="checkbox" value="Platinum" />Platinum</label>
+                    </div>
+                  </label>
+                  <div class="quote-options-grid">
+                    <div class="quote-option-card" data-quote-option-card="0">
+                      <p class="drawer-eyebrow">Option 1</p>
+                      <div class="option-meta">
+                        <label class="option-toggle">
+                          <input type="checkbox" data-option-active="0" checked />
+                          <span>Active</span>
+                        </label>
+                        <label class="option-recommend">
+                          <input type="radio" name="recommended-option" data-option-recommend="0" />
+                          <span>Recommend</span>
+                        </label>
+                      </div>
+                      <label class="field">
+                        <span>Clarity</span>
+                        <select data-field="quote_option_1_clarity">
+                          <option value="">Select</option>
+                          <option value="SI">SI</option>
+                          <option value="VS">VS</option>
+                          <option value="VVS">VVS</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Color</span>
+                        <select data-field="quote_option_1_color">
+                          <option value="">Select</option>
+                          <option value="E-F">E-F</option>
+                          <option value="F-G">F-G</option>
+                          <option value="G-I">G-I</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Price (18K)</span>
+                        <input type="text" data-field="quote_option_1_price_18k" placeholder="2999" />
+                      </label>
+                      <div class="option-actions">
+                        <button class="btn btn-ghost btn-mini" type="button" data-option-copy="0">Copy price</button>
+                        <button class="btn btn-ghost btn-mini" type="button" data-option-auto="0">Use auto</button>
+                      </div>
+                      <div class="option-final" data-option-final="0">Final: --</div>
+                      <div class="quote-option-status" data-quote-option-status="0">Idle</div>
+                    </div>
+                    <div class="quote-option-card" data-quote-option-card="1">
+                      <p class="drawer-eyebrow">Option 2</p>
+                      <div class="option-meta">
+                        <label class="option-toggle">
+                          <input type="checkbox" data-option-active="1" checked />
+                          <span>Active</span>
+                        </label>
+                        <label class="option-recommend">
+                          <input type="radio" name="recommended-option" data-option-recommend="1" />
+                          <span>Recommend</span>
+                        </label>
+                      </div>
+                      <label class="field">
+                        <span>Clarity</span>
+                        <select data-field="quote_option_2_clarity">
+                          <option value="">Select</option>
+                          <option value="SI">SI</option>
+                          <option value="VS">VS</option>
+                          <option value="VVS">VVS</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Color</span>
+                        <select data-field="quote_option_2_color">
+                          <option value="">Select</option>
+                          <option value="E-F">E-F</option>
+                          <option value="F-G">F-G</option>
+                          <option value="G-I">G-I</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Price (18K)</span>
+                        <input type="text" data-field="quote_option_2_price_18k" placeholder="2999" />
+                      </label>
+                      <div class="option-actions">
+                        <button class="btn btn-ghost btn-mini" type="button" data-option-copy="1">Copy price</button>
+                        <button class="btn btn-ghost btn-mini" type="button" data-option-auto="1">Use auto</button>
+                      </div>
+                      <div class="option-final" data-option-final="1">Final: --</div>
+                      <div class="quote-option-status" data-quote-option-status="1">Idle</div>
+                    </div>
+                    <div class="quote-option-card" data-quote-option-card="2">
+                      <p class="drawer-eyebrow">Option 3</p>
+                      <div class="option-meta">
+                        <label class="option-toggle">
+                          <input type="checkbox" data-option-active="2" checked />
+                          <span>Active</span>
+                        </label>
+                        <label class="option-recommend">
+                          <input type="radio" name="recommended-option" data-option-recommend="2" />
+                          <span>Recommend</span>
+                        </label>
+                      </div>
+                      <label class="field">
+                        <span>Clarity</span>
+                        <select data-field="quote_option_3_clarity">
+                          <option value="">Select</option>
+                          <option value="SI">SI</option>
+                          <option value="VS">VS</option>
+                          <option value="VVS">VVS</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Color</span>
+                        <select data-field="quote_option_3_color">
+                          <option value="">Select</option>
+                          <option value="E-F">E-F</option>
+                          <option value="F-G">F-G</option>
+                          <option value="G-I">G-I</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Price (18K)</span>
+                        <input type="text" data-field="quote_option_3_price_18k" placeholder="2999" />
+                      </label>
+                      <div class="option-actions">
+                        <button class="btn btn-ghost btn-mini" type="button" data-option-copy="2">Copy price</button>
+                        <button class="btn btn-ghost btn-mini" type="button" data-option-auto="2">Use auto</button>
+                      </div>
+                      <div class="option-final" data-option-final="2">Final: --</div>
+                      <div class="quote-option-status" data-quote-option-status="2">Idle</div>
+                    </div>
+                  </div>
+                  <div class="quote-options-grid">
+                    <label class="field">
+                      <span>Discount type</span>
+                      <select data-field="quote_discount_type" data-discount-type>
+                        <option value="">Auto (best available)</option>
+                        <option value="none">No discount</option>
+                        <option value="friends">Friends &amp; family</option>
+                        <option value="welcome">Welcome</option>
+                        <option value="offer">Offer code</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Custom discount %</span>
+                      <input type="text" data-field="quote_discount_percent" data-discount-percent placeholder="10" />
+                    </label>
+                    <div class="field read-only">
+                      <span>Final price after discount</span>
+                      <div class="read-only-value" data-discount-final>$--</div>
+                    </div>
+                  </div>
+                  <p class="muted">
+                    18K prices auto-calc from metal weight + diamond breakdown. Enter to override if needed.
+                    14K discount and Platinum premium apply from the price chart.
+                  </p>
+                </div>
+
+                <div class="notes-tags">
+                  <button class="chip" type="button" data-note-tag="#priority">#priority</button>
+                  <button class="chip" type="button" data-note-tag="#vendor">#vendor</button>
+                  <button class="chip" type="button" data-note-tag="#customer">#customer</button>
+                  <button class="chip" type="button" data-note-tag="#qc">#qc</button>
+                  <button class="chip" type="button" data-note-tag="#shipping">#shipping</button>
+                </div>
+                <details class="notes-block" data-notes-toggle>
+                  <summary>
+                    <span class="drawer-eyebrow">Internal notes</span>
+                    <span class="muted">Collapsed</span>
+                  </summary>
+                  <div class="notes-toolbar">
+                    <span class="drawer-eyebrow">Internal notes</span>
+                    <div class="notes-actions">
+                      <button class="btn btn-ghost" type="button" data-note-timestamp>Add timestamp</button>
+                      <button class="btn btn-ghost" type="button" data-note-template>Add checklist</button>
+                    </div>
+                  </div>
+                  <label class="field">
+                    <span>Notes</span>
+                    <textarea rows="4" data-field="notes" placeholder="Add internal notes"></textarea>
+                  </label>
+                </details>
+              </div>
+
+              <div class="drawer-section" data-order-details-section>
+                <h3>Fulfillment details</h3>
+                <div class="fulfillment-group">
+                  <p class="drawer-eyebrow">Shipping</p>
+                  <div class="edit-grid">
+                    <label class="field">
+                      <span>Shipping method</span>
+                      <select data-order-details-field="shipping_method">
+                        <option value="">Select method</option>
+                        <option value="Express">Express</option>
+                        <option value="Overnight">Overnight</option>
+                        <option value="Standard">Standard</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Shipping carrier</span>
+                      <select data-order-details-field="shipping_carrier">
+                        <option value="">Select carrier</option>
+                        <option value="FedEx">FedEx</option>
+                        <option value="UPS">UPS</option>
+                        <option value="DHL">DHL</option>
+                        <option value="USPS">USPS</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Tracking number</span>
+                      <input type="text" data-order-details-field="tracking_number" placeholder="1234567890" />
+                    </label>
+                    <label class="field">
+                      <span>Tracking URL</span>
+                      <input type="url" data-order-details-field="tracking_url" placeholder="https://carrier.com/track" />
+                    </label>
+                  </div>
+                  <div class="fulfillment-actions">
+                    <button class="btn btn-ghost" data-open-tracking type="button">Open tracking</button>
+                  </div>
+                  <label class="field">
+                    <span>Shipping notes</span>
+                    <textarea rows="3" data-order-details-field="shipping_notes" placeholder="Signature required, insured delivery."></textarea>
+                  </label>
+                </div>
+
+                <div class="fulfillment-group">
+                  <p class="drawer-eyebrow">Status</p>
+                  <div class="edit-grid">
+                    <label class="field">
+                      <span>Shipping status</span>
+                      <select data-order-details-field="shipping_status">
+                        <option value="">Select status</option>
+                        <option value="Label created">Label created</option>
+                        <option value="Picked up">Picked up</option>
+                        <option value="In transit">In transit</option>
+                        <option value="Out for delivery">Out for delivery</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Exception">Exception</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Delivery ETA</span>
+                      <input type="date" data-order-details-field="delivery_eta" placeholder="YYYY-MM-DD" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="fulfillment-group">
+                  <p class="drawer-eyebrow">Customer docs</p>
+                  <label class="field">
+                    <span>Certificates (Type: Number per line)</span>
+                    <textarea rows="3" data-order-details-field="certificates" placeholder="GIA: 123456&#10;IGI: 987654"></textarea>
+                  </label>
+                  <label class="field">
+                    <span>Care details</span>
+                    <textarea rows="3" data-order-details-field="care_details" placeholder="Wipe with soft cloth, store separately."></textarea>
+                  </label>
+                  <label class="field">
+                    <span>Warranty details</span>
+                    <textarea rows="3" data-order-details-field="warranty_details" placeholder="1-year workmanship warranty."></textarea>
+                  </label>
+                  <label class="field">
+                    <span>Service details</span>
+                    <textarea rows="3" data-order-details-field="service_details" placeholder="Annual inspection available by appointment."></textarea>
+                  </label>
+                </div>
+                <div class="drawer-actions-row">
+                  <button class="btn btn-ghost" data-details-save type="button">Save fulfillment details</button>
+                </div>
+              </div>
+            </div>
+
+            <aside class="detail-aside">
+              <div class="summary-card" data-summary-card>
+                <div class="summary-head">
+                  <div>
+                    <p class="drawer-eyebrow">At a glance</p>
+                    <h3 data-summary-product>--</h3>
+                    <p class="summary-sub" data-summary-design-code>--</p>
+                  </div>
+                  <span class="badge" data-summary-status>--</span>
+                </div>
+                <div class="summary-grid">
+                  <div class="summary-row">
+                    <span>Order</span>
+                    <span data-summary-request>--</span>
+                  </div>
+                  <div class="summary-row">
+                    <span>Created</span>
+                    <span data-summary-created>--</span>
+                  </div>
+                  <div class="summary-row" data-summary-price-row>
+                    <span>Price</span>
+                    <span data-summary-price>--</span>
+                  </div>
+                </div>
+                <div class="summary-block" data-summary-sizes-block>
+                  <div class="summary-line">
+                    <span>Ring size</span>
+                    <span data-summary-size-ring>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Bracelet size</span>
+                    <span data-summary-size-bracelet>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Chain size</span>
+                    <span data-summary-size-chain>--</span>
+                  </div>
+                </div>
+                <div class="summary-block" data-summary-options-block>
+                  <div class="summary-line">
+                    <span>Option 1</span>
+                    <span data-summary-option-1>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Option 2</span>
+                    <span data-summary-option-2>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Option 3</span>
+                    <span data-summary-option-3>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Recommended</span>
+                    <span data-summary-option-recommended>--</span>
+                  </div>
+                </div>
+                <div class="summary-block" data-summary-quote-block>
+                  <div class="summary-line">
+                    <span>Metal weight</span>
+                    <span data-summary-metal-weight>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Metal adjust</span>
+                    <span data-summary-metal-adjustment>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Diamond mix</span>
+                    <span class="summary-value wrap" data-summary-diamond-breakdown>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Discount</span>
+                    <span data-summary-discount>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Pricing</span>
+                    <span data-summary-pricing-status>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Last priced</span>
+                    <span data-summary-last-priced>--</span>
+                  </div>
+                </div>
+                <div class="summary-block" data-summary-preferences-block>
+                  <div class="summary-line">
+                    <span>Interests</span>
+                    <span class="summary-value wrap" data-summary-interests>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Contact pref</span>
+                    <span class="summary-value wrap" data-summary-contact-preference>--</span>
+                  </div>
+                  <div class="summary-line">
+                    <span>Subscription</span>
+                    <span data-summary-subscription>--</span>
+                  </div>
+                </div>
+                <div class="summary-block" data-summary-notes-block>
+                  <div class="summary-line">
+                    <span>Customer notes</span>
+                    <span class="summary-value wrap" data-summary-customer-notes>--</span>
+                  </div>
+                </div>
+                <div class="summary-block">
+                  <div class="summary-line">
+                    <span>Customer</span>
+                    <span data-summary-customer>--</span>
+                    <button class="btn btn-ghost btn-mini" type="button" data-copy-customer>Copy</button>
+                  </div>
+                  <div class="summary-line">
+                    <span>Email</span>
+                    <span data-summary-email>--</span>
+                    <button class="btn btn-ghost btn-mini" type="button" data-copy-email>Copy</button>
+                  </div>
+                  <div class="summary-line">
+                    <span>Phone</span>
+                    <span data-summary-phone>--</span>
+                    <button class="btn btn-ghost btn-mini" type="button" data-copy-phone>Copy</button>
+                  </div>
+                </div>
+                <div class="summary-block">
+                  <div class="summary-line">
+                    <span>Address</span>
+                    <span data-summary-address>--</span>
+                    <button class="btn btn-ghost btn-mini" type="button" data-copy-address>Copy</button>
+                  </div>
+                </div>
+                <details class="summary-more" data-summary-more>
+                  <summary>More details</summary>
+                  <div class="summary-more-body" data-summary-more-body>
+                    <div class="summary-block">
+                      <div class="summary-line">
+                        <span>Timeline</span>
+                        <span data-summary-timeline>--</span>
+                      </div>
+                      <div class="summary-line">
+                        <span>Timeline delay</span>
+                        <span data-summary-timeline-delay>--</span>
+                      </div>
+                      <div class="summary-line">
+                        <span>Metal</span>
+                        <span data-summary-metal>--</span>
+                      </div>
+                      <div class="summary-line">
+                        <span>Stone</span>
+                        <span data-summary-stone>--</span>
+                      </div>
+                      <div class="summary-line">
+                        <span>Stone weight</span>
+                        <span data-summary-stone-weight>--</span>
+                      </div>
+                      <div class="summary-line">
+                        <span>Diamond mix</span>
+                        <span class="summary-value wrap" data-summary-diamond-breakdown>--</span>
+                      </div>
+                      <div class="summary-line">
+                        <span>Discount</span>
+                        <span data-summary-discount>--</span>
+                      </div>
+                    </div>
+                    <div class="summary-more-activity" data-activity-slot></div>
+                  </div>
+                </details>
+                <button class="btn btn-ghost" type="button" data-copy-summary>Copy order summary</button>
+              </div>
+
+              <div class="summary-card next-action-card" data-next-action-panel>
+                <p class="drawer-eyebrow">Next action</p>
+                <p class="summary-next" data-next-action-text>Review edits or choose an action.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal" data-confirm-modal aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div>
+            <p class="drawer-eyebrow">Confirmation email</p>
+            <h2>Get Customer Confirmation</h2>
+          </div>
+          <button class="btn btn-ghost" data-confirm-close type="button">Close</button>
+        </div>
+        <div class="confirm-meta">
+          <div>
+            <span>To</span>
+            <p data-confirm-to>--</p>
+          </div>
+          <div>
+            <span>Subject</span>
+            <p data-confirm-subject>--</p>
+          </div>
+        </div>
+        <div class="confirm-preview" data-confirm-preview></div>
+        <div class="modal-actions">
+          <button class="btn" data-confirm-send type="button">Send confirmation</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" data-toast aria-live="polite"></div>
+
+    <script src="./enums.js" defer></script>
+    <script src="./catalog-utils.js" defer></script>
+    <script src="./catalog-form.js" defer></script>
+    <script src="./detail.js" defer></script>
+  </body>
+</html>
+

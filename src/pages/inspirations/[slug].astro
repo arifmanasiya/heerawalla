@@ -17,33 +17,15 @@ const { item } = Astro.props as { item: Inspiration };
 const catalogUrl = import.meta.env.PUBLIC_CATALOG_API_URL || '';
 const catalogMode = (import.meta.env.PUBLIC_CATALOG_MODE || 'hybrid').toLowerCase();
 const metaTitle = `${item.title} | Inspirations | Heerawalla`;
-const metaDescription = item.shortDesc;
-
-const usdFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0
-});
+const metaDescription = item.description;
 
 const formatNumber = (value: number) => {
   if (Number.isInteger(value)) return value.toString();
   return value.toString();
 };
-const roundTo99 = (value: number) => {
-  if (!Number.isFinite(value)) return value;
-  const lower = Math.floor(value / 100) * 100 + 99;
-  const upper = Math.ceil(value / 100) * 100 + 99;
-  return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
-};
 
 const buildEstimateDetails = (inspiration: Inspiration) => {
   const details: Array<{ label: string; value: string }> = [];
-  if (inspiration.estimatedPriceUsdVvs1Vvs2_18k) {
-    details.push({
-      label: 'Est. price',
-      value: usdFormatter.format(roundTo99(inspiration.estimatedPriceUsdVvs1Vvs2_18k))
-    });
-  }
   if (inspiration.stoneWeight) {
     const stoneOptions = inspiration.stoneTypes.length
       ? ` (${inspiration.stoneTypes.join(' / ')})`
@@ -114,7 +96,7 @@ const inspirationSlug = item.slug;
       </div>
       <div class="border border-slate-200 bg-white overflow-hidden">
         <img
-          src={withBase(item.heroImage)}
+          src={item.heroImage?.startsWith('http') ? item.heroImage : withBase(item.heroImage)}
           alt={`${item.title} inspiration`}
           class="w-full h-full object-cover"
           loading="lazy"
@@ -144,17 +126,6 @@ const inspirationSlug = item.slug;
     </section>
 
     <section class="border-t border-slate-200 pt-8 space-y-4">
-      <h2 class="font-display text-2xl tracking-tight">Suggested palette</h2>
-      <div class="flex flex-wrap gap-2">
-        {item.palette.map((chip) => (
-          <span class="px-3 py-1 text-xs uppercase tracking-[0.18em] border border-slate-200 text-slate-500">
-            {chip.label}
-          </span>
-        ))}
-      </div>
-    </section>
-
-    <section class="border-t border-slate-200 pt-8 space-y-4">
       <h2 class="font-display text-2xl tracking-tight">Inspiration disclaimer</h2>
       <p class="text-sm text-slate-600 max-w-3xl">{INSPIRATION_DISCLAIMER}</p>
       <a
@@ -173,8 +144,14 @@ const inspirationSlug = item.slug;
 
   <script is:inline define:vars={{ catalogUrl, catalogMode, inspirationSlug }}>
     (() => {
-      const catalogUrlValue = String(catalogUrl || '');
+      let catalogUrlValue = String(catalogUrl || '');
       const catalogModeValue = String(catalogMode || '').toLowerCase();
+      if (!catalogUrlValue) {
+        const host = window.location.hostname;
+        if (host === 'localhost' || host === '127.0.0.1') {
+          catalogUrlValue = 'http://localhost:8787/catalog';
+        }
+      }
       const inspirationSlugValue = String(inspirationSlug || '');
       if (!catalogUrlValue || catalogModeValue === 'ssr' || !inspirationSlugValue) return;
 
@@ -182,34 +159,14 @@ const inspirationSlug = item.slug;
       const listEl = document.querySelector('[data-estimate-list]');
       if (!wrapper || !listEl) return;
 
-      const usdFormatter = new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        maximumFractionDigits: 0
-      });
-
       const formatNumber = (value) => {
         if (!Number.isFinite(value)) return '';
         if (Number.isInteger(value)) return value.toString();
         return value.toString();
       };
 
-      const roundTo99 = (value) => {
-        if (!Number.isFinite(value)) return value;
-        const lower = Math.floor(value / 100) * 100 + 99;
-        const upper = Math.ceil(value / 100) * 100 + 99;
-        return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
-      };
-
       const buildDetails = (item) => {
         const details = [];
-        const price = Number(item.estimatedPriceUsdVvs1Vvs2_18k || 0);
-        if (price) {
-          details.push({
-            label: 'Est. price',
-            value: usdFormatter.format(roundTo99(price))
-          });
-        }
         if (item.stoneWeight) {
           const stoneOptions = item.stoneTypes && item.stoneTypes.length
             ? ` (${item.stoneTypes.join(' / ')})`

@@ -14,6 +14,15 @@
     pendingChanges: [],
     confirmation: null,
     isNewRow: false,
+    catalogHeaders: [],
+    catalogEnums: null,
+    catalogFormState: null,
+    catalogOriginalFields: null,
+    catalogMediaState: null,
+    catalogStoneOptions: null,
+    catalogValidation: null,
+    sizingSpec: null,
+    recommendedOptionIndex: null,
   };
 
   const STATUS_OPTIONS = {
@@ -32,6 +41,9 @@
     quotes: ["NEW", "ACKNOWLEDGED", "QUOTED", "QUOTE_ACTIONED", "DROPPED"],
     tickets: ["NEW", "PENDING", "RESOLVED"],
     contacts: [],
+    products: [],
+    inspirations: [],
+    "media-library": [],
     "price-chart": [],
     "cost-chart": [],
     "diamond-price-chart": [],
@@ -47,6 +59,7 @@
       { action: "mark_shipped", label: "Mark shipped", confirm: "Mark as shipped?" },
       { action: "mark_delivered", label: "Mark delivered", confirm: "Mark as delivered?" },
       { action: "cancel", label: "Cancel order", confirm: "Cancel this order?" },
+      { action: "delete", label: "Delete", confirm: "Delete this order? This cannot be undone." },
     ],
     quotes: [
       { action: "acknowledge", label: "Acknowledge", confirm: "Mark as acknowledged?" },
@@ -54,12 +67,17 @@
       { action: "refresh_quote", label: "Refresh quote link", confirm: "Send a refreshed quote link?" },
       { action: "mark_actioned", label: "Mark quote actioned", confirm: "Mark quote as actioned?" },
       { action: "drop", label: "Drop", confirm: "Drop this quote?" },
+      { action: "delete", label: "Delete", confirm: "Delete this quote? This cannot be undone." },
     ],
     tickets: [
       { action: "mark_pending", label: "Mark pending", confirm: "Mark as pending?" },
       { action: "mark_resolved", label: "Mark resolved", confirm: "Mark as resolved?" },
+      { action: "send_email", label: "Send email", confirm: "Send an email to this customer?" },
     ],
     contacts: [],
+    products: [{ action: "delete", label: "Delete", confirm: "Delete this product? This cannot be undone." }],
+    inspirations: [],
+    "media-library": [],
     "price-chart": [],
     "cost-chart": [],
     "diamond-price-chart": [],
@@ -78,7 +96,6 @@
       "notes",
     ],
     quotes: [
-      "price",
       "timeline",
       "timeline_adjustment_weeks",
       "metal",
@@ -103,6 +120,9 @@
     ],
     tickets: ["notes"],
     contacts: [],
+    products: [],
+    inspirations: [],
+    "media-library": [],
     "price-chart": ["metal", "adjustment_type", "adjustment_value", "notes"],
     "cost-chart": ["key", "value", "unit", "notes"],
     "diamond-price-chart": ["clarity", "color", "weight_min", "weight_max", "price_per_ct", "notes"],
@@ -178,29 +198,64 @@
     quotes: "Quote",
     tickets: "Customer ticket",
     contacts: "Contact",
+    products: "Product",
+    inspirations: "Inspiration",
+    "media-library": "Media library",
     "price-chart": "Price chart",
     "cost-chart": "Cost chart",
     "diamond-price-chart": "Diamond price chart",
   };
 
   const PRICING_TABS = new Set(["price-chart", "cost-chart", "diamond-price-chart"]);
+  const CATALOG_TABS = new Set(["products", "inspirations", "media-library"]);
+  const CATALOG_ITEM_TABS = new Set(["products", "inspirations"]);
   const QUOTE_OPTION_FIELDS = [
     { clarity: "quote_option_1_clarity", color: "quote_option_1_color", price: "quote_option_1_price_18k" },
     { clarity: "quote_option_2_clarity", color: "quote_option_2_color", price: "quote_option_2_price_18k" },
     { clarity: "quote_option_3_clarity", color: "quote_option_3_color", price: "quote_option_3_price_18k" },
   ];
   const QUOTE_PRICE_FIELDS = new Set(QUOTE_OPTION_FIELDS.map((option) => option.price));
-  const QUOTE_PRICING_FIELDS = new Set([
+  const QUOTE_BASE_PRICING_FIELDS = new Set([
     "metal",
     "metal_weight",
+    "stone",
     "stone_weight",
     "diamond_breakdown",
     "timeline",
     "timeline_adjustment_weeks",
     "quote_discount_type",
     "quote_discount_percent",
-    ...QUOTE_OPTION_FIELDS.flatMap((option) => [option.clarity, option.color]),
+    "size",
+    "size_label",
+    "size_ring",
+    "size_bracelet",
+    "size_chain",
   ]);
+  const QUOTE_OPTION_FIELD_INDEX = new Map();
+  QUOTE_OPTION_FIELDS.forEach((option, index) => {
+    QUOTE_OPTION_FIELD_INDEX.set(option.clarity, index);
+    QUOTE_OPTION_FIELD_INDEX.set(option.color, index);
+    QUOTE_OPTION_FIELD_INDEX.set(option.price, index);
+  });
+  const PRICING_PAYLOAD_KEYS = [
+    "metal",
+    "metal_weight",
+    "stone",
+    "stone_weight",
+    "diamond_breakdown",
+    "diamond_breakdown_components",
+    "timeline",
+    "timeline_adjustment_weeks",
+    "quote_discount_type",
+    "quote_discount_percent",
+    "size",
+    "size_label",
+    "size_ring",
+    "size_bracelet",
+    "size_chain",
+    "clarity",
+    "color",
+  ];
 
   const CRITICAL_EDIT_FIELDS = new Set([
     "price",
@@ -229,6 +284,12 @@
   ]);
 
   const DIAMOND_TERMS = ["diamond", "lab grown diamond"];
+  const DEFAULT_STONE_ROLES = [
+    { value: "center", label: "Center" },
+    { value: "accent", label: "Accent" },
+    { value: "side", label: "Side" },
+    { value: "halo", label: "Halo" },
+  ];
   const NOTE_CHECKLIST = [
     "Metal weight confirmed",
     "Diamond breakdown confirmed",
@@ -256,7 +317,7 @@
       return state.role === "admin" || state.role === "ops";
     }
     if (state.tab === "tickets") {
-      return state.role === "admin";
+      return state.role === "admin" || state.role === "ops";
     }
     if (
       state.tab === "price-chart" ||
@@ -264,6 +325,9 @@
       state.tab === "diamond-price-chart"
     ) {
       return state.role === "admin";
+    }
+    if (CATALOG_TABS.has(state.tab)) {
+      return state.role === "admin" || state.role === "ops";
     }
     return false;
   }
@@ -273,12 +337,46 @@
     userRole: document.querySelector("[data-user-role]"),
     userEmail: document.querySelector("[data-user-email]"),
     backLink: document.querySelector("[data-back-link]"),
+    detailHeader: document.querySelector("[data-detail-header]"),
     detailType: document.querySelector("[data-detail-type]"),
     detailTitle: document.querySelector("[data-detail-title]"),
     detailSub: document.querySelector("[data-detail-sub]"),
     detailError: document.querySelector("[data-detail-error]"),
     detailStatusCorner: document.querySelector("[data-detail-status-corner]"),
     detailGrid: document.querySelector("[data-detail-grid]"),
+    overviewSection: document.querySelector("[data-overview-section]"),
+    catalogSection: document.querySelector("[data-catalog-section]"),
+    catalogTitle: document.querySelector("[data-catalog-title]"),
+    catalogFields: document.querySelector("[data-catalog-fields]"),
+    catalogMediaSection: document.querySelector("[data-catalog-media-section]"),
+    catalogMediaList: document.querySelector("[data-catalog-media-list]"),
+    mediaFile: document.querySelector("[data-media-file]"),
+    mediaLabel: document.querySelector("[data-media-label]"),
+    mediaAlt: document.querySelector("[data-media-alt]"),
+    mediaDescription: document.querySelector("[data-media-description]"),
+    mediaPosition: document.querySelector("[data-media-position]"),
+    mediaOrder: document.querySelector("[data-media-order]"),
+    mediaPrimary: document.querySelector("[data-media-primary]"),
+    mediaUpload: document.querySelector("[data-media-upload]"),
+    mediaId: document.querySelector("[data-media-id]"),
+    mediaPositionExisting: document.querySelector("[data-media-position-existing]"),
+    mediaOrderExisting: document.querySelector("[data-media-order-existing]"),
+    mediaPrimaryExisting: document.querySelector("[data-media-primary-existing]"),
+    mediaLink: document.querySelector("[data-media-link]"),
+    catalogStoneSection: document.querySelector("[data-catalog-stone-section]"),
+    catalogStoneList: document.querySelector("[data-catalog-stone-list]"),
+    stoneAddRole: document.querySelector("[data-stone-add-role]"),
+    stoneAddType: document.querySelector("[data-stone-add-type]"),
+    stoneAddCtMin: document.querySelector("[data-stone-add-ct-min]"),
+    stoneAddCtMax: document.querySelector("[data-stone-add-ct-max]"),
+    stoneAddCountMin: document.querySelector("[data-stone-add-count-min]"),
+    stoneAddCountMax: document.querySelector("[data-stone-add-count-max]"),
+    stoneAddCut: document.querySelector("[data-stone-add-cut]"),
+    stoneAddClarity: document.querySelector("[data-stone-add-clarity]"),
+    stoneAddColor: document.querySelector("[data-stone-add-color]"),
+    stoneAddPrimary: document.querySelector("[data-stone-add-primary]"),
+    stoneAddNotes: document.querySelector("[data-stone-add-notes]"),
+    stoneAddButton: document.querySelector("[data-stone-add]"),
     actionRow: document.querySelector("[data-action-row]"),
     actionSelect: document.querySelector("[data-action-select]"),
     actionRun: document.querySelector("[data-action-run]"),
@@ -286,6 +384,9 @@
     quoteSection: document.querySelector("[data-quote-section]"),
     quoteMetals: Array.from(document.querySelectorAll("[data-quote-metals] input[type=\"checkbox\"]")),
     quoteMetalInput: document.querySelector("[data-field=\"quote_metal_options\"]"),
+    quoteOptionCards: Array.from(document.querySelectorAll("[data-quote-option-card]")),
+    quoteOptionStatuses: Array.from(document.querySelectorAll("[data-quote-option-status]")),
+    quoteExtras: document.querySelector("[data-quote-extras]"),
     metalWeightLabel: document.querySelector("[data-metal-weight-label]"),
     metalWeightAdjustmentLabel: document.querySelector("[data-metal-weight-adjustment-label]"),
     metalWeightFinal: document.querySelector("[data-metal-weight-final]"),
@@ -327,10 +428,36 @@
     summaryMetal: document.querySelector("[data-summary-metal]"),
     summaryStone: document.querySelector("[data-summary-stone]"),
     summaryStoneWeight: document.querySelector("[data-summary-stone-weight]"),
+    summaryMetalWeight: document.querySelector("[data-summary-metal-weight]"),
+    summaryMetalAdjustment: document.querySelector("[data-summary-metal-adjustment]"),
+    summaryDiamondBreakdown: document.querySelector("[data-summary-diamond-breakdown]"),
+    summaryDiscount: document.querySelector("[data-summary-discount]"),
+    summaryPricingStatus: document.querySelector("[data-summary-pricing-status]"),
+    summaryInterests: document.querySelector("[data-summary-interests]"),
+    summaryContactPreference: document.querySelector("[data-summary-contact-preference]"),
+    summarySubscription: document.querySelector("[data-summary-subscription]"),
+    summaryCustomerNotes: document.querySelector("[data-summary-customer-notes]"),
+    summaryOption1: document.querySelector("[data-summary-option-1]"),
+    summaryOption2: document.querySelector("[data-summary-option-2]"),
+    summaryOption3: document.querySelector("[data-summary-option-3]"),
+    summaryOptionRecommended: document.querySelector("[data-summary-option-recommended]"),
+    summaryLastPriced: document.querySelector("[data-summary-last-priced]"),
+    summarySizeRing: document.querySelector("[data-summary-size-ring]"),
+    summarySizeBracelet: document.querySelector("[data-summary-size-bracelet]"),
+    summarySizeChain: document.querySelector("[data-summary-size-chain]"),
     summaryCustomer: document.querySelector("[data-summary-customer]"),
     summaryEmail: document.querySelector("[data-summary-email]"),
     summaryPhone: document.querySelector("[data-summary-phone]"),
     summaryAddress: document.querySelector("[data-summary-address]"),
+    summaryCard: document.querySelector("[data-summary-card]"),
+    summaryQuoteBlock: document.querySelector("[data-summary-quote-block]"),
+    summaryPreferencesBlock: document.querySelector("[data-summary-preferences-block]"),
+    summaryOptionsBlock: document.querySelector("[data-summary-options-block]"),
+    summaryNotesBlock: document.querySelector("[data-summary-notes-block]"),
+    summarySizesBlock: document.querySelector("[data-summary-sizes-block]"),
+    summaryMore: document.querySelector("[data-summary-more]"),
+    summaryPriceRow: document.querySelector("[data-summary-price-row]"),
+    nextActionPanel: document.querySelector("[data-next-action-panel]"),
     copyCustomer: document.querySelector("[data-copy-customer]"),
     copyEmail: document.querySelector("[data-copy-email]"),
     copyPhone: document.querySelector("[data-copy-phone]"),
@@ -341,22 +468,75 @@
     discountType: document.querySelector("[data-discount-type]"),
     discountPercent: document.querySelector("[data-discount-percent]"),
     discountFinal: document.querySelector("[data-discount-final]"),
+    breakdownRaw: document.querySelector("[data-breakdown-raw]"),
+    breakdownRawToggle: document.querySelector("[data-breakdown-raw-toggle]"),
+    optionFinals: Array.from(document.querySelectorAll("[data-option-final]")),
+    optionActiveToggles: Array.from(document.querySelectorAll("[data-option-active]")),
+    optionRecommendRadios: Array.from(document.querySelectorAll("[data-option-recommend]")),
+    optionCopyButtons: Array.from(document.querySelectorAll("[data-option-copy]")),
+    optionAutoButtons: Array.from(document.querySelectorAll("[data-option-auto]")),
+    activitySection: document.querySelector("[data-activity-section]"),
+    activitySlot: document.querySelector("[data-activity-slot]"),
     diamondPresets: document.querySelector("[data-diamond-presets]"),
     noteTimestamp: document.querySelector("[data-note-timestamp]"),
     noteTemplate: document.querySelector("[data-note-template]"),
     noteTags: Array.from(document.querySelectorAll("[data-note-tag]")),
+    notesToggle: document.querySelector("[data-notes-toggle]"),
     openTracking: document.querySelector("[data-open-tracking]"),
     toast: document.querySelector("[data-toast]"),
   };
 
-  const storedBase = localStorage.getItem("adminApiBase") || "";
-  const apiBase = storedBase || document.body.dataset.apiBase || "";
+  function getApiBase() {
+    if (typeof window === "undefined") return "";
+    const stored = localStorage.getItem("adminApiBase") || "";
+    return stored || document.body.dataset.apiBase || "";
+  }
+  const apiBase = getApiBase();
   const siteBase = (document.body.dataset.siteBase || "https://www.heerawalla.com").replace(/\/$/, "");
   let isSyncingBreakdown = false;
   let quotePricingTimer = null;
-  let quotePricingInFlight = false;
+  const quotePricingQueue = new Set();
+  const quotePricingState = {
+    options: QUOTE_OPTION_FIELDS.map(() => ({
+      status: "idle",
+      signature: "",
+      lastPayload: null,
+      lastError: "",
+      lastPricedAt: "",
+    })),
+    inflight: new Map(),
+    cache: new Map(),
+  };
   const catalogCache = { data: null, promise: null };
   const mediaCache = new Map();
+
+  function getStoredAdminEmail() {
+    if (typeof window === "undefined") return "";
+    try {
+      return localStorage.getItem("adminEmail") || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function buildAdminHeaders(extra = {}, explicitEmail = "") {
+    const headers = { "Content-Type": "application/json", ...extra };
+    const localEmail = explicitEmail || "";
+    if (localEmail) {
+      headers["X-Admin-Email"] = localEmail;
+    }
+    return headers;
+  }
+
+  function isLocalApi(base) {
+    return base.startsWith("http://localhost") || base.startsWith("http://127.0.0.1");
+  }
+
+  function addLocalAdminQuery(url, base, email) {
+    if (isLocalApi(base) && email) {
+      url.searchParams.set("admin_email", email);
+    }
+  }
 
   function setButtonEnabled(button, enabled) {
     if (!button) return;
@@ -621,7 +801,7 @@
 
   let isSyncingSizing = false;
 
-  function buildSizeSummary(values) {
+  function deriveSizeString(values) {
     const parts = [];
     if (isFilled(values.ring)) parts.push(`Ring size: ${values.ring}`);
     if (isFilled(values.bracelet)) parts.push(`Bracelet size: ${values.bracelet}`);
@@ -638,11 +818,9 @@
       bracelet: ui.sizeBracelet ? ui.sizeBracelet.value.trim() : "",
       chain: ui.sizeChain ? ui.sizeChain.value.trim() : "",
     };
-    const summary = buildSizeSummary(values);
-    if (summary) {
-      sizeField.value = summary;
-      sizeField.dataset.activityValue = summary;
-    }
+    const summary = deriveSizeString(values);
+    sizeField.value = summary;
+    sizeField.dataset.activityValue = summary;
   }
 
   function applySizingVisibility(spec) {
@@ -690,6 +868,7 @@
       };
     }
     applySizingVisibility(spec);
+    state.sizingSpec = spec;
     if (ui.sizeRing) {
       ui.sizeRing.value = ringValue;
     }
@@ -699,6 +878,7 @@
     if (ui.sizeChain) {
       ui.sizeChain.value = chainValue;
     }
+    syncSizingToSizeField();
     isSyncingSizing = false;
   }
 
@@ -757,6 +937,22 @@
     return ui.editFields.find((field) => field.dataset.field === "diamond_breakdown");
   }
 
+  function normalizeStoneTypeLabel(value) {
+    const normalized = String(value || "").toLowerCase();
+    if (normalized.includes("lab")) return "lab";
+    if (normalized.includes("natural")) return "natural";
+    return "";
+  }
+
+  function getDefaultDiamondType() {
+    const stoneValue = String(getEditValue("stone") || "").toLowerCase();
+    if (!stoneValue) return "";
+    if (stoneValue.includes("lab")) return "lab";
+    if (stoneValue.includes("natural")) return "natural";
+    const isDiamond = DIAMOND_TERMS.some((term) => stoneValue.includes(term));
+    return isDiamond ? "natural" : "";
+  }
+
   function parseDiamondBreakdownValue(value) {
     if (!value) return [];
     return String(value)
@@ -794,7 +990,58 @@
       .join("\n");
   }
 
-  function getDiamondRowsFromDom() {
+  function parseDiamondBreakdownValueTyped(value) {
+    if (!value) return [];
+    return String(value)
+      .split(/\n|;|,/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => {
+        let stoneType = "";
+        let payload = entry;
+        const typeMatch = entry.match(/^(lab(?:\s+grown)?|natural)(?:\s+diamond)?\s*[:=-]\s*(.+)$/i);
+        if (typeMatch) {
+          stoneType = normalizeStoneTypeLabel(typeMatch[1]);
+          payload = typeMatch[2];
+        }
+        const match = payload.match(
+          /([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[xA-]\s*([0-9]*\.?[0-9]+)/i
+        );
+        if (match) {
+          return { weight: match[1], count: match[2], stoneType };
+        }
+        const numbers = payload.match(/[0-9]*\.?[0-9]+/g) || [];
+        if (numbers.length >= 2) {
+          return { weight: numbers[0], count: numbers[1], stoneType };
+        }
+        if (numbers.length === 1) {
+          return { weight: numbers[0], count: "1", stoneType };
+        }
+        return null;
+      })
+      .filter(Boolean);
+  }
+
+  function formatDiamondBreakdownTyped(rows) {
+    return rows
+      .map((row) => {
+        const weight = String(row.weight || "").trim();
+        const count = String(row.count || "").trim();
+        if (!weight || !count) return "";
+        const typeLabel =
+          row.stoneType === "lab"
+            ? "Lab"
+            : row.stoneType === "natural"
+            ? "Natural"
+            : "";
+        const prefix = typeLabel ? `${typeLabel}: ` : "";
+        return `${prefix}${weight} x ${count}`;
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function getDiamondRowsFromDomTyped() {
     if (!ui.diamondBreakdownRows) return [];
     return Array.from(ui.diamondBreakdownRows.querySelectorAll("[data-diamond-row]")).map(
       (row) => {
@@ -802,7 +1049,9 @@
           row.querySelector("[data-diamond-weight]")?.value?.trim() || "";
         const count =
           row.querySelector("[data-diamond-count]")?.value?.trim() || "";
-        return { weight, count };
+        const stoneType =
+          row.querySelector("[data-diamond-type]")?.value?.trim() || "";
+        return { weight, count, stoneType };
       }
     );
   }
@@ -811,9 +1060,13 @@
     if (isSyncingBreakdown) return;
     const field = getDiamondBreakdownField();
     if (!field) return;
-    const rows = getDiamondRowsFromDom();
+    const defaultType = getDefaultDiamondType();
+    const rows = getDiamondRowsFromDomTyped().map((row) => ({
+      ...row,
+      stoneType: row.stoneType || defaultType,
+    }));
     isSyncingBreakdown = true;
-    field.value = formatDiamondBreakdown(rows);
+    field.value = formatDiamondBreakdownTyped(rows);
     isSyncingBreakdown = false;
   }
 
@@ -825,12 +1078,14 @@
       updateDiamondStats([]);
       return;
     }
+    const defaultType = getDefaultDiamondType();
     ui.diamondBreakdownRows.innerHTML = rows
       .map((row, index) => {
         const weight = String(row.weight || "").trim();
         const count = String(row.count || "").trim();
         const totalValue = Number(weight || 0) * Number(count || 0);
         const totalText = formatDiamondCarat(totalValue);
+        const stoneType = normalizeStoneTypeLabel(row.stoneType) || defaultType;
         return `
           <div class="diamond-row" data-diamond-row data-row-index="${index}">
             <label>
@@ -844,6 +1099,14 @@
               <input type="text" data-diamond-count placeholder="1" value="${escapeAttribute(
                 count
               )}" />
+            </label>
+            <label>
+              <span>Type</span>
+              <select data-diamond-type>
+                <option value="">Auto</option>
+                <option value="natural" ${stoneType === "natural" ? "selected" : ""}>Natural</option>
+                <option value="lab" ${stoneType === "lab" ? "selected" : ""}>Lab</option>
+              </select>
             </label>
             <div class="diamond-total">
               <span>Total ct</span>
@@ -862,6 +1125,29 @@
     return `${trimmed} ct`;
   }
 
+  function buildDiamondComponentsPayload() {
+    if (state.tab !== "quotes") return [];
+    const rows = getDiamondRowsFromDomTyped();
+    if (!rows.length) return [];
+    const defaultType = getDefaultDiamondType();
+    const groups = new Map();
+    rows.forEach((row) => {
+      const weight = String(row.weight || "").trim();
+      const count = String(row.count || "").trim();
+      if (!weight || !count) return;
+      const stoneType = normalizeStoneTypeLabel(row.stoneType) || defaultType;
+      if (!stoneType) return;
+      const key = stoneType;
+      const list = groups.get(key) || [];
+      list.push(`${weight} x ${count}`);
+      groups.set(key, list);
+    });
+    return Array.from(groups.entries()).map(([stoneType, lines]) => ({
+      stone_type: stoneType,
+      diamond_breakdown: lines.join("\n"),
+    }));
+  }
+
   function updateDiamondStats(rows) {
     if (!ui.diamondPieceCount || !ui.diamondCaratTotal) return;
     const pieces = rows.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
@@ -871,6 +1157,23 @@
     );
     ui.diamondPieceCount.textContent = pieces;
     ui.diamondCaratTotal.textContent = formatDiamondCarat(carats);
+    const stoneValue = getEditValue("stone").toLowerCase();
+    const isDiamond = DIAMOND_TERMS.some((term) => stoneValue.includes(term));
+    if (isDiamond) {
+      const stoneWeightField = getEditField("stone_weight");
+      if (stoneWeightField) {
+        const normalized =
+          carats && Number.isFinite(carats)
+            ? (carats % 1 === 0 ? carats.toFixed(0) : carats.toFixed(2).replace(/\.?0+$/, ""))
+            : "";
+        stoneWeightField.value = normalized;
+        stoneWeightField.dataset.activityValue = normalized;
+        if (state.selectedItem) {
+          state.selectedItem.stone_weight = normalized;
+          updateSummaryCard(state.selectedItem);
+        }
+      }
+    }
   }
 
   function updateDiamondRowTotals() {
@@ -891,8 +1194,9 @@
     if (!value) return;
     const match = value.match(/([0-9]*\.?[0-9]+)x([0-9]+)/i);
     if (!match) return;
-    const rows = getDiamondRowsFromDom();
-    rows.push({ weight: match[1], count: match[2] });
+    const defaultType = getDefaultDiamondType();
+    const rows = getDiamondRowsFromDomTyped();
+    rows.push({ weight: match[1], count: match[2], stoneType: defaultType });
     renderDiamondBreakdownRows(rows);
     syncDiamondBreakdownField();
     if (ui.diamondPresets) ui.diamondPresets.value = "";
@@ -901,7 +1205,7 @@
   function setDiamondBreakdownRowsFromField() {
     const field = getDiamondBreakdownField();
     if (!field) return;
-    const rows = parseDiamondBreakdownValue(field.value);
+    const rows = parseDiamondBreakdownValueTyped(field.value);
     renderDiamondBreakdownRows(rows);
   }
 
@@ -940,95 +1244,394 @@
     });
   }
 
-  function collectQuotePricingFields() {
-    if (state.tab !== "quotes") return null;
-    const metalWeight = getEditValue("metal_weight");
-    if (!metalWeight) return null;
-    const goldOnly = isGoldOnlyQuote();
-    const hasOption = QUOTE_OPTION_FIELDS.some((option) => {
-      return Boolean(getEditValue(option.clarity) || getEditValue(option.color));
-    });
-    if (!hasOption && !goldOnly) return null;
-    const fields = {};
-    QUOTE_PRICING_FIELDS.forEach((key) => {
-      const value = getEditValue(key);
-      if (value) fields[key] = value;
-    });
-    return fields;
-  }
-
-  function applyQuotePricing(fields) {
-    if (!fields) return;
-    QUOTE_OPTION_FIELDS.forEach((option) => {
-      const value = fields[option.price];
-      if (!value) return;
+  function initializeQuotePricingStatus() {
+    if (state.tab !== "quotes") return;
+    QUOTE_OPTION_FIELDS.forEach((option, index) => {
       const field = getEditField(option.price);
-      if (!shouldApplyAutoPrice(field)) return;
-      field.value = value;
-      field.dataset.auto = "true";
-      field.dataset.manual = "";
+      const value = field ? field.value.trim() : "";
+      if (value) {
+        setOptionStatus(index, "priced");
+      } else {
+        setOptionStatus(index, "idle");
+      }
     });
-    updatePrimaryActionState();
+    initializeOptionDefaults();
+    updateOptionFinals();
   }
 
-  async function refreshQuotePricing() {
-    if (state.tab !== "quotes" || quotePricingInFlight) return;
-    const fields = collectQuotePricingFields();
-    if (!fields) return;
-    const basePayload = {
-      metal: fields.metal || "",
-      metal_weight: fields.metal_weight || "",
-      stone: fields.stone || "",
-      stone_weight: fields.stone_weight || "",
-      diamond_breakdown: fields.diamond_breakdown || "",
-      timeline: fields.timeline || "",
-      timeline_adjustment_weeks: fields.timeline_adjustment_weeks || "",
-      quote_discount_type: fields.quote_discount_type || "",
-      quote_discount_percent: fields.quote_discount_percent || "",
+  function initializeOptionDefaults() {
+    if (state.tab !== "quotes") return;
+    QUOTE_OPTION_FIELDS.forEach((option, index) => {
+      const clarity = getEditValue(option.clarity);
+      const color = getEditValue(option.color);
+      const price = getEditValue(option.price);
+      const isActive = Boolean(clarity || color || price || index === 0);
+      setOptionActive(index, isActive);
+    });
+    if (state.recommendedOptionIndex === null) {
+      const firstActive = QUOTE_OPTION_FIELDS.findIndex((_, index) => isOptionActive(index));
+      state.recommendedOptionIndex = firstActive >= 0 ? firstActive : null;
+      syncRecommendedOptionUi();
+    }
+  }
+
+  function signature(payload) {
+    return PRICING_PAYLOAD_KEYS.map((key) => {
+      if (key === "diamond_breakdown_components") {
+        return `${key}:${JSON.stringify(payload[key] || [])}`;
+      }
+      return `${key}:${String(payload[key] ?? "")}`;
+    }).join("|");
+  }
+
+  function collectBasePricingPayload() {
+    if (state.tab !== "quotes") return null;
+    syncSizingToSizeField();
+    const diamondComponents = buildDiamondComponentsPayload();
+    return {
+      metal: getEditValue("metal") || "",
+      metal_weight: getEditValue("metal_weight") || "",
+      stone: getEditValue("stone") || "",
+      stone_weight: getEditValue("stone_weight") || "",
+      diamond_breakdown: getEditValue("diamond_breakdown") || "",
+      diamond_breakdown_components: diamondComponents,
+      timeline: getEditValue("timeline") || "",
+      timeline_adjustment_weeks: getEditValue("timeline_adjustment_weeks") || "",
+      quote_discount_type: getEditValue("quote_discount_type") || "",
+      quote_discount_percent: getEditValue("quote_discount_percent") || "",
       size: getEditValue("size") || "",
       size_label: "",
       size_ring: ui.sizeRing ? ui.sizeRing.value.trim() : "",
       size_bracelet: ui.sizeBracelet ? ui.sizeBracelet.value.trim() : "",
       size_chain: ui.sizeChain ? ui.sizeChain.value.trim() : "",
     };
-    const pricingBase = getCatalogBase();
-    quotePricingInFlight = true;
-    try {
-      const updates = {};
-      const goldOnly = isGoldOnlyQuote();
-      const requests = QUOTE_OPTION_FIELDS.map(async (option, index) => {
-        const clarity = fields[option.clarity] || "";
-        const color = fields[option.color] || "";
-        if (!clarity && !color && !(goldOnly && index === 0)) return;
-        const payload = { ...basePayload, clarity, color };
-        const response = await fetch(`${pricingBase}/pricing/estimate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data?.ok) return;
-        updates[option.price] = String(data.price || "");
-      });
-      await Promise.all(requests);
-      applyQuotePricing(updates);
-    } catch (error) {
-      return;
-    } finally {
-      quotePricingInFlight = false;
+  }
+
+  function collectOptionPayload(optionIndex, basePayload) {
+    const option = QUOTE_OPTION_FIELDS[optionIndex];
+    if (!option) return null;
+    const clarity = getEditValue(option.clarity) || "";
+    const color = getEditValue(option.color) || "";
+    return { ...basePayload, clarity, color };
+  }
+
+  function getOptionPriceField(optionIndex) {
+    const option = QUOTE_OPTION_FIELDS[optionIndex];
+    return option ? getEditField(option.price) : null;
+  }
+
+  function setOptionStatus(optionIndex, status, message = "") {
+    const entry = quotePricingState.options[optionIndex];
+    if (!entry) return;
+    entry.status = status;
+    entry.lastError = status === "error" ? message : "";
+    if (status === "priced") {
+      entry.lastPricedAt = new Date().toISOString();
+    }
+    const card = ui.quoteOptionCards[optionIndex];
+    const statusNode = ui.quoteOptionStatuses[optionIndex];
+    if (card) {
+      card.classList.toggle("is-pricing", status === "pricing");
+      card.classList.toggle("is-stale", status === "stale");
+      card.classList.toggle("is-error", status === "error");
+      card.classList.toggle("is-manual", status === "manual");
+      card.classList.toggle("is-inactive", !isOptionActive(optionIndex));
+    }
+    if (statusNode) {
+      const label =
+        status === "pricing"
+          ? "Pricing..."
+          : status === "stale"
+          ? "Stale"
+          : status === "error"
+          ? "Error"
+          : status === "manual"
+          ? "Manual"
+          : status === "priced"
+          ? "Priced"
+          : "Idle";
+      statusNode.textContent = message ? `${label} · ${message}` : label;
+    }
+    updatePricingSummaryStatus();
+    updateSummaryCard(state.selectedItem);
+  }
+
+  function markOptionManual(optionIndex) {
+    if (optionIndex == null) return;
+    setOptionStatus(optionIndex, "manual");
+  }
+
+  function resolveLastPricedLabel() {
+    const timestamps = quotePricingState.options
+      .map((entry) => entry.lastPricedAt)
+      .filter(Boolean);
+    if (!timestamps.length) return "--";
+    const latest = timestamps.sort().slice(-1)[0];
+    return formatActivityTime(latest);
+  }
+
+  function isOptionActive(optionIndex) {
+    const toggle = ui.optionActiveToggles[optionIndex];
+    return toggle ? toggle.checked : true;
+  }
+
+  function setOptionActive(optionIndex, active) {
+    const toggle = ui.optionActiveToggles[optionIndex];
+    if (toggle) toggle.checked = active;
+    const option = QUOTE_OPTION_FIELDS[optionIndex];
+    if (!option) return;
+    [option.clarity, option.color, option.price].forEach((key) => {
+      const field = getEditField(key);
+      if (field) field.disabled = !active;
+    });
+    const radio = ui.optionRecommendRadios[optionIndex];
+    if (radio) radio.disabled = !active;
+    const copyBtn = ui.optionCopyButtons[optionIndex];
+    if (copyBtn) copyBtn.disabled = !active;
+    const autoBtn = ui.optionAutoButtons[optionIndex];
+    if (autoBtn) autoBtn.disabled = !active;
+    const card = ui.quoteOptionCards[optionIndex];
+    if (card) card.classList.toggle("is-inactive", !active);
+    if (!active && state.recommendedOptionIndex === optionIndex) {
+      state.recommendedOptionIndex = null;
+      syncRecommendedOptionUi();
+    }
+    if (!active) {
+      setOptionStatus(optionIndex, "idle", "Inactive");
+    }
+    updateActionButtonState();
+  }
+
+  function syncRecommendedOptionUi() {
+    ui.optionRecommendRadios.forEach((radio, index) => {
+      radio.checked = state.recommendedOptionIndex === index;
+    });
+    if (state.selectedItem) {
+      updateSummaryCard(state.selectedItem);
     }
   }
 
-  function scheduleQuotePricingUpdate() {
+  function updateOptionFinal(optionIndex) {
+    const finalNode = ui.optionFinals[optionIndex];
+    if (!finalNode) return;
+    const priceField = getOptionPriceField(optionIndex);
+    const priceValue = Number(priceField?.value || "");
+    if (!priceValue || Number.isNaN(priceValue)) {
+      finalNode.textContent = "Final: --";
+      return;
+    }
+    const type = normalizeText(getEditValue("quote_discount_type"));
+    const percent = Number(getEditValue("quote_discount_percent")) || 0;
+    const applyDiscount = type === "custom" && percent > 0;
+    const finalValue = applyDiscount ? Math.max(0, priceValue * (1 - percent / 100)) : priceValue;
+    finalNode.textContent = `Final: ${formatPrice(finalValue) || "--"}`;
+  }
+
+  function updateOptionFinals() {
+    QUOTE_OPTION_FIELDS.forEach((_, index) => updateOptionFinal(index));
+  }
+
+  function applyQuotePrice(optionIndex, value) {
+    const field = getOptionPriceField(optionIndex);
+    if (!field || !shouldApplyAutoPrice(field)) return;
+    field.value = value;
+    field.dataset.auto = "true";
+    field.dataset.manual = "";
+    if (state.selectedItem) {
+      const key = QUOTE_OPTION_FIELDS[optionIndex].price;
+      state.selectedItem[key] = value;
+      updateSummaryCard(state.selectedItem);
+    }
+    updateDiscountPreview();
+    updateOptionFinal(optionIndex);
+  }
+
+  function shouldPriceOption(optionIndex, basePayload) {
+    const option = QUOTE_OPTION_FIELDS[optionIndex];
+    if (!option) return false;
+    if (!isOptionActive(optionIndex)) return false;
+    const priceField = getOptionPriceField(optionIndex);
+    const isManual = priceField && priceField.dataset.manual === "true" && priceField.value.trim();
+    if (isManual) return false;
+    const clarity = getEditValue(option.clarity);
+    const color = getEditValue(option.color);
+    const goldOnly = isGoldOnlyQuote();
+    return Boolean(clarity || color || (goldOnly && optionIndex === 0));
+  }
+
+  function computeMissingCriticalInfo(basePayload) {
+    const chips = [];
+    if (!basePayload) return chips;
+    if (!basePayload.metal) {
+      chips.push(buildMissingChip("Metal missing", '[data-field="metal"]'));
+    }
+    if (!basePayload.metal_weight) {
+      chips.push(buildMissingChip("Metal weight missing", '[data-field="metal_weight"]'));
+    }
+    if (!basePayload.timeline) {
+      chips.push(buildMissingChip("Timeline missing", '[data-field="timeline"]'));
+    }
+    const stoneValue = String(basePayload.stone || "").toLowerCase();
+    const isDiamond = DIAMOND_TERMS.some((term) => stoneValue.includes(term));
+    const components = Array.isArray(basePayload.diamond_breakdown_components)
+      ? basePayload.diamond_breakdown_components
+      : [];
+    if (stoneValue) {
+      if (isDiamond && !basePayload.diamond_breakdown && components.length === 0) {
+        chips.push(buildMissingChip("Diamond breakdown missing", '[data-field="diamond_breakdown"]'));
+      }
+      if (!isDiamond && !basePayload.stone_weight) {
+        chips.push(buildMissingChip("Stone weight missing", '[data-field="stone_weight"]'));
+      }
+    }
+    const spec = state.sizingSpec || {};
+    if (spec.ring && !basePayload.size_ring) {
+      chips.push(buildMissingChip("Ring size missing", "[data-size-ring] input"));
+    }
+    if (spec.bracelet && !basePayload.size_bracelet) {
+      chips.push(buildMissingChip("Bracelet size missing", "[data-size-bracelet] input"));
+    }
+    if (spec.chain && !basePayload.size_chain) {
+      chips.push(buildMissingChip("Chain size missing", "[data-size-chain] input"));
+    }
+    const goldOnly = isGoldOnlyQuote();
+    if (!goldOnly) {
+      QUOTE_OPTION_FIELDS.forEach((option, index) => {
+        if (!isOptionActive(index)) return;
+        const clarity = getEditValue(option.clarity);
+        const color = getEditValue(option.color);
+        if (!clarity) {
+          chips.push(
+            buildMissingChip(`Option ${index + 1} clarity missing`, `[data-field="${option.clarity}"]`)
+          );
+        }
+        if (!color) {
+          chips.push(
+            buildMissingChip(`Option ${index + 1} color missing`, `[data-field="${option.color}"]`)
+          );
+        }
+      });
+    }
+    return chips;
+  }
+
+  async function priceOption(optionIndex, payload) {
+    const option = QUOTE_OPTION_FIELDS[optionIndex];
+    if (!option || !payload) return;
+    const payloadSignature = signature(payload);
+    const cached = quotePricingState.cache.get(payloadSignature);
+    if (cached) {
+      applyQuotePrice(optionIndex, cached.price);
+      setOptionStatus(optionIndex, "priced");
+      return;
+    }
+    const inflight = quotePricingState.inflight.get(optionIndex);
+    if (inflight && inflight.signature === payloadSignature) return inflight.promise;
+    setOptionStatus(optionIndex, "pricing");
+    const pricingBase = getCatalogBase();
+    const promise = fetch(`${pricingBase}/pricing/estimate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then((response) =>
+        response
+          .json()
+          .catch(() => ({}))
+          .then((data) => ({ response, data }))
+      )
+      .then(({ response, data }) => {
+        if (!response.ok || !data?.ok) {
+          setOptionStatus(optionIndex, "error");
+          return;
+        }
+        const priceValue = String(data.price ?? "");
+        quotePricingState.cache.set(payloadSignature, { price: priceValue });
+        applyQuotePrice(optionIndex, priceValue);
+        setOptionStatus(optionIndex, "priced");
+      })
+      .catch(() => {
+        setOptionStatus(optionIndex, "error");
+      })
+      .finally(() => {
+        quotePricingState.inflight.delete(optionIndex);
+        updatePrimaryActionState();
+        updateActionButtonState();
+      });
+    quotePricingState.inflight.set(optionIndex, { promise, signature: payloadSignature });
+    return promise;
+  }
+
+  async function refreshQuotePricing(optionIndexes) {
     if (state.tab !== "quotes") return;
+    const basePayload = collectBasePricingPayload();
+    if (!basePayload) return;
+    QUOTE_OPTION_FIELDS.forEach((_, index) => {
+      if (shouldPriceOption(index, basePayload)) return;
+      const priceField = getOptionPriceField(index);
+      const isManual = priceField && priceField.dataset.manual === "true" && priceField.value.trim();
+      if (isManual) {
+        setOptionStatus(index, "manual");
+      } else if (priceField && priceField.value.trim()) {
+        setOptionStatus(index, "priced");
+      } else {
+        setOptionStatus(index, "idle");
+      }
+    });
+    const missing = computeMissingCriticalInfo(basePayload);
+    if (missing.length) {
+      updatePrimaryActionState();
+      updateActionButtonState();
+      return;
+    }
+    const targets = optionIndexes && optionIndexes.length ? optionIndexes : [];
+    const shouldPrice = targets.filter((index) => shouldPriceOption(index, basePayload));
+    if (!shouldPrice.length) {
+      updatePrimaryActionState();
+      updateActionButtonState();
+      return;
+    }
+    await Promise.all(
+      shouldPrice.map((index) => {
+        const payload = collectOptionPayload(index, basePayload);
+        return priceOption(index, payload);
+      })
+    );
+  }
+
+  function scheduleQuotePricingUpdate({ baseChanged = false, optionIndex = null } = {}) {
+    if (state.tab !== "quotes") return;
+    if (baseChanged) {
+      QUOTE_OPTION_FIELDS.forEach((_, index) => {
+        quotePricingQueue.add(index);
+      });
+    } else if (typeof optionIndex === "number") {
+      quotePricingQueue.add(optionIndex);
+    }
+    quotePricingQueue.forEach((index) => {
+      const priceField = getOptionPriceField(index);
+      const isManual = priceField && priceField.dataset.manual === "true" && priceField.value.trim();
+      if (!isOptionActive(index)) {
+        setOptionStatus(index, "idle");
+        return;
+      }
+      if (isManual) {
+        setOptionStatus(index, "manual");
+        return;
+      }
+      setOptionStatus(index, "stale");
+    });
     if (quotePricingTimer) clearTimeout(quotePricingTimer);
     quotePricingTimer = setTimeout(() => {
-      refreshQuotePricing();
-    }, 350);
+      const targets = Array.from(quotePricingQueue);
+      quotePricingQueue.clear();
+      refreshQuotePricing(targets);
+    }, 500);
   }
 
   function getCatalogBase() {
-    return apiBase.replace(/\/admin\/?$/, "");
+    const base = getApiBase();
+    return base.replace(/\/admin\/?$/, "");
   }
 
   function extractSlug(url) {
@@ -1252,12 +1855,16 @@
   }
 
   async function apiFetch(path, options = {}) {
-    if (!apiBase) throw new Error("Missing API base");
-    const base = apiBase.endsWith("/") ? apiBase : `${apiBase}/`;
+    const resolvedBase = getApiBase();
+    if (!resolvedBase) throw new Error("Missing API base");
+    const base = resolvedBase.endsWith("/") ? resolvedBase : `${resolvedBase}/`;
     const url = new URL(path.replace(/^\//, ""), base);
+    const localEmail = isLocalApi(base) ? getStoredAdminEmail() : "";
+    addLocalAdminQuery(url, base, localEmail);
+    const headers = buildAdminHeaders(options.headers || {}, localEmail);
     const response = await fetch(url.toString(), {
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      credentials: isLocalApi(base) ? "omit" : "include",
+      headers,
       ...options,
     });
     if (!response.ok) {
@@ -1270,8 +1877,11 @@
   function getTabEndpoint(tab) {
     if (tab === "orders") return "/orders";
     if (tab === "quotes") return "/quotes";
-    if (tab === "tickets") return "/contacts";
-    if (tab === "contacts") return "/contacts-unified";
+    if (tab === "tickets") return "/tickets";
+    if (tab === "contacts") return "/contacts";
+    if (tab === "products") return "/products";
+    if (tab === "inspirations") return "/inspirations";
+    if (tab === "media-library") return "/media-library";
     if (tab === "price-chart") return "/price-chart";
     if (tab === "cost-chart") return "/cost-chart";
     if (tab === "diamond-price-chart") return "/diamond-price-chart";
@@ -1281,7 +1891,11 @@
   function getActionEndpoint() {
     if (state.tab === "orders") return "/orders/action";
     if (state.tab === "quotes") return "/quotes/action";
-    if (state.tab === "tickets") return "/contacts/action";
+    if (state.tab === "tickets") return "/tickets/action";
+    if (state.tab === "contacts") return "/contacts/action";
+    if (state.tab === "products") return "/products/action";
+    if (state.tab === "inspirations") return "/inspirations/action";
+    if (state.tab === "media-library") return "/media-library/action";
     if (state.tab === "price-chart") return "/price-chart/action";
     if (state.tab === "cost-chart") return "/cost-chart/action";
     if (state.tab === "diamond-price-chart") return "/diamond-price-chart/action";
@@ -1294,11 +1908,18 @@
       state.selectedItem.request_id ||
       state.selectedItem.email ||
       state.selectedItem.row_number ||
+      state.selectedItem.slug ||
+      state.selectedItem.id ||
+      state.selectedItem.media_id ||
       ""
     );
   }
 
   function applyEditVisibility() {
+    if (CATALOG_TABS.has(state.tab)) {
+      if (ui.editSection) ui.editSection.classList.add("is-hidden");
+      return;
+    }
     const allowed = new Set(EDIT_FIELDS[state.tab]);
     ui.editFields.forEach((field) => {
       const wrapper = field.closest(".field");
@@ -1310,6 +1931,798 @@
       ui.editSection.classList.toggle("is-hidden", allowed.size === 0);
     }
     applyQuoteVisibility();
+  }
+
+  function applyCatalogVisibility() {
+    const showCatalog = CATALOG_TABS.has(state.tab);
+    if (ui.catalogSection) ui.catalogSection.classList.toggle("is-hidden", !showCatalog);
+    if (ui.catalogMediaSection) {
+      const showMedia = CATALOG_ITEM_TABS.has(state.tab);
+      ui.catalogMediaSection.classList.toggle("is-hidden", !showCatalog || !showMedia);
+    }
+    if (ui.catalogStoneSection) {
+      const showStone = CATALOG_ITEM_TABS.has(state.tab);
+      ui.catalogStoneSection.classList.toggle("is-hidden", !showCatalog || !showStone);
+    }
+    if (ui.missingPanel) ui.missingPanel.classList.toggle("is-hidden", false);
+    if (ui.activityFeed) ui.activityFeed.closest(".drawer-section")?.classList.toggle("is-hidden", showCatalog);
+    if (ui.orderDetailsSection) ui.orderDetailsSection.classList.toggle("is-hidden", showCatalog);
+    if (ui.sizeBlock) ui.sizeBlock.classList.toggle("is-hidden", showCatalog);
+    if (ui.summaryCard) ui.summaryCard.classList.toggle("is-hidden", showCatalog);
+    if (ui.nextActionPanel) ui.nextActionPanel.classList.toggle("is-hidden", showCatalog);
+  }
+
+  function renderCatalogFields(item, enums) {
+    if (!ui.catalogFields) return;
+    if (state.tab === "media-library") {
+      const headers = Array.isArray(state.catalogHeaders) && state.catalogHeaders.length
+        ? state.catalogHeaders
+        : Object.keys(item || {});
+      const keys = headers
+        .map((key) => String(key || "").trim())
+        .filter((key) => key && key !== "row_number");
+      const longFields = new Set(["description", "label", "alt", "url"]);
+      ui.catalogFields.innerHTML = keys
+        .map((key) => {
+          const value = item?.[key] ?? "";
+          const label = key.replace(/_/g, " ");
+          const isLong = longFields.has(key);
+          const isReadOnly = key === "created_at";
+          if (isLong) {
+            return `
+              <label class="field full-span">
+                <span>${escapeHtml(label)}</span>
+                <textarea rows="2" data-field="${escapeAttribute(key)}" ${isReadOnly ? 'data-readonly="true" disabled' : ""}>${escapeHtml(
+                  String(value || "")
+                )}</textarea>
+              </label>
+            `;
+          }
+          return `
+            <label class="field">
+              <span>${escapeHtml(label)}</span>
+              <input type="text" data-field="${escapeAttribute(key)}" value="${escapeAttribute(
+                String(value || "")
+              )}" ${isReadOnly ? 'data-readonly="true" disabled' : ""} />
+            </label>
+          `;
+        })
+        .join("");
+      return;
+    }
+    if (!window.CatalogForm) return;
+    const form = window.CatalogForm;
+    const safeEnums = enums || {};
+    const value = item || {};
+    const allowCustomLists = new Set(["categories", "styles", "motifs", "tags"]);
+    const typeValue =
+      value.type || (state.tab === "products" ? "product" : state.tab === "inspirations" ? "inspiration" : "");
+    const activeValue =
+      value.is_active === undefined || value.is_active === null
+        ? state.isNewRow
+        : Boolean(value.is_active);
+    const featuredValue = Boolean(value.is_featured);
+    const slugHelper = `<button class="btn btn-ghost btn-small" type="button" data-slug-generate>Generate</button>`;
+    const fields = [
+      form.renderTextInput({ label: "ID", field: "id", value: value.id || "", readOnly: true }),
+      form.renderTextInput({ label: "Type", field: "type", value: typeValue, readOnly: true }),
+      form.renderTextInput({ label: "Name", field: "name", value: value.name || "" }),
+      form.renderTextInput({
+        label: "Slug",
+        field: "slug",
+        value: value.slug || "",
+        helperHtml: slugHelper,
+      }),
+      form.renderTextarea({
+        label: "Description",
+        field: "description",
+        value: value.description || "",
+        fullSpan: true,
+        rows: 2,
+        counter: true,
+      }),
+      form.renderTextarea({
+        label: "Short description",
+        field: "short_desc",
+        value: value.short_desc || "",
+        fullSpan: true,
+        rows: 2,
+        counter: true,
+      }),
+      form.renderTextarea({
+        label: "Long description",
+        field: "long_desc",
+        value: value.long_desc || "",
+        fullSpan: true,
+        rows: 4,
+        counter: true,
+      }),
+      form.renderTextInput({
+        label: "Hero image URL",
+        field: "hero_image",
+        value: value.hero_image || "",
+        fullSpan: true,
+        placeholder: "https://...",
+      }),
+      form.renderEnumSelect({
+        label: "Design code",
+        field: "design_code",
+        value: value.design_code || "",
+        options: safeEnums.design_codes,
+        includeEmpty: true,
+        placeholder: "Select",
+      }),
+      form.renderEnumSelect({
+        label: "Collection",
+        field: "collection",
+        value: value.collection || "",
+        options: safeEnums.collections,
+        includeEmpty: true,
+        placeholder: "Select",
+      }),
+      form.renderEnumSelect({
+        label: "Gender",
+        field: "gender",
+        value: value.gender || "",
+        options: safeEnums.genders,
+        includeEmpty: true,
+        placeholder: "Select",
+      }),
+      form.renderToggle({ label: "Active", field: "is_active", value: activeValue }),
+      form.renderToggle({ label: "Featured", field: "is_featured", value: featuredValue }),
+      form.renderMultiSelectChips({
+        label: "Categories",
+        field: "categories",
+        values: value.categories || [],
+        enumKey: "categories",
+        allowCustom: allowCustomLists.has("categories"),
+        placeholder: "Add category",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Styles",
+        field: "styles",
+        values: value.styles || [],
+        enumKey: "styles",
+        allowCustom: allowCustomLists.has("styles"),
+        placeholder: "Add style",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Motifs",
+        field: "motifs",
+        values: value.motifs || [],
+        enumKey: "motifs",
+        allowCustom: allowCustomLists.has("motifs"),
+        placeholder: "Add motif",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Metals",
+        field: "metals",
+        values: value.metals || [],
+        enumKey: "metals",
+        allowCustom: false,
+        placeholder: "Add metal",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Metal options",
+        field: "metal_options",
+        values: value.metal_options || [],
+        enumKey: "metals",
+        allowCustom: true,
+        placeholder: "Add option",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Stone types",
+        field: "stone_types",
+        values: value.stone_types || [],
+        enumKey: "stone_types",
+        allowCustom: false,
+        placeholder: "Add stone type",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Stone type options",
+        field: "stone_type_options",
+        values: value.stone_type_options || [],
+        enumKey: "stone_types",
+        allowCustom: true,
+        placeholder: "Add option",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Cut",
+        field: "cut",
+        values: value.cut || [],
+        enumKey: "cuts",
+        allowCustom: false,
+        placeholder: "Add cut",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Clarity",
+        field: "clarity",
+        values: value.clarity || [],
+        enumKey: "clarities",
+        allowCustom: false,
+        placeholder: "Add clarity",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Color",
+        field: "color",
+        values: value.color || [],
+        enumKey: "colors",
+        allowCustom: false,
+        placeholder: "Add color",
+        fullSpan: true,
+      }),
+      form.renderTextInput({
+        label: "Carat",
+        field: "carat",
+        value: value.carat || "",
+        placeholder: "1.0",
+        type: "number",
+      }),
+      form.renderTextInput({
+        label: "Stone weight",
+        field: "stone_weight",
+        value: value.stone_weight || "",
+        placeholder: "0.25",
+        type: "number",
+      }),
+      form.renderRangeInput({
+        label: "Stone weight range",
+        field: "stone_weight_range",
+        value: value.stone_weight_range || "",
+        unit: "ct",
+      }),
+      form.renderTextInput({
+        label: "Metal weight",
+        field: "metal_weight",
+        value: value.metal_weight || "",
+        placeholder: "3.2",
+        type: "number",
+      }),
+      form.renderRangeInput({
+        label: "Metal weight range",
+        field: "metal_weight_range",
+        value: value.metal_weight_range || "",
+        unit: "g",
+      }),
+      form.renderListTextarea({
+        label: "Palette",
+        field: "palette",
+        values: value.palette || [],
+        placeholder: "metal:18K Yellow Gold",
+        fullSpan: true,
+      }),
+      form.renderListTextarea({
+        label: "Takeaways",
+        field: "takeaways",
+        values: value.takeaways || [],
+        placeholder: "One point per line",
+        fullSpan: true,
+      }),
+      form.renderListTextarea({
+        label: "Translation notes",
+        field: "translation_notes",
+        values: value.translation_notes || [],
+        placeholder: "One note per line",
+        fullSpan: true,
+      }),
+      form.renderMultiSelectChips({
+        label: "Tags",
+        field: "tags",
+        values: value.tags || [],
+        enumKey: "tags",
+        allowCustom: allowCustomLists.has("tags"),
+        placeholder: "Add tag",
+        fullSpan: true,
+      }),
+      form.renderTextInput({
+        label: "Created at",
+        field: "created_at",
+        value: value.created_at || "",
+        readOnly: true,
+      }),
+      form.renderTextInput({
+        label: "Updated at",
+        field: "updated_at",
+        value: value.updated_at || "",
+        readOnly: true,
+      }),
+    ];
+
+    ui.catalogFields.innerHTML = fields.join("");
+
+    const handleCatalogChange = () => {
+      refreshMissingInfo();
+      updatePrimaryActionState();
+      updateActionButtonState();
+    };
+    form.init(ui.catalogFields, safeEnums, handleCatalogChange);
+
+    const slugButton = ui.catalogFields.querySelector("[data-slug-generate]");
+    if (slugButton) {
+      slugButton.addEventListener("click", () => {
+        const nameInput = ui.catalogFields.querySelector('[data-field="name"]');
+        const slugInput = ui.catalogFields.querySelector('[data-field="slug"]');
+        if (!nameInput || !slugInput || !window.CatalogUtils) return;
+        slugInput.value = window.CatalogUtils.normalizeSlug(nameInput.value || "");
+        slugInput.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
+    ui.catalogFields.querySelectorAll("[data-char-count]").forEach((input) => {
+      const counter = input.closest(".field")?.querySelector("[data-char-counter]");
+      if (!counter) return;
+      const updateCounter = () => {
+        counter.textContent = String(input.value.length || 0);
+      };
+      updateCounter();
+      input.addEventListener("input", updateCounter);
+    });
+  }
+
+  async function renderCatalogMedia(item) {
+    if (!ui.catalogMediaList) return;
+    if (!CATALOG_ITEM_TABS.has(state.tab)) {
+      ui.catalogMediaList.innerHTML = "";
+      return;
+    }
+    const slug = item?.slug || "";
+    if (!slug) {
+      state.catalogMediaState = { items: [] };
+      ui.catalogMediaList.innerHTML = `<div class="muted">Save this record before linking media.</div>`;
+      return;
+    }
+    const mappingPath = state.tab === "products" ? "/product-media" : "/inspiration-media";
+    const mappingParam = state.tab === "products" ? "product_slug" : "inspiration_slug";
+    try {
+      const [mediaLibrary, mappings] = await Promise.all([
+        apiFetch("/media-library?limit=500&offset=0"),
+        apiFetch(`${mappingPath}?${mappingParam}=${encodeURIComponent(slug)}&limit=500&offset=0`),
+      ]);
+      state.catalogMediaState = { items: mappings.items || [] };
+      const libraryMap = new Map(
+        (mediaLibrary.items || []).map((entry) => [entry.media_id, entry])
+      );
+      const cards = (mappings.items || []).map((mapping) => {
+        const media = libraryMap.get(mapping.media_id) || {};
+        const url = normalizeImageUrl(media.url || "");
+        const isVideo = String(media.media_type || "").toLowerCase().startsWith("video");
+        const mediaNode = isVideo
+          ? `<video src="${escapeAttribute(url)}" controls></video>`
+          : `<img src="${escapeAttribute(url)}" alt="">`;
+        const position = mapping.position || "--";
+        const order = mapping.sort_order || mapping.order || "--";
+        const primary = String(mapping.is_primary || "") === "1" ? "Yes" : "No";
+        return `
+          <div class="catalog-media-item">
+            ${mediaNode}
+            <div class="catalog-media-meta">${escapeHtml(mapping.media_id || "--")}</div>
+            <div class="catalog-media-meta">${escapeHtml(media.label || media.description || "")}</div>
+            <div class="catalog-media-meta">Position: ${escapeHtml(position)} · Order: ${escapeHtml(
+          String(order)
+        )} · Primary: ${escapeHtml(primary)}</div>
+            <div class="catalog-media-actions">
+              <button class="btn btn-ghost btn-small" type="button" data-media-copy data-url="${escapeAttribute(
+                url
+              )}">Copy URL</button>
+              <button class="btn btn-ghost btn-small" type="button" data-media-hero data-url="${escapeAttribute(
+                url
+              )}">Set hero</button>
+              <a class="btn btn-ghost btn-small" href="${escapeAttribute(
+                url
+              )}" target="_blank" rel="noopener">Open</a>
+            </div>
+          </div>
+        `;
+      });
+      ui.catalogMediaList.innerHTML = cards.length ? cards.join("") : `<div class="muted">No media linked yet.</div>`;
+    } catch (error) {
+      state.catalogMediaState = { items: [] };
+      ui.catalogMediaList.innerHTML = `<div class="muted">Unable to load media.</div>`;
+    }
+  }
+
+  function getStoneRoleOptions(enums) {
+    const roles = enums?.stone_roles;
+    return Array.isArray(roles) && roles.length ? roles : DEFAULT_STONE_ROLES;
+  }
+
+  function buildSelectOptions(options, selected, includeEmpty, placeholder) {
+    const safeSelected = String(selected || "");
+    const items = [];
+    if (includeEmpty) {
+      items.push(`<option value="">${escapeHtml(placeholder || "Select")}</option>`);
+    }
+    (options || []).forEach((option) => {
+      const value = String(option.value || "");
+      const label = String(option.label || option.value || "");
+      const isSelected = safeSelected && value.toLowerCase() === safeSelected.toLowerCase();
+      items.push(
+        `<option value="${escapeAttribute(value)}"${isSelected ? " selected" : ""}>${escapeHtml(label)}</option>`
+      );
+    });
+    return items.join("");
+  }
+
+  function renderStoneOptionRow(entry, enums) {
+    const roleOptions = getStoneRoleOptions(enums);
+    const stoneTypeOptions = enums.stone_types || [];
+    const cutOptions = enums.cuts || [];
+    const clarityOptions = enums.clarities || [];
+    const colorOptions = enums.colors || [];
+    const isPrimary = String(entry.is_primary || entry.isPrimary || "") === "1" || entry.is_primary === true;
+    return `
+      <div class="catalog-stone-row" data-stone-option-id="${escapeAttribute(entry.id || "")}">
+        <div class="catalog-stone-grid">
+          <label class="field">
+            <span>Role</span>
+            <select data-stone-field="role">
+              ${buildSelectOptions(roleOptions, entry.role, true, "Select")}
+            </select>
+          </label>
+          <label class="field">
+            <span>Stone type</span>
+            <select data-stone-field="stone_type">
+              ${buildSelectOptions(stoneTypeOptions, entry.stone_type, true, "Select")}
+            </select>
+          </label>
+          <label class="field">
+            <span>Carat min</span>
+            <input type="number" step="0.01" min="0" data-stone-field="ct_min" value="${escapeAttribute(
+              entry.ct_min ?? ""
+            )}">
+          </label>
+          <label class="field">
+            <span>Carat max</span>
+            <input type="number" step="0.01" min="0" data-stone-field="ct_max" value="${escapeAttribute(
+              entry.ct_max ?? ""
+            )}">
+          </label>
+          <label class="field">
+            <span>Count min</span>
+            <input type="number" step="1" min="0" data-stone-field="count_min" value="${escapeAttribute(
+              entry.count_min ?? ""
+            )}">
+          </label>
+          <label class="field">
+            <span>Count max</span>
+            <input type="number" step="1" min="0" data-stone-field="count_max" value="${escapeAttribute(
+              entry.count_max ?? ""
+            )}">
+          </label>
+          <label class="field">
+            <span>Cut</span>
+            <select data-stone-field="cut">
+              ${buildSelectOptions(cutOptions, entry.cut, true, "Select")}
+            </select>
+          </label>
+          <label class="field">
+            <span>Clarity</span>
+            <select data-stone-field="clarity">
+              ${buildSelectOptions(clarityOptions, entry.clarity, true, "Select")}
+            </select>
+          </label>
+          <label class="field">
+            <span>Color</span>
+            <select data-stone-field="color">
+              ${buildSelectOptions(colorOptions, entry.color, true, "Select")}
+            </select>
+          </label>
+          <label class="field">
+            <span>Primary</span>
+            <select data-stone-field="is_primary">
+              <option value="" ${isPrimary ? "" : "selected"}>No</option>
+              <option value="1" ${isPrimary ? "selected" : ""}>Yes</option>
+            </select>
+          </label>
+          <label class="field full-span">
+            <span>Notes</span>
+            <input type="text" data-stone-field="notes" value="${escapeAttribute(entry.notes || "")}">
+          </label>
+        </div>
+        <div class="catalog-stone-actions">
+          <button class="btn btn-ghost btn-small" type="button" data-stone-save>Save</button>
+          <button class="btn btn-ghost btn-small" type="button" data-stone-delete>Delete</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function getStoneOptionRowValues(row) {
+    const read = (key) => {
+      const field = row.querySelector(`[data-stone-field="${key}"]`);
+      return field ? field.value.trim() : "";
+    };
+    return {
+      role: read("role"),
+      stone_type: read("stone_type"),
+      ct_min: read("ct_min"),
+      ct_max: read("ct_max"),
+      count_min: read("count_min"),
+      count_max: read("count_max"),
+      cut: read("cut"),
+      clarity: read("clarity"),
+      color: read("color"),
+      is_primary: read("is_primary"),
+      notes: read("notes"),
+    };
+  }
+
+  async function renderCatalogStoneOptions(item) {
+    if (!ui.catalogStoneList) return;
+    if (!CATALOG_ITEM_TABS.has(state.tab)) {
+      ui.catalogStoneList.innerHTML = "";
+      return;
+    }
+    const catalogId = item?.id || "";
+    const catalogSlug = item?.slug || "";
+    if (!catalogId && !catalogSlug) {
+      state.catalogStoneOptions = { items: [] };
+      ui.catalogStoneList.innerHTML = `<div class="muted">Save this record before adding stone options.</div>`;
+      return;
+    }
+    const params = new URLSearchParams();
+    if (catalogId) params.set("catalog_id", catalogId);
+    if (catalogSlug) params.set("catalog_slug", catalogSlug);
+    try {
+      const data = await apiFetch(`/catalog-stone-options?${params.toString()}`);
+      const items = Array.isArray(data.items) ? data.items : [];
+      state.catalogStoneOptions = { items };
+      const enums = state.catalogEnums || {};
+      const rows = items.map((entry) => renderStoneOptionRow(entry, enums));
+      ui.catalogStoneList.innerHTML = rows.length ? rows.join("") : `<div class="muted">No stone options yet.</div>`;
+    } catch (error) {
+      state.catalogStoneOptions = { items: [] };
+      ui.catalogStoneList.innerHTML = `<div class="muted">Unable to load stone options.</div>`;
+    }
+  }
+
+  function getStoneAddValues() {
+    return {
+      role: ui.stoneAddRole?.value.trim() || "",
+      stone_type: ui.stoneAddType?.value.trim() || "",
+      ct_min: ui.stoneAddCtMin?.value.trim() || "",
+      ct_max: ui.stoneAddCtMax?.value.trim() || "",
+      count_min: ui.stoneAddCountMin?.value.trim() || "",
+      count_max: ui.stoneAddCountMax?.value.trim() || "",
+      cut: ui.stoneAddCut?.value.trim() || "",
+      clarity: ui.stoneAddClarity?.value.trim() || "",
+      color: ui.stoneAddColor?.value.trim() || "",
+      is_primary: ui.stoneAddPrimary?.value || "",
+      notes: ui.stoneAddNotes?.value.trim() || "",
+    };
+  }
+
+  function resetStoneAddForm() {
+    if (ui.stoneAddRole) ui.stoneAddRole.value = "";
+    if (ui.stoneAddType) ui.stoneAddType.value = "";
+    if (ui.stoneAddCtMin) ui.stoneAddCtMin.value = "";
+    if (ui.stoneAddCtMax) ui.stoneAddCtMax.value = "";
+    if (ui.stoneAddCountMin) ui.stoneAddCountMin.value = "";
+    if (ui.stoneAddCountMax) ui.stoneAddCountMax.value = "";
+    if (ui.stoneAddCut) ui.stoneAddCut.value = "";
+    if (ui.stoneAddClarity) ui.stoneAddClarity.value = "";
+    if (ui.stoneAddColor) ui.stoneAddColor.value = "";
+    if (ui.stoneAddPrimary) ui.stoneAddPrimary.value = "";
+    if (ui.stoneAddNotes) ui.stoneAddNotes.value = "";
+  }
+
+  async function addStoneOption() {
+    if (!state.selectedItem) return;
+    const catalogId = state.selectedItem.id || "";
+    const catalogSlug = state.selectedItem.slug || "";
+    if (!catalogId && !catalogSlug) {
+      showToast("Save the item before adding stone options.", "error");
+      return;
+    }
+    const fields = getStoneAddValues();
+    if (!fields.role || !fields.stone_type) {
+      showToast("Role and stone type are required.", "error");
+      return;
+    }
+    try {
+      await apiFetch("/catalog-stone-options/action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "add_row",
+          fields: {
+            catalog_id: catalogId,
+            catalog_slug: catalogSlug,
+            ...fields,
+          },
+        }),
+      });
+      resetStoneAddForm();
+      await renderCatalogStoneOptions(state.selectedItem);
+      showToast("Stone option added.");
+    } catch (error) {
+      showToast("Unable to add stone option.", "error");
+    }
+  }
+
+  async function saveStoneOption(row) {
+    const id = row.getAttribute("data-stone-option-id") || "";
+    if (!id) return;
+    const fields = getStoneOptionRowValues(row);
+    if (!fields.role || !fields.stone_type) {
+      showToast("Role and stone type are required.", "error");
+      return;
+    }
+    try {
+      await apiFetch("/catalog-stone-options/action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "update",
+          id,
+          fields,
+        }),
+      });
+      await renderCatalogStoneOptions(state.selectedItem);
+      showToast("Stone option saved.");
+    } catch (error) {
+      showToast("Unable to save stone option.", "error");
+    }
+  }
+
+  async function deleteStoneOption(row) {
+    const id = row.getAttribute("data-stone-option-id") || "";
+    if (!id) return;
+    if (!confirm("Delete this stone option?")) return;
+    try {
+      await apiFetch("/catalog-stone-options/action", {
+        method: "POST",
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      await renderCatalogStoneOptions(state.selectedItem);
+      showToast("Stone option deleted.");
+    } catch (error) {
+      showToast("Unable to delete stone option.", "error");
+    }
+  }
+
+  function getCatalogSlug() {
+    return state.selectedItem?.slug || "";
+  }
+
+  function getCatalogMappingEndpoint() {
+    return state.tab === "products" ? "/product-media/action" : "/inspiration-media/action";
+  }
+
+  function getCatalogMappingPayload(mediaId, position, order, isPrimary) {
+    const slug = getCatalogSlug();
+    if (!slug) return null;
+    const fields =
+      state.tab === "products"
+        ? {
+            product_slug: slug,
+            media_id: mediaId,
+            position,
+            order,
+            is_primary: isPrimary,
+          }
+        : {
+            inspiration_slug: slug,
+            media_id: mediaId,
+            position,
+            order,
+            is_primary: isPrimary,
+          };
+    return { action: "add_row", fields };
+  }
+
+  async function linkExistingMedia() {
+    const mediaId = ui.mediaId?.value.trim();
+    if (!mediaId) {
+      showToast("Add a media ID first.", "error");
+      return;
+    }
+    const position = ui.mediaPositionExisting?.value.trim() || "";
+    const order = ui.mediaOrderExisting?.value.trim() || "";
+    if (!position) {
+      showToast("Choose a media position.", "error");
+      return;
+    }
+    const isPrimary = ui.mediaPrimaryExisting?.value || "";
+    if (order && Number.isNaN(Number(order))) {
+      showToast("Order must be a number.", "error");
+      return;
+    }
+    const payload = getCatalogMappingPayload(mediaId, position, order, isPrimary);
+    if (!payload) {
+      showToast("Save the record before linking media.", "error");
+      return;
+    }
+    const result = await apiFetch(getCatalogMappingEndpoint(), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!result.ok) {
+      showToast("Linking failed.", "error");
+      return;
+    }
+    showToast("Media linked");
+    renderCatalogMedia(state.selectedItem);
+  }
+
+  async function uploadAndLinkMedia() {
+    const file = ui.mediaFile?.files?.[0];
+    if (!file) {
+      showToast("Choose a file first.", "error");
+      return;
+    }
+    const label = ui.mediaLabel?.value.trim() || "";
+    const alt = ui.mediaAlt?.value.trim() || "";
+    const description = ui.mediaDescription?.value.trim() || "";
+    const position = ui.mediaPosition?.value.trim() || "";
+    const order = ui.mediaOrder?.value.trim() || "";
+    const isPrimary = ui.mediaPrimary?.value || "";
+    if (order && Number.isNaN(Number(order))) {
+      showToast("Order must be a number.", "error");
+      return;
+    }
+    if (!position) {
+      showToast("Choose a media position.", "error");
+      return;
+    }
+    try {
+      const resolvedBase = getApiBase();
+      const base = resolvedBase.endsWith("/") ? resolvedBase : `${resolvedBase}/`;
+      const localEmail = isLocalApi(base) ? getStoredAdminEmail() : "";
+      const formData = new FormData();
+      formData.append("file", file);
+      if (label) formData.append("label", label);
+      const uploadUrl = new URL("media/upload", base);
+      addLocalAdminQuery(uploadUrl, base, localEmail);
+      const uploadResponse = await fetch(uploadUrl.toString(), {
+        method: "POST",
+        credentials: isLocalApi(base) ? "omit" : "include",
+        body: formData,
+      });
+      const uploadResult = await uploadResponse.json();
+      if (!uploadResult.ok) throw new Error("upload_failed");
+      const media = uploadResult.media || {};
+      const createdAt = new Date().toISOString();
+      await apiFetch("/media-library/action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "add_row",
+          fields: {
+            media_id: media.media_id,
+            url: media.url,
+            media_type: media.media_type || "image",
+            label,
+            alt,
+            description,
+            created_at: createdAt,
+          },
+        }),
+      });
+      const mappingPayload = getCatalogMappingPayload(
+        media.media_id,
+        position,
+        order,
+        isPrimary
+      );
+      if (mappingPayload) {
+        await apiFetch(getCatalogMappingEndpoint(), {
+          method: "POST",
+          body: JSON.stringify(mappingPayload),
+        });
+      }
+      showToast("Media uploaded");
+      renderCatalogMedia(state.selectedItem);
+      if (ui.mediaFile) ui.mediaFile.value = "";
+    } catch (error) {
+      showToast("Upload failed.", "error");
+    }
   }
 
   function applyOrderDetailsVisibility() {
@@ -1346,6 +2759,11 @@
     });
     toggleFieldVisibility("quote_option_1_clarity", !goldOnly);
     toggleFieldVisibility("quote_option_1_color", !goldOnly);
+    if (goldOnly) {
+      QUOTE_OPTION_FIELDS.forEach((_, index) => {
+        if (index > 0) setOptionStatus(index, "idle");
+      });
+    }
   }
 
   function applyDiscountControlState() {
@@ -1367,6 +2785,34 @@
     applyGoldOnlyQuoteState();
     if (ui.sizeBlock && state.tab !== "quotes") {
       ui.sizeBlock.classList.add("is-hidden");
+    }
+    if (ui.quoteExtras) {
+      ui.quoteExtras.classList.toggle("is-hidden", state.tab === "quotes");
+    }
+    if (ui.notesToggle) {
+      ui.notesToggle.open = state.tab !== "quotes";
+    }
+    if (ui.summaryMore) {
+      ui.summaryMore.classList.toggle("is-hidden", state.tab !== "quotes");
+    }
+    if (ui.summaryPriceRow) {
+      ui.summaryPriceRow.classList.toggle("is-hidden", state.tab === "quotes");
+    }
+    relocateActivityForQuotes();
+  }
+
+  function relocateActivityForQuotes() {
+    if (!ui.activitySection || !ui.activitySlot) return;
+    if (state.tab === "quotes") {
+      if (!ui.activitySection.dataset.originalParent) {
+        ui.activitySection.dataset.originalParent = "detail-main";
+      }
+      ui.activitySlot.appendChild(ui.activitySection);
+    } else if (ui.activitySection.dataset.originalParent === "detail-main") {
+      const main = document.querySelector(".detail-main");
+      if (main && !main.contains(ui.activitySection)) {
+        main.insertBefore(ui.activitySection, main.firstChild);
+      }
     }
   }
 
@@ -1488,6 +2934,23 @@
   function updateSummaryCard(item) {
     if (!item) return;
     const status = normalizeStatus(item.status);
+    const isQuoteOrOrder = state.tab === "quotes" || state.tab === "orders";
+    const isQuote = state.tab === "quotes";
+    if (ui.summaryQuoteBlock) {
+      ui.summaryQuoteBlock.classList.toggle("is-hidden", !isQuoteOrOrder);
+    }
+    if (ui.summaryPreferencesBlock) {
+      ui.summaryPreferencesBlock.classList.toggle("is-hidden", !isQuoteOrOrder);
+    }
+    if (ui.summaryOptionsBlock) {
+      ui.summaryOptionsBlock.classList.toggle("is-hidden", !isQuote);
+    }
+    if (ui.summaryNotesBlock) {
+      ui.summaryNotesBlock.classList.toggle("is-hidden", !isQuoteOrOrder);
+    }
+    if (ui.summarySizesBlock) {
+      ui.summarySizesBlock.classList.toggle("is-hidden", !isQuote);
+    }
     if (ui.summaryStatus) {
       ui.summaryStatus.textContent = status;
       ui.summaryStatus.dataset.status = status;
@@ -1507,6 +2970,74 @@
     if (ui.summaryStoneWeight) {
       ui.summaryStoneWeight.textContent = formatStoneWeight(item.stone_weight) || "--";
     }
+    if (ui.summaryMetalWeight) {
+      ui.summaryMetalWeight.textContent = formatGrams(item.metal_weight) || "--";
+    }
+    if (ui.summaryMetalAdjustment) {
+      ui.summaryMetalAdjustment.textContent = formatSignedGrams(item.metal_weight_adjustment) || "--";
+    }
+    if (ui.summaryDiamondBreakdown) {
+      ui.summaryDiamondBreakdown.textContent = item.diamond_breakdown || "--";
+    }
+    if (ui.summaryDiscount) {
+      const type = String(item.quote_discount_type || "").trim();
+      const percent = String(item.quote_discount_percent || "").trim();
+      if (type && percent) {
+        ui.summaryDiscount.textContent = `${type} ${percent}%`;
+      } else if (type) {
+        ui.summaryDiscount.textContent = type;
+      } else if (percent) {
+        ui.summaryDiscount.textContent = `${percent}%`;
+      } else {
+        ui.summaryDiscount.textContent = "--";
+      }
+    }
+    if (ui.summaryInterests) {
+      ui.summaryInterests.textContent = item.interests || "--";
+    }
+    if (ui.summaryContactPreference) {
+      ui.summaryContactPreference.textContent = item.contact_preference || "--";
+    }
+    if (ui.summarySubscription) {
+      ui.summarySubscription.textContent = item.subscription_status || "--";
+    }
+    if (ui.summaryCustomerNotes) {
+      ui.summaryCustomerNotes.textContent = item.customer_notes || item.request_notes || "--";
+    }
+    if (ui.summaryOption1) {
+      ui.summaryOption1.textContent = formatPrice(item.quote_option_1_price_18k) || "--";
+    }
+    if (ui.summaryOption2) {
+      ui.summaryOption2.textContent = formatPrice(item.quote_option_2_price_18k) || "--";
+    }
+    if (ui.summaryOption3) {
+      ui.summaryOption3.textContent = formatPrice(item.quote_option_3_price_18k) || "--";
+    }
+    [ui.summaryOption1, ui.summaryOption2, ui.summaryOption3].forEach((node, index) => {
+      if (!node) return;
+      const row = node.closest(".summary-line");
+      if (!row) return;
+      row.classList.toggle("is-recommended", state.recommendedOptionIndex === index);
+    });
+    if (ui.summaryOptionRecommended) {
+      const recLabel =
+        state.recommendedOptionIndex === null
+          ? "--"
+          : `Option ${state.recommendedOptionIndex + 1}`;
+      ui.summaryOptionRecommended.textContent = recLabel;
+    }
+    if (ui.summaryLastPriced) {
+      ui.summaryLastPriced.textContent = resolveLastPricedLabel();
+    }
+    if (ui.summarySizeRing) {
+      ui.summarySizeRing.textContent = ui.sizeRing?.value?.trim() || "--";
+    }
+    if (ui.summarySizeBracelet) {
+      ui.summarySizeBracelet.textContent = ui.sizeBracelet?.value?.trim() || "--";
+    }
+    if (ui.summarySizeChain) {
+      ui.summarySizeChain.textContent = ui.sizeChain?.value?.trim() || "--";
+    }
     if (ui.summaryCustomer) ui.summaryCustomer.textContent = item.name || "--";
     if (ui.summaryEmail) ui.summaryEmail.textContent = item.email || "--";
     if (ui.summaryPhone) ui.summaryPhone.textContent = formatPhone(item.phone);
@@ -1517,35 +3048,73 @@
     return `<button class="chip missing-chip" type="button" data-focus-target='${selector}'>${label}</button>`;
   }
 
+  function buildWarningChip(label, selector) {
+    return `<button class="chip is-warning" type="button" data-focus-target='${selector}'>${label}</button>`;
+  }
+
   function refreshMissingInfo() {
     if (!ui.missingList) return;
-    const chips = [];
-    const metalWeight = getEditValue("metal_weight");
-    if (!metalWeight) {
-      chips.push(buildMissingChip("Metal weight missing", '[data-field="metal_weight"]'));
+    let chips = [];
+    if (state.tab === "media-library") {
+      ui.missingList.innerHTML = '<span class="muted">No missing details.</span>';
+      updateNextActionText();
+      return;
     }
-    const stoneWeight = getEditValue("stone_weight");
-    if (!stoneWeight) {
-      chips.push(buildMissingChip("Stone weight missing", '[data-field="stone_weight"]'));
+    if (CATALOG_TABS.has(state.tab)) {
+      const formState = collectCatalogFormState();
+      if (window.CatalogUtils) {
+        const enums = state.catalogEnums || {};
+        const normalized = window.CatalogUtils.normalizeCatalogItem(formState, enums);
+        state.catalogFormState = normalized.normalized;
+        state.catalogValidation = window.CatalogUtils.validateCatalogItem(
+          normalized.normalized,
+          enums,
+          state.catalogMediaState
+        );
+        const missing = state.catalogValidation.missingCritical || [];
+        const warnings = state.catalogValidation.warnings || [];
+        chips = [
+          ...missing.map((entry) => buildMissingChip(entry.message, entry.selector || "")),
+          ...warnings.map((entry) => buildWarningChip(entry.message, `[data-field="${entry.field}"]`)),
+        ];
+      }
+      ui.missingList.innerHTML = chips.length
+        ? chips.join("")
+        : '<span class="muted">No missing details.</span>';
+      updateNextActionText();
+      return;
     }
-    const stoneValue = getEditValue("stone").toLowerCase();
-    const breakdownValue = getEditValue("diamond_breakdown");
-    const isDiamond = DIAMOND_TERMS.some((term) => stoneValue.includes(term));
-    if (isDiamond && !breakdownValue) {
-      chips.push(buildMissingChip("Diamond breakdown empty", '[data-field="diamond_breakdown"]'));
-    }
-    const shippingStatus = getOrderDetailsValue("shipping_status").toLowerCase();
-    const trackingNumber = getOrderDetailsValue("tracking_number");
-    if (TRACKING_REQUIRED_STATUSES.has(shippingStatus) && !trackingNumber) {
-      chips.push(
-        buildMissingChip("Tracking # required for shipping", '[data-order-details-field="tracking_number"]')
-      );
-    }
-    const etaValue = getOrderDetailsValue("delivery_eta");
-    if (etaValue && !/^\d{4}-\d{2}-\d{2}$/.test(etaValue)) {
-      chips.push(
-        buildMissingChip("Delivery ETA needs YYYY-MM-DD", '[data-order-details-field="delivery_eta"]')
-      );
+    if (state.tab === "quotes") {
+      const basePayload = collectBasePricingPayload();
+      chips = computeMissingCriticalInfo(basePayload);
+    } else {
+      const metalWeight = getEditValue("metal_weight");
+      if (!metalWeight) {
+        chips.push(buildMissingChip("Metal weight missing", '[data-field="metal_weight"]'));
+      }
+      const stoneWeight = getEditValue("stone_weight");
+      if (!stoneWeight) {
+        chips.push(buildMissingChip("Stone weight missing", '[data-field="stone_weight"]'));
+      }
+      const stoneValue = getEditValue("stone").toLowerCase();
+      const breakdownValue = getEditValue("diamond_breakdown");
+      const isDiamond = DIAMOND_TERMS.some((term) => stoneValue.includes(term));
+      if (isDiamond && !breakdownValue) {
+        chips.push(buildMissingChip("Diamond breakdown empty", '[data-field="diamond_breakdown"]'));
+      }
+      const shippingStatus = getOrderDetailsValue("shipping_status").toLowerCase();
+      const trackingNumber = getOrderDetailsValue("tracking_number");
+      if (TRACKING_REQUIRED_STATUSES.has(shippingStatus) && !trackingNumber) {
+        chips.push(
+          buildMissingChip("Tracking # required for shipping", '[data-order-details-field="tracking_number"]')
+        );
+      }
+      const etaValue = getOrderDetailsValue("delivery_eta");
+      if (etaValue && !/^\d{4}-\d{2}-\d{2}$/.test(etaValue)) {
+        chips.push(
+          buildMissingChip("Delivery ETA needs YYYY-MM-DD", '[data-order-details-field="delivery_eta"]')
+        );
+      }
     }
     ui.missingList.innerHTML = chips.length ? chips.join("") : '<span class="muted">No missing details.</span>';
     updateNextActionText();
@@ -1576,7 +3145,8 @@
 
   function updateDiscountPreview() {
     if (!ui.discountFinal) return;
-    const base = Number(getEditValue("price"));
+    const baseValue = getEditValue("price") || getEditValue("quote_option_1_price_18k");
+    const base = Number(baseValue);
     const percent = Number(ui.discountPercent?.value) || 0;
     if (ui.discountType && ui.discountPercent) {
       ui.discountPercent.disabled = ui.discountType.value !== "custom";
@@ -1590,6 +3160,7 @@
       percent && percent > 0 ? Math.max(0, base * (1 - percent / 100)) : base;
     ui.discountFinal.textContent = formatPrice(finalValue) || "--";
     syncDiscountFieldsFromUi();
+    updateOptionFinals();
   }
 
   function buildSummaryText(item) {
@@ -1685,6 +3256,13 @@
       ui.nextActionText.textContent = `${missingCount} critical items need attention.`;
       return;
     }
+    if (state.tab === "quotes") {
+      const gate = getQuotePricingGateState();
+      if (gate.blocked && gate.reason) {
+        ui.nextActionText.textContent = gate.reason;
+        return;
+      }
+    }
     if (state.criticalDirty) {
       ui.nextActionText.textContent = "Critical edits pending. Save before actions.";
       return;
@@ -1742,16 +3320,81 @@
   function updateActionButtonState() {
     if (!ui.actionRun || !ui.actionSelect) return;
     const disabled = ui.actionSelect.disabled || !ui.actionSelect.value;
+    if (state.tab === "quotes") {
+      const gate = getQuotePricingGateState();
+      ui.actionRun.disabled = disabled || gate.blocked;
+      updatePricingSummaryStatus(gate);
+      return;
+    }
+    if (CATALOG_ITEM_TABS.has(state.tab)) {
+      const missing = state.catalogValidation?.missingCritical?.length || 0;
+      const isDelete = ui.actionSelect.value === "delete";
+      ui.actionRun.disabled = disabled || (isDelete && (missing > 0 || state.dirtySections.edits));
+      return;
+    }
     ui.actionRun.disabled = disabled;
+  }
+
+  function updatePricingSummaryStatus(gateState) {
+    if (!ui.summaryPricingStatus) return;
+    if (state.tab !== "quotes") {
+      ui.summaryPricingStatus.textContent = "--";
+      return;
+    }
+    const gate = gateState || getQuotePricingGateState();
+    if (gate.reason === "Pricing in progress") {
+      ui.summaryPricingStatus.textContent = "Pricing...";
+      return;
+    }
+    if (gate.reason === "Missing pricing inputs") {
+      ui.summaryPricingStatus.textContent = "Missing inputs";
+      return;
+    }
+    if (gate.reason === "Pricing stale") {
+      ui.summaryPricingStatus.textContent = "Stale";
+      return;
+    }
+    if (gate.reason === "No active options") {
+      ui.summaryPricingStatus.textContent = "No active options";
+      return;
+    }
+    ui.summaryPricingStatus.textContent = "Current";
+  }
+
+  function getQuotePricingGateState() {
+    if (state.tab !== "quotes") return { blocked: false, reason: "" };
+    const basePayload = collectBasePricingPayload();
+    const missing = computeMissingCriticalInfo(basePayload);
+    const activeOptions = QUOTE_OPTION_FIELDS.map((_, index) => index).filter((index) =>
+      isOptionActive(index)
+    );
+    const statuses = activeOptions.map((index) => quotePricingState.options[index]?.status || "idle");
+    const anyPricing = statuses.some((status) => status === "pricing");
+    const allPriced =
+      activeOptions.length > 0 &&
+      statuses.every((status) => status === "priced" || status === "manual");
+    const blocked = missing.length > 0 || anyPricing || !allPriced || activeOptions.length === 0;
+    let reason = "";
+    if (missing.length) {
+      reason = "Missing pricing inputs";
+    } else if (anyPricing) {
+      reason = "Pricing in progress";
+    } else if (!allPriced) {
+      reason = "Pricing stale";
+    } else if (activeOptions.length === 0) {
+      reason = "No active options";
+    }
+    return { blocked, reason };
   }
 
   function renderActions() {
     const canEdit = canEditCurrentTab();
     const actions =
       state.tab === "orders" && state.selectedItem
-        ? ACTIONS.orders.filter((action) =>
-            (ORDER_ACTION_FLOW[normalizeStatus(state.selectedItem.status)] || []).includes(action.action)
-          )
+        ? ACTIONS.orders.filter((action) => {
+            if (action.action === "delete") return true;
+            return (ORDER_ACTION_FLOW[normalizeStatus(state.selectedItem.status)] || []).includes(action.action);
+          })
         : ACTIONS[state.tab];
     if (ui.actionSelect) {
       ui.actionSelect.innerHTML =
@@ -1780,6 +3423,11 @@
     ui.orderDetailsFields.forEach((field) => {
       field.disabled = !canEdit;
     });
+    if (ui.catalogFields) {
+      ui.catalogFields.querySelectorAll("input,textarea,select").forEach((field) => {
+        field.disabled = !canEdit || field.hasAttribute("data-readonly");
+      });
+    }
   }
 
   function renderDetailField(label, value) {
@@ -1866,11 +3514,13 @@
       renderActivityFeed();
       return;
     }
+    const isTicket = state.tab === "tickets";
+    const createdLabel = isTicket ? "Ticket created" : "Order created";
     if (item.created_at) {
       addActivityEvent({
         time: item.created_at,
         type: "system",
-        title: "Order created",
+        title: createdLabel,
         detail: `Status: ${normalizeStatus(item.status)}`,
       });
     }
@@ -1919,7 +3569,42 @@
     return changes;
   }
 
+  function collectCatalogFormState() {
+    if (!ui.catalogFields || !window.CatalogForm) return {};
+    return window.CatalogForm.readFormState(ui.catalogFields);
+  }
+
   function collectEditableUpdates() {
+    if (CATALOG_TABS.has(state.tab)) {
+      if (state.tab === "media-library") {
+        const fields = {};
+        if (!ui.catalogFields) return fields;
+        const inputs = ui.catalogFields.querySelectorAll("input,textarea,select");
+        inputs.forEach((field) => {
+          const key = field.dataset.field;
+          if (!key) return;
+          if (field.disabled) return;
+          const value = field.value;
+          if (value !== undefined) fields[key] = value.trim();
+        });
+        return fields;
+      }
+      const rawState = collectCatalogFormState();
+      if (!window.CatalogUtils || !window.CatalogUtils.normalizeCatalogItem) return rawState;
+      const enums = state.catalogEnums || {};
+      const normalized = window.CatalogUtils.normalizeCatalogItem(rawState, enums);
+      state.catalogFormState = normalized.normalized;
+      const original = state.catalogOriginalFields || {};
+      const updates = {};
+      Object.keys(normalized.fields || {}).forEach((key) => {
+        const current = normalized.fields[key];
+        const baseline = original[key];
+        if (String(current ?? "") !== String(baseline ?? "")) {
+          updates[key] = current;
+        }
+      });
+      return updates;
+    }
     const fields = {};
     syncQuoteMetalInput();
     ui.editFields.forEach((field) => {
@@ -1941,7 +3626,7 @@
     const canEdit = canEditCurrentTab();
     const notesChanged = getNotesValue() !== state.originalNotes.trim();
     if (ui.notesSave) {
-      if (PRICING_TABS.has(state.tab) || state.tab === "quotes") {
+      if (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab) || state.tab === "quotes") {
         ui.notesSave.style.display = "none";
       } else {
         ui.notesSave.style.display = "";
@@ -1959,7 +3644,9 @@
       const hasChanges =
         Object.keys(fields).length > 0 || (state.tab === "quotes" && notesChanged);
       ui.primaryAction.textContent =
-        state.isNewRow && PRICING_TABS.has(state.tab) ? "Add row" : "Save updates";
+        state.isNewRow && (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab))
+          ? "Add row"
+          : "Save updates";
       ui.primaryAction.disabled = !canEdit || !hasChanges;
       state.dirtySections.edits = hasChanges;
       updateDirtyIndicator();
@@ -2176,8 +3863,11 @@
     ui.confirmModal.setAttribute("inert", "");
   }
 
-  function populateDetail(item) {
-    const requestId = state.isNewRow ? "New row" : item.request_id || item.email || "Record";
+  async function populateDetail(item) {
+    const isCatalog = CATALOG_TABS.has(state.tab);
+    const requestId = state.isNewRow
+      ? "New row"
+      : item.request_id || item.email || item.slug || item.id || item.media_id || "Record";
     const status = item.status || "NEW";
     state.selectedId = requestId;
     state.selectedItem = item;
@@ -2194,6 +3884,7 @@
     ui.detailSub.textContent = requestId;
     if (ui.detailStatusCorner) {
       const statusValue =
+        isCatalog ||
         state.tab === "contacts" ||
         state.tab === "price-chart" ||
         state.tab === "cost-chart" ||
@@ -2205,6 +3896,13 @@
     }
     if (ui.detailError) ui.detailError.textContent = "";
 
+    if (isCatalog) {
+      await populateCatalogDetail(item);
+      return;
+    }
+
+    applyCatalogVisibility();
+
     const detailFields =
       state.tab === "contacts"
         ? [
@@ -2212,28 +3910,26 @@
             ["Name", item.name],
             ["Email", item.email],
             ["Phone", formatPhone(item.phone)],
-            ["Type", item.type],
-            ["Subscribed", item.subscribed],
-            ["Sources", item.sources],
-            ["First seen", formatDate(item.first_seen_at)],
-            ["Last seen", formatDate(item.last_seen_at)],
-            ["Last source", item.last_source],
-            ["Unsubscribed at", formatDate(item.unsubscribed_at)],
-            ["Unsubscribed reason", item.unsubscribed_reason],
+            ["Source", item.source],
+            ["Request ID", item.request_id],
+            ["Contact preference", item.contact_preference],
+            ["Interests", item.interests],
+            ["Page URL", item.page_url],
             ["Updated", formatDate(item.updated_at)],
           ]
-        : state.tab === "tickets"
-        ? [
-            ["Request ID", item.request_id],
-            ["Created", formatDate(item.created_at)],
-            ["Status", status],
-            ["Name", item.name],
-            ["Email", item.email],
-            ["Phone", formatPhone(item.phone)],
-            ["Interests", item.interests],
-            ["Contact preference", item.contact_preference],
-            ["Customer notes", item.notes],
-          ]
+      : state.tab === "tickets"
+      ? [
+          ["Request ID", item.request_id],
+          ["Created", formatDate(item.created_at)],
+          ["Status", status],
+          ["Name", item.name],
+          ["Email", item.email],
+          ["Phone", formatPhone(item.phone)],
+          ["Subject", item.subject],
+          ["Summary", item.summary],
+          ["Page URL", item.page_url],
+          ["Updated", formatDate(item.updated_at)],
+        ]
         : state.tab === "price-chart"
         ? [
             ["Row", item.row_number],
@@ -2263,128 +3959,8 @@
         : [];
 
     const detailSections =
-      state.tab === "quotes"
-        ? [
-            {
-              title: "Request",
-              rows: [
-                ["Request ID", item.request_id],
-                ["Created", formatDate(item.created_at)],
-                ["Status", status],
-              ],
-            },
-            {
-              title: "Client",
-              rows: [
-                ["Name", item.name],
-                ["Email", item.email],
-                ["Phone", formatPhone(item.phone)],
-              ],
-            },
-            {
-              title: "Piece",
-              rows: [
-                ["Product", item.product_name],
-                ["Images", renderQuoteMediaSlot()],
-                ["Design code", item.design_code],
-                ["Metal", item.metal],
-                [buildMetalWeightLabel(item.metal), formatGrams(item.metal_weight)],
-                [buildMetalWeightAdjustmentLabel(item.metal), formatSignedGrams(item.metal_weight_adjustment)],
-                ["Stone", item.stone],
-                ["Stone weight", item.stone_weight],
-                ["Diamond breakdown", item.diamond_breakdown],
-                ...buildSizingRows(item),
-              ],
-            },
-            {
-              title: "Quote",
-              rows: [
-                ["Price", formatPrice(item.price)],
-                ["Timeline", item.timeline],
-                ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
-                ["Discount type", item.quote_discount_type],
-                ["Discount percent", item.quote_discount_percent],
-              ],
-            },
-            {
-              title: "Address",
-              rows: [
-                ["Address", item.address_line1],
-                ["City", item.city],
-                ["State", item.state],
-                ["Postal code", item.postal_code],
-                ["Country", item.country],
-              ],
-            },
-            {
-              title: "Preferences",
-              rows: [
-                ["Interests", item.interests],
-                ["Contact preference", item.contact_preference],
-                ["Subscription", item.subscription_status],
-              ],
-            },
-          ]
-        : state.tab === "orders"
-        ? [
-            {
-              title: "Request",
-              rows: [
-                ["Request ID", item.request_id],
-                ["Created", formatDate(item.created_at)],
-                ["Status", status],
-              ],
-            },
-            {
-              title: "Client",
-              rows: [
-                ["Name", item.name],
-                ["Email", item.email],
-                ["Phone", formatPhone(item.phone)],
-              ],
-            },
-            {
-              title: "Piece",
-              rows: [
-                ["Product", item.product_name],
-                ["Images", renderQuoteMediaSlot()],
-                ["Design code", item.design_code],
-                ["Metal", item.metal],
-                [buildMetalWeightLabel(item.metal), formatGrams(item.metal_weight)],
-                [buildMetalWeightAdjustmentLabel(item.metal), formatSignedGrams(item.metal_weight_adjustment)],
-                ["Stone", item.stone],
-                ["Stone weight", item.stone_weight],
-                ["Diamond breakdown", item.diamond_breakdown],
-                ...buildSizingRows(item),
-              ],
-            },
-            {
-              title: "Timeline & Pricing",
-              rows: [
-                ["Price", formatPrice(item.price)],
-                ["Timeline", item.timeline],
-                ["Timeline delay", formatDelayWeeks(item.timeline_adjustment_weeks)],
-              ],
-            },
-            {
-              title: "Address",
-              rows: [
-                ["Address", item.address_line1],
-                ["City", item.city],
-                ["State", item.state],
-                ["Postal code", item.postal_code],
-                ["Country", item.country],
-              ],
-            },
-            {
-              title: "Preferences",
-              rows: [
-                ["Interests", item.interests],
-                ["Contact preference", item.contact_preference],
-                ["Subscription", item.subscription_status],
-              ],
-            },
-          ]
+      state.tab === "quotes" || state.tab === "orders"
+        ? []
         : [];
 
     if (detailSections.length) {
@@ -2394,6 +3970,10 @@
       ui.detailGrid.classList.remove("detail-sections");
       ui.detailGrid.innerHTML = renderDetailRows(detailFields);
     }
+    if (ui.overviewSection) {
+      const hideOverview = state.tab === "quotes" || state.tab === "orders";
+      ui.overviewSection.classList.toggle("is-hidden", hideOverview);
+    }
     refreshQuoteMedia(item);
     refreshSizingInputs(item);
 
@@ -2401,7 +3981,7 @@
       const key = field.dataset.field;
       if (!key) return;
       if (key === "notes") {
-        field.value = item.notes || "";
+        field.value = state.tab === "tickets" ? "" : item.notes || "";
         field.dataset.activityValue = field.value;
         return;
       }
@@ -2412,7 +3992,8 @@
     setQuoteMetalSelection(item.quote_metal_options || "", item.metal || "");
     setDiamondBreakdownRowsFromField();
     resetQuoteAutoPricingState();
-    scheduleQuotePricingUpdate();
+    initializeQuotePricingStatus();
+    scheduleQuotePricingUpdate({ baseChanged: true });
 
     applyEditVisibility();
     applyOrderDetailsVisibility();
@@ -2431,6 +4012,63 @@
     validateMetalWeightInputs();
     updateFulfillmentDirty();
     updateDirtyIndicator();
+  }
+
+  async function populateCatalogDetail(item) {
+    applyCatalogVisibility();
+    if (ui.detailGrid) ui.detailGrid.innerHTML = "";
+    if (ui.catalogTitle) {
+      ui.catalogTitle.textContent = `${TAB_LABELS[state.tab] || "Catalog"} details`;
+    }
+    const enums = await loadCatalogEnums();
+    if (state.tab === "media-library") {
+      state.catalogFormState = item || {};
+      state.catalogOriginalFields = null;
+      state.catalogValidation = null;
+      state.selectedItem = item || {};
+      renderCatalogFields(item || {}, enums);
+      applyEditVisibility();
+      renderActions();
+      updateActionButtonState();
+      updatePrimaryActionState();
+      refreshMissingInfo();
+      return;
+    }
+    const parsed = window.CatalogUtils ? window.CatalogUtils.parseLegacyFields(item, enums) : item || {};
+    if (state.isNewRow && parsed.is_active === undefined) {
+      parsed.is_active = true;
+    }
+    const normalized =
+      window.CatalogUtils && window.CatalogUtils.normalizeCatalogItem
+        ? window.CatalogUtils.normalizeCatalogItem(parsed, enums)
+        : { normalized: parsed, fields: {} };
+    state.catalogFormState = normalized.normalized || parsed;
+    state.catalogOriginalFields = normalized.fields || {};
+    state.catalogValidation = null;
+    state.selectedItem = parsed;
+    renderCatalogFields(parsed, enums);
+      if (window.CatalogForm) {
+        window.CatalogForm.setSelectOptions(ui.mediaPosition, enums.media_positions, true, "Select");
+        window.CatalogForm.setSelectOptions(
+          ui.mediaPositionExisting,
+          enums.media_positions,
+          true,
+          "Select"
+        );
+        const roleOptions = getStoneRoleOptions(enums);
+        window.CatalogForm.setSelectOptions(ui.stoneAddRole, roleOptions, true, "Select");
+        window.CatalogForm.setSelectOptions(ui.stoneAddType, enums.stone_types || [], true, "Select");
+        window.CatalogForm.setSelectOptions(ui.stoneAddCut, enums.cuts || [], true, "Select");
+        window.CatalogForm.setSelectOptions(ui.stoneAddClarity, enums.clarities || [], true, "Select");
+        window.CatalogForm.setSelectOptions(ui.stoneAddColor, enums.colors || [], true, "Select");
+      }
+      await renderCatalogMedia(parsed);
+      await renderCatalogStoneOptions(parsed);
+    applyEditVisibility();
+    renderActions();
+    updateActionButtonState();
+    updatePrimaryActionState();
+    refreshMissingInfo();
   }
 
   async function loadMe() {
@@ -2452,33 +4090,72 @@
       return;
     }
     setSyncStatus("Loading");
-    try {
-      const params = new URLSearchParams({ limit: "1", offset: "0" });
-      if (state.tab === "contacts") {
-        params.set("email", requestId);
-      } else if (
-        state.tab === "price-chart" ||
-        state.tab === "cost-chart" ||
-        state.tab === "diamond-price-chart"
-      ) {
-        params.set("row_number", requestId);
-      } else {
-        params.set("request_id", requestId);
-      }
+      try {
+        const params = new URLSearchParams({ limit: "1", offset: "0" });
+        if (state.tab === "contacts") {
+          params.set("email", requestId);
+        } else if (
+          state.tab === "price-chart" ||
+          state.tab === "cost-chart" ||
+          state.tab === "diamond-price-chart"
+        ) {
+          params.set("row_number", requestId);
+        } else if (CATALOG_TABS.has(state.tab)) {
+          if (state.tab === "media-library") {
+            params.set("media_id", requestId);
+          } else {
+            params.set("slug", requestId);
+            params.set("id", requestId);
+          }
+        } else {
+          params.set("request_id", requestId);
+        }
       const data = await apiFetch(`${getTabEndpoint(state.tab)}?${params.toString()}`);
-      const item = (data.items || [])[0];
-      if (!item) {
-        setSyncStatus("Not found");
-        if (ui.detailError) ui.detailError.textContent = "Record not found.";
-        return;
+      state.catalogHeaders = Array.isArray(data.headers) ? data.headers : [];
+        const item = (data.items || [])[0];
+        if (!item) {
+          setSyncStatus("Not found");
+          if (ui.detailError) ui.detailError.textContent = "Record not found.";
+          return;
+        }
+        await populateDetail(item);
+      if (state.tab === "orders") {
+        await loadOrderDetails(item.request_id);
+      } else if (state.tab === "tickets") {
+        await loadTicketDetails(item.request_id);
+      } else {
+        populateOrderDetails({});
       }
-      populateDetail(item);
-      await loadOrderDetails(item.request_id);
-      setSyncStatus("Loaded");
+        setSyncStatus("Loaded");
     } catch (error) {
       setSyncStatus("Error");
       if (ui.detailError) ui.detailError.textContent = "Failed to load record.";
       showToast("Failed to load record.", "error");
+    }
+  }
+
+  async function loadCatalogHeaders() {
+    try {
+      const data = await apiFetch(`${getTabEndpoint(state.tab)}?limit=1&offset=0`);
+      state.catalogHeaders = Array.isArray(data.headers) ? data.headers : [];
+    } catch {
+      state.catalogHeaders = [];
+    }
+  }
+
+  async function loadCatalogEnums() {
+    if (state.catalogEnums) return state.catalogEnums;
+    try {
+      const data = await apiFetch("/enums");
+      state.catalogEnums = data || {};
+      return state.catalogEnums;
+    } catch {
+      if (window.AdminEnums && window.AdminEnums.FALLBACK_ENUMS) {
+        state.catalogEnums = window.AdminEnums.FALLBACK_ENUMS;
+        return state.catalogEnums;
+      }
+      state.catalogEnums = {};
+      return state.catalogEnums;
     }
   }
 
@@ -2492,6 +4169,31 @@
       populateOrderDetails(data.details || {});
     } catch (error) {
       populateOrderDetails({});
+    }
+  }
+
+  async function loadTicketDetails(requestId) {
+    if (!requestId || state.tab !== "tickets") return;
+    try {
+      const data = await apiFetch(`/tickets/details?request_id=${encodeURIComponent(requestId)}`);
+      const details = Array.isArray(data.details) ? data.details : [];
+      details.forEach((entry) => {
+        const kind = String(entry.kind || "note").toLowerCase();
+        const title =
+          kind === "email"
+            ? "Email sent"
+            : kind === "status"
+            ? "Status update"
+            : "Comment";
+        addActivityEvent({
+          time: entry.created_at || new Date().toISOString(),
+          type: kind,
+          title,
+          detail: entry.note || "",
+        });
+      });
+    } catch (error) {
+      // Ignore detail fetch errors for now.
     }
   }
 
@@ -2527,13 +4229,30 @@
       if (!saved) return;
     }
     const details = state.tab === "orders" ? collectOrderDetailsUpdates() : {};
-    if (state.tab === "orders" && action === "mark_shipped") {
-      const missing = REQUIRED_SHIPPING_DETAILS_FIELDS.filter((field) => !details[field]);
-      if (missing.length) {
-        showToast("Add required fulfillment details before shipping.", "error");
+      if (state.tab === "orders" && action === "mark_shipped") {
+        const missing = REQUIRED_SHIPPING_DETAILS_FIELDS.filter((field) => !details[field]);
+        if (missing.length) {
+          showToast("Add required fulfillment details before shipping.", "error");
+          return;
+        }
+      }
+      if (state.tab === "tickets" && action === "send_email") {
+        const subject = window.prompt("Email subject");
+        if (!subject) return;
+        const body = window.prompt("Email message");
+        if (!body) return;
+        const result = await apiFetch("/tickets/action", {
+          method: "POST",
+          body: JSON.stringify({ action: "send_email", requestId: recordId, subject, body }),
+        });
+        if (result.ok) {
+          showToast("Email sent");
+          await loadTicketDetails(recordId);
+        } else {
+          showToast("Email failed", "error");
+        }
         return;
       }
-    }
     const payload = { action };
     if (
       state.tab === "price-chart" ||
@@ -2561,7 +4280,10 @@
     });
     if (result.ok) {
       showToast("Action saved");
-      await loadRecord(state.selectedItem.request_id);
+      const refreshId = getSelectedRecordId();
+      if (refreshId) {
+        await loadRecord(refreshId);
+      }
     } else {
       showToast("Action failed", "error");
     }
@@ -2569,22 +4291,27 @@
 
   async function saveDetails() {
     const recordId = getSelectedRecordId();
-    if (!recordId && !(state.isNewRow && PRICING_TABS.has(state.tab))) {
+    const isPricing = PRICING_TABS.has(state.tab);
+    const isCatalog = CATALOG_TABS.has(state.tab);
+    if (!recordId && !(state.isNewRow && (isPricing || isCatalog))) {
       showToast("Missing record ID", "error");
       return;
     }
     const fields = collectEditableUpdates();
     const notes = getNotesValue();
-    if (PRICING_TABS.has(state.tab)) {
+    if (isPricing) {
       fields.notes = notes;
     }
     const payload = {
-      action: state.isNewRow && PRICING_TABS.has(state.tab) ? "add_row" : "edit",
+      action: state.isNewRow && (isPricing || isCatalog) ? "add_row" : "edit",
       fields,
     };
-    if (PRICING_TABS.has(state.tab) && !state.isNewRow) {
+    if (isPricing && !state.isNewRow) {
       payload.rowNumber = recordId;
-    } else if (!PRICING_TABS.has(state.tab)) {
+    } else if (isCatalog && !state.isNewRow) {
+      const rowNumber = state.selectedItem?.row_number || recordId;
+      payload.rowNumber = rowNumber;
+    } else if (!isPricing && !isCatalog) {
       payload.requestId = recordId;
       payload.notes = notes;
     }
@@ -2599,9 +4326,11 @@
     });
     if (result.ok) {
       showToast("Updates saved");
-      if (state.isNewRow && PRICING_TABS.has(state.tab)) {
+      if (state.isNewRow && (PRICING_TABS.has(state.tab) || isCatalog)) {
         window.location.href = `/?tab=${encodeURIComponent(state.tab)}`;
       } else if (PRICING_TABS.has(state.tab)) {
+        await loadRecord(recordId);
+      } else if (isCatalog) {
         await loadRecord(recordId);
       } else {
         await loadRecord(state.selectedItem.request_id);
@@ -2619,6 +4348,26 @@
     const recordId = getSelectedRecordId();
     if (!recordId) {
       showToast("Missing record ID", "error");
+      return;
+    }
+    if (state.tab === "tickets") {
+      const note = getNotesValue();
+      if (!note) {
+        showToast("Add a comment first.", "error");
+        return;
+      }
+      const result = await apiFetch("/tickets/action", {
+        method: "POST",
+        body: JSON.stringify({ action: "add_note", requestId: recordId, note }),
+      });
+      if (result.ok) {
+        showToast("Comment added");
+        const notesField = getEditField("notes");
+        if (notesField) notesField.value = "";
+        await loadTicketDetails(recordId);
+      } else {
+        showToast("Comment failed", "error");
+      }
       return;
     }
     let notes = getNotesValue();
@@ -2819,6 +4568,13 @@
       ui.actionRun.addEventListener("click", () => {
         const action = ui.actionSelect ? ui.actionSelect.value : "";
         if (!action) return;
+        if (state.tab === "quotes") {
+          const gate = getQuotePricingGateState();
+          if (gate.blocked) {
+            showToast(gate.reason || "Pricing not ready.", "error");
+            return;
+          }
+        }
         const config = getActionConfig(action);
         if (config && config.confirm && !window.confirm(config.confirm)) return;
         if (state.criticalDirty && !window.confirm("Proceed without saving critical edits?")) return;
@@ -2859,15 +4615,20 @@
         }
         if (state.tab === "quotes" && key) {
           if (QUOTE_PRICE_FIELDS.has(key)) {
+            const optionIndex = QUOTE_OPTION_FIELD_INDEX.get(key);
             if (field.value) {
               markQuotePriceManual(field);
+              markOptionManual(optionIndex);
             } else {
               field.dataset.manual = "";
               field.dataset.auto = "true";
-              scheduleQuotePricingUpdate();
+              scheduleQuotePricingUpdate({ optionIndex });
             }
-          } else if (QUOTE_PRICING_FIELDS.has(key)) {
-            scheduleQuotePricingUpdate();
+            updateOptionFinal(optionIndex);
+          } else if (QUOTE_BASE_PRICING_FIELDS.has(key)) {
+            scheduleQuotePricingUpdate({ baseChanged: true });
+          } else if (QUOTE_OPTION_FIELD_INDEX.has(key)) {
+            scheduleQuotePricingUpdate({ optionIndex: QUOTE_OPTION_FIELD_INDEX.get(key) });
           }
         }
         if (key === "metal_weight" || key === "metal_weight_adjustment") {
@@ -2900,10 +4661,72 @@
         evaluateCriticalDirty();
         refreshMissingInfo();
         updatePrimaryActionState();
+        updateActionButtonState();
       };
       field.addEventListener("input", handler);
       field.addEventListener("change", handler);
     });
+
+    if (ui.catalogFields) {
+      ["input", "change"].forEach((eventName) => {
+        ui.catalogFields.addEventListener(eventName, () => {
+          refreshMissingInfo();
+          updatePrimaryActionState();
+          updateActionButtonState();
+        });
+      });
+    }
+
+    if (ui.mediaUpload) {
+      ui.mediaUpload.addEventListener("click", () => {
+        uploadAndLinkMedia();
+      });
+    }
+
+    if (ui.mediaLink) {
+      ui.mediaLink.addEventListener("click", () => {
+        linkExistingMedia();
+      });
+    }
+
+    if (ui.catalogMediaList) {
+      ui.catalogMediaList.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const url = target.dataset.url || "";
+        if (target.hasAttribute("data-media-copy") && url) {
+          handleCopyText("Media URL", url);
+        }
+        if (target.hasAttribute("data-media-hero") && url) {
+          const heroField = ui.catalogFields?.querySelector('[data-field="hero_image"]');
+          if (heroField instanceof HTMLInputElement) {
+            heroField.value = url;
+            heroField.dispatchEvent(new Event("input", { bubbles: true }));
+            showToast("Hero image updated");
+          }
+        }
+      });
+    }
+    if (ui.catalogStoneList) {
+      ui.catalogStoneList.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const row = target.closest("[data-stone-option-id]");
+        if (!row) return;
+        if (target.hasAttribute("data-stone-save")) {
+          saveStoneOption(row);
+          return;
+        }
+        if (target.hasAttribute("data-stone-delete")) {
+          deleteStoneOption(row);
+        }
+      });
+    }
+    if (ui.stoneAddButton) {
+      ui.stoneAddButton.addEventListener("click", () => {
+        addStoneOption();
+      });
+    }
     ui.quoteMetals.forEach((input) => {
       input.addEventListener("change", () => {
         syncQuoteMetalInput();
@@ -2911,12 +4734,59 @@
       });
     });
 
+    ui.optionActiveToggles.forEach((toggle, index) => {
+      toggle.addEventListener("change", () => {
+        setOptionActive(index, toggle.checked);
+        refreshMissingInfo();
+        updatePrimaryActionState();
+        scheduleQuotePricingUpdate({ optionIndex: index });
+      });
+    });
+
+    ui.optionRecommendRadios.forEach((radio, index) => {
+      radio.addEventListener("change", () => {
+        if (!radio.checked) return;
+        state.recommendedOptionIndex = index;
+        syncRecommendedOptionUi();
+      });
+    });
+
+    ui.optionCopyButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const index = Number(button.dataset.optionCopy);
+        const field = getOptionPriceField(index);
+        const value = field ? field.value.trim() : "";
+        handleCopyText(`Option ${index + 1} price`, value);
+      });
+    });
+
+    ui.optionAutoButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const index = Number(button.dataset.optionAuto);
+        const field = getOptionPriceField(index);
+        if (field) {
+          field.dataset.manual = "";
+          field.dataset.auto = "true";
+          field.value = "";
+        }
+        setOptionStatus(index, "stale");
+        scheduleQuotePricingUpdate({ optionIndex: index });
+      });
+    });
+
+    if (ui.breakdownRawToggle && ui.breakdownRaw) {
+      ui.breakdownRawToggle.addEventListener("click", () => {
+        ui.breakdownRaw.classList.toggle("is-hidden");
+      });
+    }
+
     if (ui.diamondBreakdownAdd) {
       ui.diamondBreakdownAdd.addEventListener("click", () => {
-        const current = getDiamondRowsFromDom();
-        current.push({ weight: "", count: "" });
+        const defaultType = getDefaultDiamondType();
+        const current = getDiamondRowsFromDomTyped();
+        current.push({ weight: "", count: "", stoneType: defaultType });
         renderDiamondBreakdownRows(current);
-        scheduleQuotePricingUpdate();
+        scheduleQuotePricingUpdate({ baseChanged: true });
       });
     }
 
@@ -2930,10 +4800,19 @@
           return;
         }
         syncDiamondBreakdownField();
-        updateDiamondStats(getDiamondRowsFromDom());
+        updateDiamondStats(getDiamondRowsFromDomTyped());
         updateDiamondRowTotals();
         updatePrimaryActionState();
-        scheduleQuotePricingUpdate();
+        scheduleQuotePricingUpdate({ baseChanged: true });
+      });
+      ui.diamondBreakdownRows.addEventListener("change", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (!target.hasAttribute("data-diamond-type")) return;
+        syncDiamondBreakdownField();
+        updateDiamondStats(getDiamondRowsFromDomTyped());
+        updatePrimaryActionState();
+        scheduleQuotePricingUpdate({ baseChanged: true });
       });
       ui.diamondBreakdownRows.addEventListener("click", (event) => {
         const target = event.target;
@@ -2942,10 +4821,10 @@
         const row = target.closest("[data-diamond-row]");
         if (row) row.remove();
         syncDiamondBreakdownField();
-        updateDiamondStats(getDiamondRowsFromDom());
+        updateDiamondStats(getDiamondRowsFromDomTyped());
         updateDiamondRowTotals();
         updatePrimaryActionState();
-        scheduleQuotePricingUpdate();
+        scheduleQuotePricingUpdate({ baseChanged: true });
         if (!ui.diamondBreakdownRows.querySelector("[data-diamond-row]")) {
           renderDiamondBreakdownRows([]);
         }
@@ -2964,7 +4843,7 @@
     if (ui.diamondPresets) {
       ui.diamondPresets.addEventListener("change", () => {
         applyDiamondPreset(ui.diamondPresets.value);
-        scheduleQuotePricingUpdate();
+        scheduleQuotePricingUpdate({ baseChanged: true });
         updatePrimaryActionState();
       });
     }
@@ -2972,12 +4851,14 @@
     if (ui.discountType) {
       ui.discountType.addEventListener("change", () => {
         updateDiscountPreview();
+        scheduleQuotePricingUpdate({ baseChanged: true });
         updatePrimaryActionState();
       });
     }
     if (ui.discountPercent) {
       ui.discountPercent.addEventListener("input", () => {
         updateDiscountPreview();
+        scheduleQuotePricingUpdate({ baseChanged: true });
         updatePrimaryActionState();
       });
     }
@@ -3028,7 +4909,7 @@
         if (isSyncingBreakdown) return;
         setDiamondBreakdownRowsFromField();
         updatePrimaryActionState();
-        scheduleQuotePricingUpdate();
+        scheduleQuotePricingUpdate({ baseChanged: true });
       });
     }
 
@@ -3037,8 +4918,9 @@
       ["input", "change"].forEach((eventName) => {
         input.addEventListener(eventName, () => {
           syncSizingToSizeField();
-          scheduleQuotePricingUpdate();
+          scheduleQuotePricingUpdate({ baseChanged: true });
           updatePrimaryActionState();
+          if (state.selectedItem) updateSummaryCard(state.selectedItem);
         });
       });
     });
@@ -3117,6 +4999,8 @@
         const active = document.activeElement;
         if (active && active.closest("[data-order-details-section]")) {
           saveOrderDetails();
+        } else if (CATALOG_TABS.has(state.tab)) {
+          saveDetails();
         } else {
           saveNotes();
         }
@@ -3143,8 +5027,28 @@
 
   async function init() {
     const params = new URLSearchParams(window.location.search);
-    const tab = params.get("tab");
-    const id = params.get("id");
+    const bodyTab = document.body.dataset.detailTab || "";
+    let tab = params.get("tab") || bodyTab;
+    let id = params.get("id");
+    if (!tab || !id) {
+      try {
+        const storedTab = localStorage.getItem("adminDetailTab") || "";
+        const storedId = localStorage.getItem("adminDetailId") || "";
+        if (!tab && storedTab && !bodyTab) tab = storedTab;
+        if (!id && storedId) id = storedId;
+        if (tab || id) {
+          if (!bodyTab) {
+            const nextParams = new URLSearchParams(window.location.search);
+            if (tab) nextParams.set("tab", tab);
+            if (id) nextParams.set("id", id);
+            const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
+            window.history.replaceState({}, "", nextUrl);
+          }
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
     if (tab && STATUS_OPTIONS[tab]) {
       state.tab = tab;
     }
@@ -3153,9 +5057,14 @@
     }
     bindEvents();
     await loadMe();
-    if (id === "new" && PRICING_TABS.has(state.tab)) {
+    if (id === "new" && (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab))) {
       state.isNewRow = true;
-      populateDetail({});
+      if (CATALOG_TABS.has(state.tab)) {
+        await loadCatalogHeaders();
+        await populateCatalogDetail({});
+      } else {
+        await populateDetail({});
+      }
       setSyncStatus("New row");
       return;
     }

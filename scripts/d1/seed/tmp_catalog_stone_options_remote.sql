@@ -1,0 +1,13 @@
+PRAGMA foreign_keys = OFF;
+DELETE FROM catalog_stone_options;
+PRAGMA foreign_keys = ON;
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_031f70ae0384f811', 'hw-003', 'Accent', 1.0, 1, 1, 'small', '2026-01-23 02:33:32', '2026-01-23 02:33:32');
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_2b3ce2d024adc720', 'hwp-001', 'Accent', 0.02, 15, 1, 'small', '2026-01-23 02:33:32', '2026-01-23 02:33:32');
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_20b5910cdc1b7c75', 'hw-002', 'Accent', 1.0, 1, 1, 'small', '2026-01-23 02:33:32', '2026-01-23 02:33:32');
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_dd5c97b7982f2a69', 'hw-003', 'Accent', 1.5, 1, 0, 'medium', '2026-01-23 02:33:32', '2026-01-23 02:33:32');
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_75ec99b841ae8bbd', 'hwp-001', 'Accent', 0.03, 15, 0, 'medium', '2026-01-23 02:33:32', '2026-01-23 02:33:32');
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_a5b72ffbcb2bb6ac', 'hw-003', 'Accent', 2.0, 1, 0, 'large', '2026-01-23 02:33:32', '2026-01-23 02:33:32');
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_53feab19c21889b5', 'hw-003', 'Accent', 2.5, 1, 0, 'xlarge', '2026-01-23 02:33:32', '2026-01-23 02:33:32');
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_13bb27c21aa769d6', 'hw-003', 'Accent', 3.0, 1, 0, 'xxlarge', '2026-01-23 02:33:32', '2026-01-23 02:33:32');
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_99bec7618dab7e43', 'hwp-001', 'Accent', 0.15, 1, 1, 'small', '2026-01-23 02:33:32', '2026-01-23 02:33:32');
+INSERT INTO catalog_stone_options (id, catalog_id, role, carat, count, is_primary, notes, created_at, updated_at) VALUES ('stoneopt_965a4decd14c7140', 'hwp-001', 'Accent', 0.2, 1, 0, 'medium', '2026-01-23 02:33:32', '2026-01-23 02:33:32');

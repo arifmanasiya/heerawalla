@@ -4,6 +4,7 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import { loadInspirations, type Inspiration } from '../../lib/inspirations';
 import { withBase } from '../../lib/paths';
+import { MEDIA_PLACEHOLDER_URL } from '../../lib/placeholders';
 
 const metaTitle = 'Inspirations | Heerawalla';
 const metaDescription =
@@ -21,27 +22,12 @@ const styles = uniqueValues(inspirations.map((item) => item.styles)).sort();
 const motifs = uniqueValues(inspirations.map((item) => item.motifs)).sort();
 const metals = uniqueValues(inspirations.map((item) => item.metals)).sort();
 
-const usdFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0
-});
-
 const formatNumber = (value: number) => {
   if (Number.isInteger(value)) return value.toString();
   return value.toString();
 };
-const roundTo99 = (value: number) => {
-  if (!Number.isFinite(value)) return value;
-  const lower = Math.floor(value / 100) * 100 + 99;
-  const upper = Math.ceil(value / 100) * 100 + 99;
-  return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
-};
 
 const buildEstimateMeta = (item: Inspiration) => {
-  const price = item.estimatedPriceUsdVvs1Vvs2_18k
-    ? usdFormatter.format(roundTo99(item.estimatedPriceUsdVvs1Vvs2_18k))
-    : '';
   const sections: Array<{ label: string; text?: string; items?: string[] }> = [];
   const ariaParts: string[] = [];
   const carat = item.stoneWeight ? formatNumber(item.stoneWeight) : '';
@@ -61,13 +47,8 @@ const buildEstimateMeta = (item: Inspiration) => {
     sections.push({ label: 'Metal Options', items: ['18K Gold', `Approx. metal weight: ${weight}g`] });
     ariaParts.push(`Metal Options. 18K Gold; Approx. metal weight: ${weight}g.`);
   }
-  if (price) {
-    const priceText = `Estimate: ${price}`;
-    sections.push({ label: 'Price Options', items: [priceText] });
-    ariaParts.push(`Price Options. ${priceText}.`);
-  }
   const tooltip = sections.length ? { sections, ariaLabel: ariaParts.join(' ') } : null;
-  return { price, tooltip };
+  return { tooltip };
 };
 ---
 
@@ -214,7 +195,7 @@ const buildEstimateMeta = (item: Inspiration) => {
                 <a href={withBase(`/inspirations/${item.slug}`)} class="block">
                   <div class="aspect-[3/4] w-full overflow-hidden bg-white">
                     <img
-                      src={withBase(item.heroImage)}
+                      src={item.heroImage?.startsWith('http') ? item.heroImage : withBase(item.heroImage)}
                       alt={`${item.title} inspiration`}
                       loading="lazy"
                       decoding="async"
@@ -228,41 +209,36 @@ const buildEstimateMeta = (item: Inspiration) => {
                   <div class="space-y-1">
                     <div class="flex items-start justify-between gap-3">
                       <h2 class="text-lg font-semibold tracking-tight">{item.title}</h2>
-                      {estimate.price ? (
+                      {estimate.tooltip ? (
                         <span class="flex items-center gap-2">
-                          <span class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap">
-                            {estimate.price}
-                          </span>
-                          {estimate.tooltip ? (
-                            <button
-                              type="button"
-                              class="estimate-info"
-                              aria-label={estimate.tooltip.ariaLabel}
-                            >
-                              i
-                              <span class="estimate-tooltip" role="tooltip">
-                                {estimate.tooltip.sections.map((section) => (
-                                  <span class="estimate-tooltip__section">
-                                    <span class="estimate-tooltip__label">{section.label}</span>
-                                    {section.text ? (
-                                      <span class="estimate-tooltip__text">{section.text}</span>
-                                    ) : null}
-                                    {section.items?.length ? (
-                                      <span class="estimate-tooltip__list">
-                                        {section.items.map((item) => (
-                                          <span class="estimate-tooltip__item">{item}</span>
-                                        ))}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                ))}
-                              </span>
-                            </button>
-                          ) : null}
+                          <button
+                            type="button"
+                            class="estimate-info"
+                            aria-label={estimate.tooltip.ariaLabel}
+                          >
+                            i
+                            <span class="estimate-tooltip" role="tooltip">
+                              {estimate.tooltip.sections.map((section) => (
+                                <span class="estimate-tooltip__section">
+                                  <span class="estimate-tooltip__label">{section.label}</span>
+                                  {section.text ? (
+                                    <span class="estimate-tooltip__text">{section.text}</span>
+                                  ) : null}
+                                  {section.items?.length ? (
+                                    <span class="estimate-tooltip__list">
+                                      {section.items.map((item) => (
+                                        <span class="estimate-tooltip__item">{item}</span>
+                                      ))}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              ))}
+                            </span>
+                          </button>
                         </span>
                       ) : null}
                     </div>
-                    <p class="text-sm text-slate-500">{item.shortDesc}</p>
+                    <p class="text-sm text-slate-500">{item.description}</p>
                   </div>
                   <div class="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
                     {item.tags.slice(0, 3).map((tag) => (
@@ -298,8 +274,14 @@ const buildEstimateMeta = (item: Inspiration) => {
 
 <script is:inline define:vars={{ catalogUrl, catalogMode, basePath }}>
   (() => {
-    const catalogUrlValue = String(catalogUrl || '');
+    let catalogUrlValue = String(catalogUrl || '');
     const catalogModeValue = String(catalogMode || '').toLowerCase();
+    if (!catalogUrlValue) {
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        catalogUrlValue = 'http://localhost:8787/catalog';
+      }
+    }
     const basePathValue = String(basePath || '/');
     const grid = document.querySelector('[data-inspiration-grid]');
     const empty = document.querySelector('[data-inspiration-empty]');
@@ -330,23 +312,7 @@ const buildEstimateMeta = (item: Inspiration) => {
       return value.toString();
     };
 
-    const roundTo99 = (value) => {
-      if (!Number.isFinite(value)) return value;
-      const lower = Math.floor(value / 100) * 100 + 99;
-      const upper = Math.ceil(value / 100) * 100 + 99;
-      return Math.abs(value - lower) <= Math.abs(value - upper) ? lower : upper;
-    };
-
-    const usdFormatter = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    });
-
     const buildEstimateMeta = (item) => {
-      const price = item.estimatedPriceUsdVvs1Vvs2_18k
-        ? usdFormatter.format(roundTo99(item.estimatedPriceUsdVvs1Vvs2_18k))
-        : '';
       const sections = [];
       const ariaParts = [];
       const carat = item.stoneWeight ? formatNumber(item.stoneWeight) : '';
@@ -366,13 +332,8 @@ const buildEstimateMeta = (item: Inspiration) => {
         sections.push({ label: 'Metal Options', items: ['18K Gold', `Approx. metal weight: ${weight}g`] });
         ariaParts.push(`Metal Options. 18K Gold; Approx. metal weight: ${weight}g.`);
       }
-      if (price) {
-        const priceText = `Estimate: ${price}`;
-        sections.push({ label: 'Price Options', items: [priceText] });
-        ariaParts.push(`Price Options. ${priceText}.`);
-      }
       const tooltip = sections.length ? { sections, ariaLabel: ariaParts.join(' ') } : null;
-      return { price, tooltip };
+      return { tooltip };
     };
 
     const getValues = () => {
@@ -481,9 +442,13 @@ const buildEstimateMeta = (item: Inspiration) => {
                 )
                 .join('')}</span></button>`
             : '';
-          const heroImage = item.heroImage ? withBase(item.heroImage) : withBase('/images/products/placeholder.svg');
+          const heroImage = item.heroImage
+            ? (String(item.heroImage).startsWith('http')
+                ? item.heroImage
+                : withBase(item.heroImage))
+            : MEDIA_PLACEHOLDER_URL;
           const title = escapeHtml(item.title || '');
-          const shortDesc = escapeHtml(item.shortDesc || '');
+          const shortDesc = escapeHtml(item.description || '');
           const tags = (item.tags || []).slice(0, 3);
           const categories = (item.categories || []).join(',');
           const genders = (item.genders || []).join(',');
@@ -519,16 +484,7 @@ const buildEstimateMeta = (item: Inspiration) => {
                 <div class="space-y-1">
                   <div class="flex items-start justify-between gap-3">
                     <h2 class="text-lg font-semibold tracking-tight">${title}</h2>
-                    ${
-                      estimate.price
-                        ? `<span class="flex items-center gap-2">
-                          <span class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap">
-                            ${escapeHtml(estimate.price)}
-                          </span>
-                          ${tooltipHtml}
-                        </span>`
-                        : ''
-                    }
+                    ${tooltipHtml ? `<span class="flex items-center gap-2">${tooltipHtml}</span>` : ''}
                   </div>
                   <p class="text-sm text-slate-500">${shortDesc}</p>
                 </div>

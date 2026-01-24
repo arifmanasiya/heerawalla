@@ -1,7 +1,7 @@
 ---
 import type { ProductWithMedia } from '../lib/products';
 const { products } = Astro.props as { products: ProductWithMedia[] };
-const collections = Array.from(new Set(products.map((p) => p.collection).filter(Boolean)));
+const designCodes = Array.from(new Set(products.map((p) => p.design_code).filter(Boolean)));
 const metals = Array.from(new Set(products.map((p) => p.metal).filter(Boolean)));
 const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
 
@@ -55,9 +55,9 @@ const categoryOptions = categories.map((value) => ({
     </button>
   </div>
   <div id="collection-filters" class="flex flex-wrap gap-3 hidden md:flex" data-filter-panel>
-      <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="collection">
-        <option value="">Collection</option>
-        {collections.map((c) => <option value={c}>{c}</option>)}
+      <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="design_code">
+        <option value="">Design</option>
+        {designCodes.map((c) => <option value={c}>{c}</option>)}
       </select>
       <select class="filter-select rounded-full border border-slate-200 px-3 py-2 text-sm" data-filter="category">
         <option value="">Edition</option>
@@ -90,13 +90,13 @@ const categoryOptions = categories.map((value) => ({
         '';
       return raw.trim();
     };
-    const toggleCollectionFilter = () => {
+    const toggleDesignFilter = () => {
       const designCode = getDesignCode();
-      const collectionSelect = document.querySelector('[data-filter="collection"]');
-      if (!collectionSelect) return;
+      const designSelect = document.querySelector('[data-filter="design_code"]');
+      if (!designSelect) return;
       const hide = Boolean(designCode);
-      collectionSelect.toggleAttribute('hidden', hide);
-      collectionSelect.toggleAttribute('disabled', hide);
+      designSelect.toggleAttribute('hidden', hide);
+      designSelect.toggleAttribute('disabled', hide);
     };
     const updateOptionsForDesignCode = () => {
       const cards = Array.from(document.querySelectorAll('[data-product-card]'));
@@ -107,12 +107,10 @@ const categoryOptions = categories.map((value) => ({
       const scoped = cards.filter((card) => (card.dataset.designCode || '').toLowerCase() === lower);
       if (!scoped.length) return;
       const available = {
-        collection: new Set(),
         category: new Set(),
         metal: new Set()
       };
       scoped.forEach((card) => {
-        if (card.dataset.collection) available.collection.add(card.dataset.collection);
         if (card.dataset.category) available.category.add(card.dataset.category);
         if (card.dataset.metal) available.metal.add(card.dataset.metal);
       });
@@ -139,13 +137,12 @@ const categoryOptions = categories.map((value) => ({
       const filters = Object.fromEntries(selects.map((s) => [s.dataset.filter, s.value]));
       const designCode = getDesignCode();
       cards.forEach((card) => {
-        const c = card.dataset.collection || '';
         const cat = card.dataset.category || '';
         const metal = card.dataset.metal || '';
         const price = Number(card.dataset.price || 0);
         const code = (card.dataset.designCode || '').toLowerCase();
         const matchesDesignCode = !designCode || code === designCode.toLowerCase();
-        const matchesCollection = !filters.collection || c === filters.collection;
+        const matchesCollection = !filters.design_code || code === filters.design_code.toLowerCase();
         const matchesCategory = !filters.category || cat === filters.category;
         const matchesMetal = !filters.metal || metal === filters.metal;
         let matchesPrice = true;
@@ -170,7 +167,7 @@ const categoryOptions = categories.map((value) => ({
       });
     }
     window.addEventListener('load', () => {
-      toggleCollectionFilter();
+      toggleDesignFilter();
       updateOptionsForDesignCode();
       apply();
     });

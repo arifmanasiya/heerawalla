@@ -1,38 +1,21 @@
-import { parse } from 'csv-parse/sync';
-import path from 'node:path';
-import { fetchCsv, getCsvSourceMode, getEnv } from './csvFetch';
-import { requiredConfigColumns, siteConfigSchema, type SiteConfig } from './schema';
-
-const SAMPLE_CONFIG = path.resolve('data/site_config.sample.csv');
+import { getEnv } from './csvFetch';
+import { siteConfigSchema, type SiteConfig } from './schema';
 
 export async function loadSiteConfig(): Promise<SiteConfig> {
-  const mode = getCsvSourceMode();
-  const url = (getEnv('SITE_CONFIG_CSV_URL') || '').trim();
-  if (mode === 'remote' && !url) {
-    throw new Error('SITE_CONFIG_CSV_URL is required when CSV_SOURCE=remote.');
+  const apiBase = (getEnv('PUBLIC_CATALOG_API_URL') || '').trim();
+  if (!apiBase) {
+    throw new Error('PUBLIC_CATALOG_API_URL is required to load site config from D1.');
   }
-  const source = mode === 'remote' ? url : SAMPLE_CONFIG;
-  const fallback = SAMPLE_CONFIG;
-  const csv = await fetchCsv(source, fallback);
-  const records = parse(csv, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true
-  }) as Record<string, string>[];
-
-  if (!records.length) {
-    throw new Error('Site config CSV has no rows.');
+  const joiner = apiBase.includes('?') ? '&' : '?';
+  const url = `${apiBase}${joiner}include=site_config`;
+  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!response.ok) {
+    throw new Error(`Catalog config API failed (${response.status} ${response.statusText}).`);
   }
-  const cols = Object.keys(records[0]);
-  for (const col of requiredConfigColumns) {
-    if (!cols.includes(col)) {
-      throw new Error(`Site config CSV missing required column: ${col}`);
-    }
-  }
-
-  const config: Record<string, string> = {};
-  for (const row of records) {
-    if (row.key) config[row.key] = row.value || '';
+  const data = (await response.json()) as { siteConfig?: Record<string, string> };
+  const config = data.siteConfig || {};
+  if (!Object.keys(config).length) {
+    throw new Error('Site config from D1 is empty.');
   }
   return siteConfigSchema.parse(config);
 }

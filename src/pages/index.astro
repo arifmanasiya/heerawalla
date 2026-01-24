@@ -6,6 +6,7 @@ import { loadProductsWithMedia, type ProductWithMedia } from '../lib/products';
 import { loadInspirations, type Inspiration } from '../lib/inspirations';
 import { loadSiteConfig, getConfigValue } from '../lib/config';
 import { withBase } from '../lib/paths';
+import { HERO_IMAGE_URL, ATELIER_IMAGE_URL } from '../lib/placeholders';
 
 const featured: ProductWithMedia[] = (await loadProductsWithMedia()).filter((p) => p.is_featured);
 const inspirations: Inspiration[] = await loadInspirations();
@@ -26,7 +27,7 @@ const metaDescriptionBase = getConfigValue(
 );
 const metaDescription = `${metaDescriptionBase} Often searched as Heerawala, Hirawala, Hirawalla, Herowalla, Herowala, Hero Wala, Hero Walla, Heera Walla, Heera Wala, हीरावाला.`;
 
-const heroImage = withBase('/images/hero.png');
+const heroImage = HERO_IMAGE_URL;
 const heroSlides = [
   heroImage,
   ...featured.map((product) => product.media.images[0]?.url).filter(Boolean),
@@ -417,8 +418,10 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
               href={withBase(`/inspirations/${primaryInspiration.slug}`)}
               class="group relative overflow-hidden border border-slate-200 bg-white aspect-[3/4] sm:aspect-[2/3] sm:h-full"
             >
-              <img
-                src={withBase(primaryInspiration.heroImage)}
+                <img
+                  src={primaryInspiration.heroImage?.startsWith('http')
+                    ? primaryInspiration.heroImage
+                    : withBase(primaryInspiration.heroImage)}
                 alt={primaryInspiration.title}
                 loading="lazy"
                 decoding="async"
@@ -438,7 +441,7 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
                 class="group relative overflow-hidden border border-slate-200 bg-white aspect-[3/4] sm:aspect-auto sm:flex-1"
               >
                 <img
-                  src={withBase(item.heroImage)}
+                  src={item.heroImage?.startsWith('http') ? item.heroImage : withBase(item.heroImage)}
                   alt={item.title}
                   loading="lazy"
                   decoding="async"
@@ -499,7 +502,7 @@ const heroSlidePanMs = Math.max(heroSlideDurationMs - heroSlideFadeMs, 4000);
         </div>
         <div class="relative aspect-[3/4] overflow-hidden border border-slate-200">
           <img
-            src={withBase('/images/atelier.png')}
+            src={ATELIER_IMAGE_URL}
             alt="Atelier detail"
             class="h-full w-full object-cover"
             loading="lazy"

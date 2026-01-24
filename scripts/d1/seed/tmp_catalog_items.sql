@@ -1,0 +1,1 @@
+SELECT id, slug, type FROM catalog_items;
