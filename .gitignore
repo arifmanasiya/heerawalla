@@ -3,6 +3,7 @@ node_modules
 .vercel
 .DS_Store
 dist
+.wrangler/state
 coverage
 .env
 .env.*
