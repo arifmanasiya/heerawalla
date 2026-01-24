@@ -93,6 +93,8 @@ async function loadProductsFromApi(): Promise<Product[]> {
           stone_weight_range: stoneWeightRange || '',
           metal_weight: toOptionalNumberFromUnknown(row.metal_weight) ?? toOptionalNumberFromList(metalWeightRange),
           metal_weight_range: metalWeightRange || '',
+          stone_options: Array.isArray(row.stone_options) ? row.stone_options : undefined,
+          metal_weight_options: Array.isArray(row.metal_weight_options) ? row.metal_weight_options : undefined,
           cut: String(row.cut || ''),
           clarity: String(row.clarity || ''),
           color: String(row.color || ''),

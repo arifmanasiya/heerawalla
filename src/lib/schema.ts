@@ -15,6 +15,8 @@ export const productSchema = z.object({
   stone_weight_range: z.string().optional().default(''),
   metal_weight: z.number().nonnegative().optional(),
   metal_weight_range: z.string().optional().default(''),
+  stone_options: z.array(z.record(z.unknown())).optional(),
+  metal_weight_options: z.array(z.record(z.unknown())).optional(),
   cut: z.string().optional().default('Ideal'),
   clarity: z.string().optional().default('VVS1 - VVS2'),
   color: z.string().optional().default('E'),

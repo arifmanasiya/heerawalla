@@ -16,7 +16,9 @@ export type MediaMapping = {
   is_primary?: boolean;
   order?: number;
   product_slug?: string;
+  product_slugs?: string;
   inspiration_slug?: string;
+  inspiration_slugs?: string;
 };
 
 const MEDIA_POSITION_ORDER = [
@@ -70,8 +72,8 @@ const sortMediaMappings = (a: MediaMapping, b: MediaMapping) => {
     const safeB = positionB === -1 ? 99 : positionB;
     if (safeA !== safeB) return safeA - safeB;
   }
-  const orderA = Number.isFinite(a.order) ? a.order : 0;
-  const orderB = Number.isFinite(b.order) ? b.order : 0;
+  const orderA = Number.isFinite(a.order) ? Number(a.order) : 0;
+  const orderB = Number.isFinite(b.order) ? Number(b.order) : 0;
   if (orderA !== orderB) return orderA - orderB;
   return String(a.media_id || '').localeCompare(String(b.media_id || ''));
 };

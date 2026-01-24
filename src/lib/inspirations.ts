@@ -50,7 +50,7 @@ const normalizeStoneType = (value: string) =>
     .replace(/diamonds?\b/gi, 'Diamond')
     .replace(/\s+/g, ' ')
     .trim();
-const parseStoneTypes = (value?: string) =>
+const parseStoneTypes = (value?: unknown) =>
   parseList(value).map(normalizeStoneType).filter(Boolean);
 
 export async function loadInspirations(): Promise<Inspiration[]> {
