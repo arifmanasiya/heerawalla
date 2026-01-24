@@ -53,6 +53,7 @@ jobs:
       PRODUCT_MEDIA_CSV_URL: ${{ vars.PRODUCT_MEDIA_CSV_URL }}
       INSPIRATION_MEDIA_CSV_URL: ${{ vars.INSPIRATION_MEDIA_CSV_URL }}
       PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.PUBLIC_TURNSTILE_SITE_KEY }}
+      PUBLIC_CATALOG_API_URL: ${{ vars.PUBLIC_CATALOG_API_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
