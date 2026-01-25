@@ -202,7 +202,7 @@ const inspirationSlug = item.slug;
 
       const fetchCatalog = async () => {
         const joiner = catalogUrlValue.includes('?') ? '&' : '?';
-        const url = `${catalogUrlValue}${joiner}include=inspirations`;
+        const url = `${catalogUrlValue}${joiner}include=inspirations&bust=${Date.now()}`;
         try {
           const response = await fetch(url, { cache: 'no-store' });
           if (!response.ok) return;

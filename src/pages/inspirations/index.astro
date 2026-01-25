@@ -511,7 +511,7 @@ const buildEstimateMeta = (item: Inspiration) => {
     const fetchCatalog = async () => {
       if (!catalogUrlValue) return;
       const joiner = catalogUrlValue.includes('?') ? '&' : '?';
-      const url = `${catalogUrlValue}${joiner}include=inspirations`;
+      const url = `${catalogUrlValue}${joiner}include=inspirations&bust=${Date.now()}`;
       try {
         const response = await fetch(url, { cache: 'no-store' });
         if (!response.ok) return;

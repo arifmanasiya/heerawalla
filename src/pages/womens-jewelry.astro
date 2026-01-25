@@ -591,9 +591,7 @@ const breadcrumbs = [
     const fetchCatalog = async () => {
       if (!catalogUrlValue) return;
       const joiner = catalogUrlValue.includes('?') ? '&' : '?';
-      const cacheBust = /localhost|127\\.0\\.0\\.1/i.test(catalogUrlValue)
-        ? `&bust=${Date.now()}`
-        : '';
+      const cacheBust = `&bust=${Date.now()}`;
       const url = `${catalogUrlValue}${joiner}include=products${cacheBust}`;
       try {
         const response = await fetch(url, { cache: 'no-store' });
