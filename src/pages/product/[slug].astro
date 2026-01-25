@@ -1911,6 +1911,16 @@ void jsonLdString;
         }
 
         applySizeTypeSelection();
+        if (sizeTypeSelect) {
+          const selected = sizeTypeSelect.selectedOptions?.[0];
+          if (selected) {
+            updateSizeTypeInfo(selected.dataset.stoneWeight || '', selected.dataset.metalWeight || '');
+          } else {
+            updateSizeTypeInfo(selectedStoneWeightValue, selectedMetalWeightValue);
+          }
+        } else {
+          updateSizeTypeInfo(selectedStoneWeightValue, selectedMetalWeightValue);
+        }
         if (window.__hwUpdateChainWeightInfo && sizeSelect) {
           window.__hwUpdateChainWeightInfo(sizeSelect.value);
         }
