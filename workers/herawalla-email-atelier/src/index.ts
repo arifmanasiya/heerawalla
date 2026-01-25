@@ -5799,7 +5799,12 @@ async function handleMediaUpload(env: Env, request: Request) {
   const mediaId = rawId || `${normalizedId}-${uniqueSuffix}`;
   const key = `media/library/${mediaId}${ext || ""}`;
   const contentType = file.type || "application/octet-stream";
-  await env.MEDIA_BUCKET.put(key, file, { httpMetadata: { contentType } });
+  await env.MEDIA_BUCKET.put(key, file, {
+    httpMetadata: {
+      contentType,
+      cacheControl: "public, max-age=31536000, immutable",
+    },
+  });
   const url = `${baseUrl}/${key}`;
   return {
     ok: true,

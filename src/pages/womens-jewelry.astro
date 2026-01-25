@@ -9,11 +9,12 @@ import { MEDIA_PLACEHOLDER_URL } from '../lib/placeholders';
 
 const editionLabel = "Women's Jewelry";
 const editionKey = 'women';
-const editionGender = 'female';
+const editionGenderValues = ['women', 'female', 'unisex'];
+const editionGenders = new Set(editionGenderValues);
 const products = (await loadProductsWithMedia()).filter((product) => {
   const gender = (product.gender || '').toLowerCase();
   if (!gender) return false;
-  return gender === editionGender || gender === 'unisex';
+  return editionGenders.has(gender);
 });
 const heroImageById = Object.fromEntries(
   products
@@ -131,7 +132,7 @@ const breadcrumbs = [
   <Footer />
 </BaseLayout>
 
-<script is:inline define:vars={{ catalogUrl, catalogMode, pricingApiBase, basePath, editionGender, heroImageById, placeholderImage }}>
+<script is:inline define:vars={{ catalogUrl, catalogMode, pricingApiBase, basePath, editionGenderValues, heroImageById, placeholderImage }}>
   (() => {
     let catalogUrlValue = String(catalogUrl || '');
     const catalogModeValue = String(catalogMode || '').toLowerCase();
@@ -143,7 +144,9 @@ const breadcrumbs = [
       }
     }
     const basePathValue = String(basePath || '/');
-    const editionGenderValue = String(editionGender || '');
+    const editionGenderList = Array.isArray(editionGenderValues)
+      ? editionGenderValues.map((value) => String(value || '').toLowerCase())
+      : [];
     const heroImageByIdValue = heroImageById || {};
     const placeholderImageValue = String(placeholderImage || '');
     const grid = document.querySelector('[data-product-grid]');
@@ -600,7 +603,7 @@ const breadcrumbs = [
         const items = data.products.filter((product) => {
           const gender = String(product.gender || '').toLowerCase();
           if (!gender) return false;
-          return gender === editionGenderValue || gender === 'unisex';
+          return editionGenderList.includes(gender);
         });
         if (catalogModeValue === 'ssr') {
           updatePrices(items);

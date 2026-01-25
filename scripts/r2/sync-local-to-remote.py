@@ -86,6 +86,8 @@ def run_upload(bucket: str, key: str, blob_path: Path) -> bool:
         f"{bucket}/{key}",
         "--file",
         str(blob_path),
+        "--cache-control",
+        "public, max-age=31536000, immutable",
         "--remote",
         "--config",
         str(CONFIG_PATH),

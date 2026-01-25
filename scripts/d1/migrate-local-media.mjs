@@ -9,6 +9,7 @@ const OUTPUT_SQL = "scripts/d1/seed/local_media_migration.sql";
 const D1_PERSIST_DIR = ".wrangler/state/v3";
 const PERSIST_DIR = ".wrangler/state/v3";
 const ALLOWED_EXTS = new Set([".png", ".jpg", ".jpeg"]);
+const CACHE_CONTROL = "public, max-age=31536000, immutable";
 const args = new Set(process.argv.slice(2));
 const useLocal = args.has("--local") || !args.has("--remote");
 const useRemote = args.has("--remote") || !args.has("--local");
@@ -130,6 +131,8 @@ function uploadToR2(bucketName, key, filePath, mode) {
     `${bucketName}/${key}`,
     "--file",
     `"${filePath}"`,
+    "--cache-control",
+    `"${CACHE_CONTROL}"`,
     isLocal ? "--local" : "",
     isRemote ? "--remote" : "",
     isLocal ? "--persist-to" : "",
