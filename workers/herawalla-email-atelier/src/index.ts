@@ -2134,6 +2134,13 @@ async function handleAdminRequest(
           headers: buildCorsHeaders(allowedOrigin, true),
         });
       }
+      if (path === "/catalog-notes") {
+        const payload = await buildCatalogNotesList(env, url.searchParams);
+        return new Response(JSON.stringify({ ok: true, ...payload }), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
       if (path === "/catalog-metal-options") {
         const payload = await buildCatalogMetalOptionsList(env, url.searchParams);
         return new Response(JSON.stringify({ ok: true, ...payload }), {
@@ -2390,6 +2397,19 @@ async function handleAdminRequest(
           });
         }
         const result = await handleCatalogStoneOptionAction(env, payload);
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (path === "/catalog-notes/action") {
+        if (!canEditCatalog(role)) {
+          return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+            status: 403,
+            headers: buildCorsHeaders(allowedOrigin, true),
+          });
+        }
+        const result = await handleCatalogNotesAction(env, payload);
         return new Response(JSON.stringify(result), {
           status: result.ok ? 200 : 400,
           headers: buildCorsHeaders(allowedOrigin, true),
@@ -3490,6 +3510,40 @@ function mapD1RowToRecord(row: Record<string, unknown>) {
       return entry;
     });
     return { items, total: items.length, headers: CATALOG_STONE_OPTIONS_HEADER };
+  }
+
+  async function buildCatalogNotesList(env: Env, params: URLSearchParams) {
+    if (!hasD1(env)) {
+      return { items: [], total: 0, headers: CATALOG_NOTES_HEADER };
+    }
+    const catalogId = (params.get("catalog_id") || params.get("catalogId") || "").trim();
+    const catalogSlug = (params.get("catalog_slug") || params.get("catalogSlug") || "").trim();
+    const kind = (params.get("kind") || "").trim();
+    let sql = "SELECT * FROM catalog_notes";
+    const clauses: string[] = [];
+    const bindings: string[] = [];
+    if (catalogId) {
+      clauses.push("catalog_id = ?");
+      bindings.push(catalogId);
+    } else if (catalogSlug) {
+      clauses.push("catalog_slug = ?");
+      bindings.push(catalogSlug);
+    }
+    if (kind) {
+      clauses.push("kind = ?");
+      bindings.push(kind);
+    }
+    if (clauses.length) {
+      sql += ` WHERE ${clauses.join(" AND ")}`;
+    }
+    sql += " ORDER BY sort_order, created_at";
+    const rows = await d1All(env, sql, bindings);
+    const items = rows.map((row) => {
+      const entry = mapD1RowToRecord(row);
+      entry.row_number = entry.id || "";
+      return entry;
+    });
+    return { items, total: items.length, headers: CATALOG_NOTES_HEADER };
   }
 
   async function buildCatalogMetalOptionsList(env: Env, params: URLSearchParams) {
@@ -5416,20 +5470,78 @@ async function handlePricingAdminAction(
   return { ok: true };
 }
 
-  async function handleCatalogAdminAction(
-    env: Env,
-    kind: "product" | "inspiration" | "media_library" | "product_media" | "inspiration_media",
-    payload: Record<string, unknown>
-  ) {
-    const action = getString(payload.action).toLowerCase();
-    if (action === "delete" || action === "remove") {
-      if (kind !== "product" && kind !== "inspiration") {
-        return { ok: false, error: "unsupported_delete" };
+function resolveMediaKeyFromUrl(url: string) {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url, "https://example.com");
+    const pathname = parsed.pathname || "";
+    const mediaIndex = pathname.indexOf("/media/");
+    if (mediaIndex !== -1) {
+      const suffix = pathname.slice(mediaIndex + "/media/".length).replace(/^\/+/, "");
+      return suffix ? `media/${suffix}` : "";
+    }
+    const libraryIndex = pathname.indexOf("/library/");
+    if (libraryIndex !== -1) {
+      const suffix = pathname.slice(libraryIndex + "/library/".length).replace(/^\/+/, "");
+      return suffix ? `media/library/${suffix}` : "";
+    }
+  } catch {}
+  return "";
+}
+
+async function deleteMediaObject(env: Env, mediaId: string, url: string) {
+  if (!env.MEDIA_BUCKET) return;
+  const key = resolveMediaKeyFromUrl(url);
+  if (!key) return;
+  await env.MEDIA_BUCKET.delete(key);
+}
+
+async function handleCatalogAdminAction(
+  env: Env,
+  kind: "product" | "inspiration" | "media_library" | "product_media" | "inspiration_media",
+  payload: Record<string, unknown>
+) {
+  const action = getString(payload.action).toLowerCase();
+  if (action === "delete" || action === "remove") {
+    if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
+    if (kind === "product_media" || kind === "inspiration_media") {
+      const mappingId = getString(payload.rowNumber || payload.row_number || payload.id || "");
+      if (!mappingId) return { ok: false, error: "missing_row_number" };
+      const mappingRows = await d1All(env, "SELECT id, media_id FROM catalog_media WHERE id = ? LIMIT 1", [
+        mappingId,
+      ]);
+      if (!mappingRows.length) return { ok: false, error: "not_found" };
+      const mediaId = getString(mappingRows[0].media_id || "");
+      await d1Run(env, "DELETE FROM catalog_media WHERE id = ?", [mappingId]);
+      const deleteMedia = Boolean(payload.delete_media || payload.deleteMedia);
+      if (deleteMedia && mediaId) {
+        const remaining = await d1All(
+          env,
+          "SELECT COUNT(*) AS total FROM catalog_media WHERE media_id = ?",
+          [mediaId]
+        );
+        const count = remaining.length ? Number(remaining[0].total || 0) : 0;
+        if (!count) {
+          const mediaRows = await d1All(
+            env,
+            "SELECT media_id, url FROM media_library WHERE media_id = ? LIMIT 1",
+            [mediaId]
+          );
+          if (mediaRows.length) {
+            const mediaUrl = getString(mediaRows[0].url || "");
+            await d1Run(env, "DELETE FROM media_library WHERE media_id = ?", [mediaId]);
+            await deleteMediaObject(env, mediaId, mediaUrl);
+          }
+        }
       }
-      if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
-      const identifier = getString(
-        payload.requestId || payload.request_id || payload.slug || payload.id || ""
-      );
+      return { ok: true };
+    }
+    if (kind !== "product" && kind !== "inspiration") {
+      return { ok: false, error: "unsupported_delete" };
+    }
+    const identifier = getString(
+      payload.requestId || payload.request_id || payload.slug || payload.id || ""
+    );
       if (!identifier) return { ok: false, error: "missing_identifier" };
       const rows = await d1All(
         env,
@@ -5448,7 +5560,7 @@ async function handlePricingAdminAction(
       ]);
       return { ok: true };
     }
-    const updates =
+  const updates =
       kind === "product"
         ? coerceUpdates(payload.fields, PRODUCT_UPDATE_FIELDS)
         : kind === "inspiration"
@@ -5520,6 +5632,76 @@ async function handlePricingAdminAction(
       const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
       const values = entries.map(([, value]) => value);
       await d1Run(env, `UPDATE catalog_stone_options SET ${setClause} WHERE id = ?`, [...values, id]);
+      return { ok: true };
+    }
+
+    return { ok: false, error: "invalid_action" };
+  }
+
+  async function handleCatalogNotesAction(env: Env, payload: Record<string, unknown>) {
+    if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
+    const action = getString(payload.action).toLowerCase();
+    const updates = coerceUpdates(payload.fields || payload, CATALOG_NOTES_UPDATE_FIELDS);
+    if (action === "delete" || action === "remove") {
+      const id = getString(payload.id || updates.id);
+      if (!id) return { ok: false, error: "missing_id" };
+      await d1Run(env, "DELETE FROM catalog_notes WHERE id = ?", [id]);
+      return { ok: true };
+    }
+
+    const now = new Date().toISOString();
+    if (action === "add_row" || action === "add") {
+      const id = getString(payload.id || "") || crypto.randomUUID();
+      let catalogSlug = getString(payload.catalog_slug || updates.catalog_slug);
+      let catalogId = getString(payload.catalog_id || updates.catalog_id);
+      if (!catalogId && catalogSlug) {
+        const rows = await d1All(
+          env,
+          "SELECT id FROM catalog_items WHERE slug = ? LIMIT 1",
+          [catalogSlug]
+        );
+        catalogId = rows.length ? String(rows[0].id || "") : "";
+      }
+      if (!catalogSlug && catalogId) {
+        const rows = await d1All(
+          env,
+          "SELECT slug FROM catalog_items WHERE id = ? LIMIT 1",
+          [catalogId]
+        );
+        catalogSlug = rows.length ? String(rows[0].slug || "") : "";
+      }
+      const kind = getString(payload.kind || updates.kind);
+      const note = getString(payload.note || updates.note);
+      const sortOrder = getString(payload.sort_order || updates.sort_order || "0");
+      if (!catalogId || !catalogSlug) return { ok: false, error: "missing_catalog" };
+      if (!kind || !note) return { ok: false, error: "missing_fields" };
+      await d1Run(
+        env,
+        `INSERT INTO catalog_notes (id, catalog_id, catalog_slug, kind, note, sort_order, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          catalogId,
+          catalogSlug,
+          kind,
+          note,
+          sortOrder,
+          now,
+          now,
+        ]
+      );
+      return { ok: true, id };
+    }
+
+    if (action === "update" || action === "edit" || action === "save") {
+      const id = getString(payload.id);
+      if (!id) return { ok: false, error: "missing_id" };
+      const fields = { ...updates, updated_at: now };
+      const entries = Object.entries(fields).filter(([, value]) => value !== undefined);
+      if (!entries.length) return { ok: false, error: "missing_updates" };
+      const setClause = entries.map(([key]) => `${key} = ?`).join(", ");
+      const values = entries.map(([, value]) => value);
+      await d1Run(env, `UPDATE catalog_notes SET ${setClause} WHERE id = ?`, [...values, id]);
       return { ok: true };
     }
 
@@ -5800,6 +5982,23 @@ const INSPIRATION_UPDATE_FIELDS = INSPIRATIONS_SHEET_HEADER;
 const MEDIA_LIBRARY_UPDATE_FIELDS = MEDIA_LIBRARY_SHEET_HEADER;
 const PRODUCT_MEDIA_UPDATE_FIELDS = PRODUCT_MEDIA_SHEET_HEADER;
 const INSPIRATION_MEDIA_UPDATE_FIELDS = INSPIRATION_MEDIA_SHEET_HEADER;
+const CATALOG_NOTES_HEADER = [
+  "id",
+  "catalog_id",
+  "catalog_slug",
+  "kind",
+  "note",
+  "sort_order",
+  "created_at",
+  "updated_at",
+];
+const CATALOG_NOTES_UPDATE_FIELDS = [
+  "catalog_id",
+  "catalog_slug",
+  "kind",
+  "note",
+  "sort_order",
+] as const;
 const CATALOG_STONE_OPTIONS_HEADER = [
   "id",
   "catalog_id",
@@ -6154,13 +6353,25 @@ async function updateCatalogRow(
         );
         catalogId = rows.length ? String(rows[0].id || "") : "";
       }
-      normalizedUpdates = {
-        catalog_id: catalogId || undefined,
-        media_id: updates.media_id || "",
-        position: updates.position || "",
-        is_primary: updates.is_primary || "",
-        sort_order: updates.sort_order || updates.order || "",
-      };
+      const hasOwn = (key: string) => Object.prototype.hasOwnProperty.call(updates, key);
+      const hasCatalogRef =
+        hasOwn("catalog_id") || hasOwn("catalog_slug") || hasOwn("product_slug") || hasOwn("inspiration_slug");
+      normalizedUpdates = {};
+      if (hasCatalogRef) {
+        normalizedUpdates.catalog_id = catalogId || "";
+      }
+      if (hasOwn("media_id")) {
+        normalizedUpdates.media_id = updates.media_id;
+      }
+      if (hasOwn("position")) {
+        normalizedUpdates.position = updates.position;
+      }
+      if (hasOwn("is_primary")) {
+        normalizedUpdates.is_primary = updates.is_primary;
+      }
+      if (hasOwn("sort_order") || hasOwn("order")) {
+        normalizedUpdates.sort_order = updates.sort_order || updates.order || "";
+      }
     }
     const entries = Object.entries(normalizedUpdates).filter(([, value]) => value !== undefined);
     if (!entries.length) return;
@@ -6181,6 +6392,28 @@ async function updateCatalogRow(
     const id = Number(rowNumber);
     if (!Number.isFinite(id)) return;
     await d1Run(env, `UPDATE catalog_media SET ${setClause} WHERE id = ?`, [...values, id]);
+    if (kind === "product_media" || kind === "inspiration_media") {
+      const isHero = String(normalizedUpdates.position || "").toLowerCase() === "hero";
+      const isPrimary = String(normalizedUpdates.is_primary || "") === "1";
+      if (isHero || isPrimary) {
+        const rows = await d1All(env, "SELECT catalog_id FROM catalog_media WHERE id = ? LIMIT 1", [id]);
+        const catalogId = rows.length ? String(rows[0].catalog_id || "") : "";
+        if (catalogId) {
+          const updatesSql = [];
+          const updateValues: string[] = [];
+          if (isHero) {
+            updatesSql.push("position = CASE WHEN position = 'hero' THEN '' ELSE position END");
+          }
+          updatesSql.push("is_primary = 0");
+          const clause = updatesSql.join(", ");
+          await d1Run(
+            env,
+            `UPDATE catalog_media SET ${clause} WHERE catalog_id = ? AND id <> ?`,
+            [catalogId, id]
+          );
+        }
+      }
+    }
     return;
   }
   const config = getCatalogSheetConfig(env, kind);
@@ -7319,6 +7552,7 @@ async function loadCatalogPayload(env: Env, params: URLSearchParams) {
           const metalWeightValue = metalOption
             ? String((metalOption as Record<string, unknown>).metal_weight || "")
             : "";
+          const metalWeightFallback = metalWeightValue || String(row.metal_weight || "");
           return {
           id: String(row.id || ""),
           name: String(row.name || ""),
@@ -7332,9 +7566,11 @@ async function loadCatalogPayload(env: Env, params: URLSearchParams) {
           gender: toPipeList(String(row.gender || "")),
           design_code: String(row.design_code || ""),
           metal: metals[0] || toPipeList(String(row.metals || "")) || String(row.metal || ""),
+          metal_options: toPipeList(String(row.metals || "")) || String(row.metal || ""),
+          metals: metals,
           stone_types: toPipeList(String(row.stone_types || "")),
           stone_weight: parseNumber(String(row.stone_weight || "")),
-            metal_weight: metalWeightValue,
+          metal_weight: metalWeightFallback,
             cut: String(row.cut || ""),
             clarity: String(row.clarity || ""),
             color: String(row.color || ""),
@@ -7432,6 +7668,15 @@ async function loadCatalogPayload(env: Env, params: URLSearchParams) {
         if (key) config[key] = String(row.value || "");
       });
       payload.siteConfig = config;
+    }
+    if (include.has("cost_chart")) {
+      const rows = await d1All(env, "SELECT key, value FROM cost_chart");
+      const chart: Record<string, string> = {};
+      rows.forEach((row) => {
+        const key = String(row.key || "");
+        if (key) chart[key] = String(row.value || "");
+      });
+      payload.costChart = chart;
     }
 
     return payload;

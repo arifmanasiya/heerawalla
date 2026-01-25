@@ -30,22 +30,10 @@ const formatNumber = (value: number) => {
 const buildEstimateMeta = (item: Inspiration) => {
   const sections: Array<{ label: string; text?: string; items?: string[] }> = [];
   const ariaParts: string[] = [];
-  const carat = item.stoneWeight ? formatNumber(item.stoneWeight) : '';
-  const diamondQualityText = carat
-    ? `${carat}ct TW, IGI-certified, excellent clarity (VVS1 or VVS2), excellent cut, color grade E or F`
-    : 'IGI-certified, excellent clarity (VVS1 or VVS2), excellent cut, color grade E or F';
+  const diamondQualityText = 'IGI-certified.';
   if (item.stoneWeight || item.metalWeight) {
     sections.push({ label: 'Diamond Quality', text: diamondQualityText });
     ariaParts.push(`Diamond Quality. ${diamondQualityText}.`);
-    if (item.stoneTypes.length) {
-      sections.push({ label: 'Diamond Options', items: item.stoneTypes });
-      ariaParts.push(`Diamond Options. ${item.stoneTypes.join('; ')}.`);
-    }
-  }
-  if (item.metalWeight) {
-    const weight = formatNumber(item.metalWeight);
-    sections.push({ label: 'Metal Options', items: ['18K Gold', `Approx. metal weight: ${weight}g`] });
-    ariaParts.push(`Metal Options. 18K Gold; Approx. metal weight: ${weight}g.`);
   }
   const tooltip = sections.length ? { sections, ariaLabel: ariaParts.join(' ') } : null;
   return { tooltip };
@@ -315,22 +303,10 @@ const buildEstimateMeta = (item: Inspiration) => {
     const buildEstimateMeta = (item) => {
       const sections = [];
       const ariaParts = [];
-      const carat = item.stoneWeight ? formatNumber(item.stoneWeight) : '';
-      const diamondQualityText = carat
-        ? `${carat}ct TW, IGI-certified, excellent clarity (VVS1 or VVS2), excellent cut, color grade E or F`
-        : 'IGI-certified, excellent clarity (VVS1 or VVS2), excellent cut, color grade E or F';
+      const diamondQualityText = 'IGI-certified.';
       if (item.stoneWeight || item.metalWeight) {
         sections.push({ label: 'Diamond Quality', text: diamondQualityText });
         ariaParts.push(`Diamond Quality. ${diamondQualityText}.`);
-        if (item.stoneTypes && item.stoneTypes.length) {
-          sections.push({ label: 'Diamond Options', items: item.stoneTypes });
-          ariaParts.push(`Diamond Options. ${item.stoneTypes.join('; ')}.`);
-        }
-      }
-      if (item.metalWeight) {
-        const weight = formatNumber(item.metalWeight);
-        sections.push({ label: 'Metal Options', items: ['18K Gold', `Approx. metal weight: ${weight}g`] });
-        ariaParts.push(`Metal Options. 18K Gold; Approx. metal weight: ${weight}g.`);
       }
       const tooltip = sections.length ? { sections, ariaLabel: ariaParts.join(' ') } : null;
       return { tooltip };

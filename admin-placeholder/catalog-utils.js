@@ -9,14 +9,10 @@
     "cut",
     "clarity",
     "color",
-    "palette",
-    "takeaways",
-    "translation_notes",
   ]);
 
   const ENUM_KEYS = {
     design_code: "design_codes",
-    collection: "collections",
     gender: "genders",
     categories: "categories",
     styles: "styles",
@@ -136,14 +132,6 @@
     }
     fields.is_active = normalizeBoolean(fields.is_active) ? "1" : "0";
     fields.is_featured = normalizeBoolean(fields.is_featured) ? "1" : "0";
-    if (fields.cut && !fields.cut_range) fields.cut_range = fields.cut;
-    if (fields.clarity && !fields.clarity_range) fields.clarity_range = fields.clarity;
-    if (fields.color && !fields.color_range) fields.color_range = fields.color;
-    if (fields.carat) {
-      const parsed = Number(fields.carat);
-      fields.carat = Number.isFinite(parsed) ? String(parsed) : fields.carat;
-    }
-
     return { normalized, fields };
   }
 
@@ -181,18 +169,17 @@
       });
     }
     if (isActive) {
-      const hero = String(safeItem.hero_image || "").trim();
       const hasHeroMedia =
         mediaState?.items?.some((item) => {
           const position = String(item.position || "").toLowerCase();
           const primary = String(item.is_primary || "").toLowerCase();
-          return position === "hero" && (primary === "1" || primary === "true");
+          return position === "hero" || primary === "1" || primary === "true";
         }) || false;
-      if (!hero && !hasHeroMedia) {
+      if (!hasHeroMedia) {
         missingCritical.push({
-          field: "hero_image",
-          message: "Hero image required for active items",
-          selector: '[data-field="hero_image"]',
+          field: "catalog_media",
+          message: "Hero media required for active items",
+          selector: "[data-catalog-panel=\"media\"]",
         });
       }
     }
@@ -215,7 +202,7 @@
         warnings.push({ field: key, message: `Unknown ${key}: ${unknown.join(", ")}` });
       }
     });
-    ["design_code", "collection", "gender"].forEach((key) => {
+    ["design_code", "gender"].forEach((key) => {
       const enumKey = ENUM_KEYS[key];
       const enumList = enums?.[enumKey] || [];
       const value = String(safeItem[key] || "").trim();

@@ -57,8 +57,7 @@
               <div class="dirty-indicator" data-dirty-indicator>All changes saved</div>
             </div>
             <div class="action-row-tools">
-              <button class="btn" data-primary-action type="button">Get Customer Confirmation</button>
-              <button class="btn btn-ghost" data-notes-save type="button">Save notes</button>
+              <button class="btn" data-primary-action type="button">Save updates</button>
               <div class="status-item">
                 <span class="status-label">Record</span>
                 <span class="status-value" data-sync-line>Loading</span>
@@ -78,17 +77,7 @@
                 </div>
               </div>
 
-              <div class="drawer-section" data-activity-section>
-                <div class="section-heading">
-                  <h3>Timeline &amp; activity</h3>
-                  <p class="muted">Created timestamps, status shifts, local edits, and fulfillment notes.</p>
-                </div>
-                <div class="timeline-feed" data-activity-feed>
-                  <div class="activity-item muted">Loading activity...</div>
-                </div>
-              </div>
-
-              <div class="drawer-section" data-overview-section>
+              <div class="drawer-section is-hidden" data-overview-section>
                 <h3>Overview</h3>
                 <div class="detail-grid" data-detail-grid></div>
               </div>
@@ -98,10 +87,76 @@
                   <h3 data-catalog-title>Catalog details</h3>
                   <p class="muted">Edit catalog attributes and save updates.</p>
                 </div>
-                <div class="edit-grid catalog-grid" data-catalog-fields></div>
+                <nav class="tabs tabs--compact" data-catalog-tabs>
+                  <button class="tab is-active" data-catalog-tab="basics" type="button">Basics</button>
+                  <button class="tab" data-catalog-tab="taxonomy" type="button">Taxonomy</button>
+                  <button class="tab" data-catalog-tab="materials" type="button">Materials</button>
+                  <button class="tab" data-catalog-tab="notes" type="button">Notes</button>
+                  <button class="tab" data-catalog-tab="media" type="button">Media</button>
+                  <button class="tab" data-catalog-tab="stones" type="button">Stone Options</button>
+                  <button class="tab" data-catalog-tab="metals" type="button">Metal Options</button>
+                  <button class="tab" data-catalog-tab="audit" type="button">Audit</button>
+                </nav>
               </div>
 
-              <div class="drawer-section is-hidden" data-catalog-media-section>
+              <div class="drawer-section catalog-panel is-hidden" data-catalog-panel="basics">
+                <div class="edit-grid catalog-grid" data-catalog-fields-basic></div>
+              </div>
+
+              <div class="drawer-section catalog-panel is-hidden" data-catalog-panel="taxonomy">
+                <div class="edit-grid catalog-grid" data-catalog-fields-taxonomy></div>
+              </div>
+
+              <div class="drawer-section catalog-panel is-hidden" data-catalog-panel="materials">
+                <div class="edit-grid catalog-grid" data-catalog-fields-materials></div>
+              </div>
+
+              <div class="drawer-section catalog-panel is-hidden" data-catalog-panel="notes" data-catalog-notes-section>
+                <div class="section-heading">
+                  <h3>Catalog notes</h3>
+                  <p class="muted">Descriptions, takeaways, and translation notes stored in catalog_notes.</p>
+                </div>
+                <div class="catalog-notes">
+                  <div class="note-block">
+                    <div class="note-head">
+                      <span>Description</span>
+                      <button class="btn btn-ghost btn-small" type="button" data-note-save="description">Save</button>
+                    </div>
+                    <textarea rows="3" data-note-editor="description" placeholder="Short description"></textarea>
+                  </div>
+                  <div class="note-block">
+                    <div class="note-head">
+                      <span>Long description</span>
+                      <button class="btn btn-ghost btn-small" type="button" data-note-save="long_desc">Save</button>
+                    </div>
+                    <textarea rows="4" data-note-editor="long_desc" placeholder="Long description"></textarea>
+                  </div>
+                  <div class="note-list" data-note-kind="takeaway">
+                    <div class="note-head">
+                      <span>Takeaways</span>
+                      <button class="btn btn-ghost btn-small" type="button" data-note-add="takeaway">Add</button>
+                    </div>
+                    <div class="note-rows" data-note-rows="takeaway"></div>
+                    <div class="note-form">
+                      <input type="text" data-note-input="takeaway" placeholder="Add takeaway note" />
+                      <input type="number" data-note-order="takeaway" placeholder="Order" />
+                    </div>
+                  </div>
+                  <div class="note-list" data-note-kind="translation_note">
+                    <div class="note-head">
+                      <span>Translation notes</span>
+                      <button class="btn btn-ghost btn-small" type="button" data-note-add="translation_note">Add</button>
+                    </div>
+                    <div class="note-rows" data-note-rows="translation_note"></div>
+                    <div class="note-form">
+                      <input type="text" data-note-input="translation_note" placeholder="Add translation note" />
+                      <input type="number" data-note-order="translation_note" placeholder="Order" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="drawer-section catalog-panel is-hidden" data-catalog-panel="media" data-catalog-media-section>
                 <div class="section-heading">
                   <h3>Media gallery</h3>
                   <p class="muted">Upload to R2 and link media to this item.</p>
@@ -147,8 +202,13 @@
                   <div class="catalog-media-form">
                     <label class="field">
                       <span>Existing media ID</span>
-                      <input type="text" data-media-id placeholder="azure-ring-hero-01" />
+                      <select data-media-id>
+                        <option value="">Select</option>
+                      </select>
                     </label>
+                    <div class="media-preview" data-media-preview>
+                      <span class="muted">Select a media item to preview.</span>
+                    </div>
                     <label class="field">
                       <span>Position</span>
                       <select data-media-position-existing>
@@ -170,10 +230,10 @@
                   </div>
                 </div>
               </div>
-              <div class="drawer-section is-hidden" data-catalog-stone-section>
+              <div class="drawer-section catalog-panel is-hidden" data-catalog-panel="stones" data-catalog-stone-section>
                 <div class="section-heading">
                   <h3>Stone options</h3>
-                  <p class="muted">Define center/accent ranges and allowed stone types for this item.</p>
+                  <p class="muted">Define stone weight options and size types for this item.</p>
                 </div>
                 <div class="catalog-stone-list" data-catalog-stone-list></div>
                 <div class="catalog-stone-form" data-catalog-stone-form>
@@ -184,44 +244,16 @@
                     </select>
                   </label>
                   <label class="field">
-                    <span>Stone type</span>
-                    <select data-stone-add-type>
-                      <option value="">Select</option>
-                    </select>
+                    <span>Carat</span>
+                    <input type="number" step="0.01" min="0" data-stone-add-carat placeholder="0.3">
                   </label>
                   <label class="field">
-                    <span>Carat min</span>
-                    <input type="number" step="0.01" min="0" data-stone-add-ct-min placeholder="0.3">
+                    <span>Count</span>
+                    <input type="number" step="1" min="0" data-stone-add-count placeholder="1">
                   </label>
                   <label class="field">
-                    <span>Carat max</span>
-                    <input type="number" step="0.01" min="0" data-stone-add-ct-max placeholder="2.0">
-                  </label>
-                  <label class="field">
-                    <span>Count min</span>
-                    <input type="number" step="1" min="0" data-stone-add-count-min placeholder="1">
-                  </label>
-                  <label class="field">
-                    <span>Count max</span>
-                    <input type="number" step="1" min="0" data-stone-add-count-max placeholder="10">
-                  </label>
-                  <label class="field">
-                    <span>Cut</span>
-                    <select data-stone-add-cut>
-                      <option value="">Select</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>Clarity</span>
-                    <select data-stone-add-clarity>
-                      <option value="">Select</option>
-                    </select>
-                  </label>
-                  <label class="field">
-                    <span>Color</span>
-                    <select data-stone-add-color>
-                      <option value="">Select</option>
-                    </select>
+                    <span>Size type</span>
+                    <input type="text" data-stone-add-size-type placeholder="small">
                   </label>
                   <label class="field">
                     <span>Primary</span>
@@ -230,15 +262,41 @@
                       <option value="1">Yes</option>
                     </select>
                   </label>
-                  <label class="field full-span">
-                    <span>Notes</span>
-                    <input type="text" data-stone-add-notes placeholder="Accent diamonds along band.">
-                  </label>
                   <button class="btn" type="button" data-stone-add>Add stone option</button>
                 </div>
               </div>
 
-              <div class="drawer-section" data-edit-section>
+              <div class="drawer-section catalog-panel is-hidden" data-catalog-panel="metals" data-catalog-metal-section>
+                <div class="section-heading">
+                  <h3>Metal options</h3>
+                  <p class="muted">Define metal weight options and size types for this item.</p>
+                </div>
+                <div class="catalog-metal-list" data-catalog-metal-list></div>
+                <div class="catalog-metal-form" data-catalog-metal-form>
+                  <label class="field">
+                    <span>Metal weight</span>
+                    <input type="number" step="0.01" min="0" data-metal-add-weight placeholder="2.5">
+                  </label>
+                  <label class="field">
+                    <span>Size type</span>
+                    <input type="text" data-metal-add-size-type placeholder="small">
+                  </label>
+                  <label class="field">
+                    <span>Primary</span>
+                    <select data-metal-add-primary>
+                      <option value="">No</option>
+                      <option value="1">Yes</option>
+                    </select>
+                  </label>
+                  <button class="btn" type="button" data-metal-add>Add metal option</button>
+                </div>
+              </div>
+
+              <div class="drawer-section catalog-panel is-hidden" data-catalog-panel="audit">
+                <div class="edit-grid catalog-grid" data-catalog-fields-audit></div>
+              </div>
+
+              <div class="drawer-section is-hidden" data-edit-section>
                 <h3>Edit details</h3>
                 <div class="edit-block">
                   <p class="drawer-eyebrow">Timing &amp; pricing</p>
@@ -593,7 +651,7 @@
                 </details>
               </div>
 
-              <div class="drawer-section" data-order-details-section>
+              <div class="drawer-section is-hidden" data-order-details-section>
                 <h3>Fulfillment details</h3>
                 <div class="fulfillment-group">
                   <p class="drawer-eyebrow">Shipping</p>
@@ -683,7 +741,7 @@
               </div>
             </div>
 
-            <aside class="detail-aside">
+            <aside class="detail-aside is-hidden">
               <div class="summary-card" data-summary-card>
                 <div class="summary-head">
                   <div>
@@ -858,7 +916,7 @@
       </section>
     </div>
 
-    <div class="modal" data-confirm-modal aria-hidden="true">
+    <div class="modal is-hidden" data-confirm-modal aria-hidden="true">
       <div class="modal-card">
         <div class="modal-header">
           <div>

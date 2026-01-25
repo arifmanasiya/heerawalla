@@ -1608,6 +1608,14 @@
     const show =
       canAdd && (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab));
     ui.addRowWrap.classList.toggle("is-hidden", !show);
+    if (ui.addRowButton) {
+      const labelMap = {
+        products: "Add product",
+        inspirations: "Add inspiration",
+        "media-library": "Add media",
+      };
+      ui.addRowButton.textContent = labelMap[state.tab] || "Add row";
+    }
   }
 
   function buildQuery() {

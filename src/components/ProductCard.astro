@@ -54,67 +54,12 @@ const normalizeMetalLabel = (value: string | undefined) => {
   if (!value) return '18K Gold';
   return value.replace(/\s+/g, ' ').trim();
 };
-const clarityToMarketing = (value: string | undefined) => {
-  if (!value) return '';
-  const normalized = value.toLowerCase();
-  if (normalized.includes('vvs1') && normalized.includes('vvs2')) {
-    return 'excellent clarity (VVS1 or VVS2)';
-  }
-  if (normalized.includes('vvs')) {
-    return 'excellent clarity (VVS)';
-  }
-  return value;
-};
-const cutToMarketing = (value: string | undefined) => {
-  if (!value) return '';
-  return `excellent cut${value ? ` (${value})` : ''}`;
-};
-const colorToMarketing = (value: string | undefined) => {
-  if (!value) return '';
-  return `color grade ${value.replace('/', ' or ')}`;
-};
 const buildEstimateTooltip = () => {
   const sections: Array<{ label: string; text?: string; items?: string[] }> = [];
   const ariaParts: string[] = [];
-  const diamondParts: string[] = [];
-  const clarity = clarityToMarketing(product.clarity);
-  const cut = cutToMarketing(product.cut);
-  const color = colorToMarketing(product.color);
-  if (clarity) diamondParts.push(clarity);
-  if (cut) diamondParts.push(cut);
-  if (color) diamondParts.push(color);
-
-  const stoneWeight = product.stone_weight ?? product.carat;
-  const caratText = formatCarat(stoneWeight);
-  const diamondQualityText = diamondParts.length
-    ? caratText
-      ? `${caratText}ct TW, IGI-certified, ${diamondParts.join(', ')}`
-      : `IGI-certified, ${diamondParts.join(', ')}`
-    : '';
-  if (diamondQualityText) {
-    sections.push({ label: 'Diamond Quality', text: diamondQualityText });
-    ariaParts.push(`Diamond Quality. ${diamondQualityText}.`);
-  }
-
-  if (stoneTypes.length) {
-    sections.push({ label: 'Diamond Options', items: stoneTypes });
-    ariaParts.push(`Diamond Options. ${stoneTypes.join('; ')}.`);
-  }
-
-  const metal18Label = normalizeMetalLabel(product.metal);
-  const metal14Label = metal18Label.replace(/18K/gi, '14K');
-  const metalPlatinumLabel = 'Platinum';
-  const metalOptionItems = Array.from(
-    new Set([metal18Label, metal14Label, metalPlatinumLabel].filter(Boolean))
-  );
-  const metalWeightText = formatWeight(product.metal_weight);
-  if (metalWeightText) {
-    metalOptionItems.push(`Approx. metal weight: ${metalWeightText}g`);
-  }
-  if (metalOptionItems.length) {
-    sections.push({ label: 'Metal Options', items: metalOptionItems });
-    ariaParts.push(`Metal Options. ${metalOptionItems.join('; ')}.`);
-  }
+  const diamondQualityText = 'IGI-certified.';
+  sections.push({ label: 'Diamond Quality', text: diamondQualityText });
+  ariaParts.push(`Diamond Quality. ${diamondQualityText}`);
 
   if (!sections.length) return { sections: [], ariaLabel: '' };
   return { sections, ariaLabel: ariaParts.join(' ') };
@@ -193,7 +138,12 @@ const estimateTooltip = buildEstimateTooltip();
         {product.name}
       </a>
       <span class="flex items-center gap-2">
-        <span class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap">
+        <span
+          class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap"
+          data-price
+          data-product-id={product.id}
+          data-product-slug={product.slug}
+        >
           {priceLabel}
         </span>
         {estimateTooltip.sections.length ? (

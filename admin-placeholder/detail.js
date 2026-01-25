@@ -20,7 +20,10 @@
     catalogOriginalFields: null,
     catalogMediaState: null,
     catalogStoneOptions: null,
+    catalogMetalOptions: null,
+    catalogNotes: null,
     catalogValidation: null,
+    mediaLibraryItems: [],
     sizingSpec: null,
     recommendedOptionIndex: null,
   };
@@ -209,6 +212,7 @@
   const PRICING_TABS = new Set(["price-chart", "cost-chart", "diamond-price-chart"]);
   const CATALOG_TABS = new Set(["products", "inspirations", "media-library"]);
   const CATALOG_ITEM_TABS = new Set(["products", "inspirations"]);
+  const CATALOG_DEFAULT_TAB = "basics";
   const QUOTE_OPTION_FIELDS = [
     { clarity: "quote_option_1_clarity", color: "quote_option_1_color", price: "quote_option_1_price_18k" },
     { clarity: "quote_option_2_clarity", color: "quote_option_2_color", price: "quote_option_2_price_18k" },
@@ -290,6 +294,8 @@
     { value: "side", label: "Side" },
     { value: "halo", label: "Halo" },
   ];
+  const NOTE_KINDS_SINGLE = ["description", "long_desc"];
+  const NOTE_KINDS_LIST = ["takeaway", "translation_note"];
   const NOTE_CHECKLIST = [
     "Metal weight confirmed",
     "Diamond breakdown confirmed",
@@ -347,7 +353,13 @@
     overviewSection: document.querySelector("[data-overview-section]"),
     catalogSection: document.querySelector("[data-catalog-section]"),
     catalogTitle: document.querySelector("[data-catalog-title]"),
+    catalogTabs: Array.from(document.querySelectorAll("[data-catalog-tab]")),
+    catalogPanels: Array.from(document.querySelectorAll("[data-catalog-panel]")),
     catalogFields: document.querySelector("[data-catalog-fields]"),
+    catalogFieldsBasic: document.querySelector("[data-catalog-fields-basic]"),
+    catalogFieldsTaxonomy: document.querySelector("[data-catalog-fields-taxonomy]"),
+    catalogFieldsMaterials: document.querySelector("[data-catalog-fields-materials]"),
+    catalogFieldsAudit: document.querySelector("[data-catalog-fields-audit]"),
     catalogMediaSection: document.querySelector("[data-catalog-media-section]"),
     catalogMediaList: document.querySelector("[data-catalog-media-list]"),
     mediaFile: document.querySelector("[data-media-file]"),
@@ -359,24 +371,32 @@
     mediaPrimary: document.querySelector("[data-media-primary]"),
     mediaUpload: document.querySelector("[data-media-upload]"),
     mediaId: document.querySelector("[data-media-id]"),
+    mediaPreview: document.querySelector("[data-media-preview]"),
     mediaPositionExisting: document.querySelector("[data-media-position-existing]"),
     mediaOrderExisting: document.querySelector("[data-media-order-existing]"),
     mediaPrimaryExisting: document.querySelector("[data-media-primary-existing]"),
     mediaLink: document.querySelector("[data-media-link]"),
+    catalogNotesSection: document.querySelector("[data-catalog-notes-section]"),
+    noteEditors: Array.from(document.querySelectorAll("[data-note-editor]")),
+    noteSaveButtons: Array.from(document.querySelectorAll("[data-note-save]")),
+    noteAddButtons: Array.from(document.querySelectorAll("[data-note-add]")),
+    noteRows: Array.from(document.querySelectorAll("[data-note-rows]")),
+    noteInputs: Array.from(document.querySelectorAll("[data-note-input]")),
+    noteOrders: Array.from(document.querySelectorAll("[data-note-order]")),
     catalogStoneSection: document.querySelector("[data-catalog-stone-section]"),
     catalogStoneList: document.querySelector("[data-catalog-stone-list]"),
     stoneAddRole: document.querySelector("[data-stone-add-role]"),
-    stoneAddType: document.querySelector("[data-stone-add-type]"),
-    stoneAddCtMin: document.querySelector("[data-stone-add-ct-min]"),
-    stoneAddCtMax: document.querySelector("[data-stone-add-ct-max]"),
-    stoneAddCountMin: document.querySelector("[data-stone-add-count-min]"),
-    stoneAddCountMax: document.querySelector("[data-stone-add-count-max]"),
-    stoneAddCut: document.querySelector("[data-stone-add-cut]"),
-    stoneAddClarity: document.querySelector("[data-stone-add-clarity]"),
-    stoneAddColor: document.querySelector("[data-stone-add-color]"),
+    stoneAddCarat: document.querySelector("[data-stone-add-carat]"),
+    stoneAddCount: document.querySelector("[data-stone-add-count]"),
+    stoneAddSizeType: document.querySelector("[data-stone-add-size-type]"),
     stoneAddPrimary: document.querySelector("[data-stone-add-primary]"),
-    stoneAddNotes: document.querySelector("[data-stone-add-notes]"),
     stoneAddButton: document.querySelector("[data-stone-add]"),
+    catalogMetalSection: document.querySelector("[data-catalog-metal-section]"),
+    catalogMetalList: document.querySelector("[data-catalog-metal-list]"),
+    metalAddWeight: document.querySelector("[data-metal-add-weight]"),
+    metalAddSizeType: document.querySelector("[data-metal-add-size-type]"),
+    metalAddPrimary: document.querySelector("[data-metal-add-primary]"),
+    metalAddButton: document.querySelector("[data-metal-add]"),
     actionRow: document.querySelector("[data-action-row]"),
     actionSelect: document.querySelector("[data-action-select]"),
     actionRun: document.querySelector("[data-action-run]"),
@@ -1936,13 +1956,13 @@
   function applyCatalogVisibility() {
     const showCatalog = CATALOG_TABS.has(state.tab);
     if (ui.catalogSection) ui.catalogSection.classList.toggle("is-hidden", !showCatalog);
-    if (ui.catalogMediaSection) {
-      const showMedia = CATALOG_ITEM_TABS.has(state.tab);
-      ui.catalogMediaSection.classList.toggle("is-hidden", !showCatalog || !showMedia);
-    }
-    if (ui.catalogStoneSection) {
-      const showStone = CATALOG_ITEM_TABS.has(state.tab);
-      ui.catalogStoneSection.classList.toggle("is-hidden", !showCatalog || !showStone);
+    if (showCatalog) {
+      const active =
+        ui.catalogTabs.find((tab) => tab.classList.contains("is-active"))?.dataset.catalogTab ||
+        CATALOG_DEFAULT_TAB;
+      setCatalogTab(active);
+    } else {
+      ui.catalogPanels.forEach((panel) => panel.classList.add("is-hidden"));
     }
     if (ui.missingPanel) ui.missingPanel.classList.toggle("is-hidden", false);
     if (ui.activityFeed) ui.activityFeed.closest(".drawer-section")?.classList.toggle("is-hidden", showCatalog);
@@ -1952,8 +1972,20 @@
     if (ui.nextActionPanel) ui.nextActionPanel.classList.toggle("is-hidden", showCatalog);
   }
 
+  function setCatalogTab(next) {
+    if (!ui.catalogTabs.length || !ui.catalogPanels.length) return;
+    const tab = next || CATALOG_DEFAULT_TAB;
+    ui.catalogTabs.forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.catalogTab === tab);
+    });
+    ui.catalogPanels.forEach((panel) => {
+      const panelKey = panel.dataset.catalogPanel || "";
+      panel.classList.toggle("is-hidden", panelKey !== tab);
+    });
+  }
+
   function renderCatalogFields(item, enums) {
-    if (!ui.catalogFields) return;
+    if (!ui.catalogFields && !ui.catalogFieldsBasic) return;
     if (state.tab === "media-library") {
       const headers = Array.isArray(state.catalogHeaders) && state.catalogHeaders.length
         ? state.catalogHeaders
@@ -1994,55 +2026,26 @@
     const form = window.CatalogForm;
     const safeEnums = enums || {};
     const value = item || {};
-    const allowCustomLists = new Set(["categories", "styles", "motifs", "tags"]);
-    const typeValue =
-      value.type || (state.tab === "products" ? "product" : state.tab === "inspirations" ? "inspiration" : "");
+    const allowCustomLists = new Set(["styles", "motifs", "tags"]);
     const activeValue =
       value.is_active === undefined || value.is_active === null
         ? state.isNewRow
         : Boolean(value.is_active);
     const featuredValue = Boolean(value.is_featured);
     const slugHelper = `<button class="btn btn-ghost btn-small" type="button" data-slug-generate>Generate</button>`;
-    const fields = [
-      form.renderTextInput({ label: "ID", field: "id", value: value.id || "", readOnly: true }),
-      form.renderTextInput({ label: "Type", field: "type", value: typeValue, readOnly: true }),
+    const basics = [
+      form.renderTextInput({
+        label: "ID",
+        field: "id",
+        value: value.id || "",
+        readOnly: !state.isNewRow,
+      }),
       form.renderTextInput({ label: "Name", field: "name", value: value.name || "" }),
       form.renderTextInput({
         label: "Slug",
         field: "slug",
         value: value.slug || "",
         helperHtml: slugHelper,
-      }),
-      form.renderTextarea({
-        label: "Description",
-        field: "description",
-        value: value.description || "",
-        fullSpan: true,
-        rows: 2,
-        counter: true,
-      }),
-      form.renderTextarea({
-        label: "Short description",
-        field: "short_desc",
-        value: value.short_desc || "",
-        fullSpan: true,
-        rows: 2,
-        counter: true,
-      }),
-      form.renderTextarea({
-        label: "Long description",
-        field: "long_desc",
-        value: value.long_desc || "",
-        fullSpan: true,
-        rows: 4,
-        counter: true,
-      }),
-      form.renderTextInput({
-        label: "Hero image URL",
-        field: "hero_image",
-        value: value.hero_image || "",
-        fullSpan: true,
-        placeholder: "https://...",
       }),
       form.renderEnumSelect({
         label: "Design code",
@@ -2052,14 +2055,11 @@
         includeEmpty: true,
         placeholder: "Select",
       }),
-      form.renderEnumSelect({
-        label: "Collection",
-        field: "collection",
-        value: value.collection || "",
-        options: safeEnums.collections,
-        includeEmpty: true,
-        placeholder: "Select",
-      }),
+      form.renderToggle({ label: "Active", field: "is_active", value: activeValue }),
+      form.renderToggle({ label: "Featured", field: "is_featured", value: featuredValue }),
+    ];
+
+    const taxonomy = [
       form.renderEnumSelect({
         label: "Gender",
         field: "gender",
@@ -2068,8 +2068,6 @@
         includeEmpty: true,
         placeholder: "Select",
       }),
-      form.renderToggle({ label: "Active", field: "is_active", value: activeValue }),
-      form.renderToggle({ label: "Featured", field: "is_featured", value: featuredValue }),
       form.renderMultiSelectChips({
         label: "Categories",
         field: "categories",
@@ -2098,6 +2096,18 @@
         fullSpan: true,
       }),
       form.renderMultiSelectChips({
+        label: "Tags",
+        field: "tags",
+        values: value.tags || [],
+        enumKey: "tags",
+        allowCustom: allowCustomLists.has("tags"),
+        placeholder: "Add tag",
+        fullSpan: true,
+      }),
+    ];
+
+    const materials = [
+      form.renderMultiSelectChips({
         label: "Metals",
         field: "metals",
         values: value.metals || [],
@@ -2107,30 +2117,12 @@
         fullSpan: true,
       }),
       form.renderMultiSelectChips({
-        label: "Metal options",
-        field: "metal_options",
-        values: value.metal_options || [],
-        enumKey: "metals",
-        allowCustom: true,
-        placeholder: "Add option",
-        fullSpan: true,
-      }),
-      form.renderMultiSelectChips({
         label: "Stone types",
         field: "stone_types",
         values: value.stone_types || [],
         enumKey: "stone_types",
         allowCustom: false,
         placeholder: "Add stone type",
-        fullSpan: true,
-      }),
-      form.renderMultiSelectChips({
-        label: "Stone type options",
-        field: "stone_type_options",
-        values: value.stone_type_options || [],
-        enumKey: "stone_types",
-        allowCustom: true,
-        placeholder: "Add option",
         fullSpan: true,
       }),
       form.renderMultiSelectChips({
@@ -2160,69 +2152,9 @@
         placeholder: "Add color",
         fullSpan: true,
       }),
-      form.renderTextInput({
-        label: "Carat",
-        field: "carat",
-        value: value.carat || "",
-        placeholder: "1.0",
-        type: "number",
-      }),
-      form.renderTextInput({
-        label: "Stone weight",
-        field: "stone_weight",
-        value: value.stone_weight || "",
-        placeholder: "0.25",
-        type: "number",
-      }),
-      form.renderRangeInput({
-        label: "Stone weight range",
-        field: "stone_weight_range",
-        value: value.stone_weight_range || "",
-        unit: "ct",
-      }),
-      form.renderTextInput({
-        label: "Metal weight",
-        field: "metal_weight",
-        value: value.metal_weight || "",
-        placeholder: "3.2",
-        type: "number",
-      }),
-      form.renderRangeInput({
-        label: "Metal weight range",
-        field: "metal_weight_range",
-        value: value.metal_weight_range || "",
-        unit: "g",
-      }),
-      form.renderListTextarea({
-        label: "Palette",
-        field: "palette",
-        values: value.palette || [],
-        placeholder: "metal:18K Yellow Gold",
-        fullSpan: true,
-      }),
-      form.renderListTextarea({
-        label: "Takeaways",
-        field: "takeaways",
-        values: value.takeaways || [],
-        placeholder: "One point per line",
-        fullSpan: true,
-      }),
-      form.renderListTextarea({
-        label: "Translation notes",
-        field: "translation_notes",
-        values: value.translation_notes || [],
-        placeholder: "One note per line",
-        fullSpan: true,
-      }),
-      form.renderMultiSelectChips({
-        label: "Tags",
-        field: "tags",
-        values: value.tags || [],
-        enumKey: "tags",
-        allowCustom: allowCustomLists.has("tags"),
-        placeholder: "Add tag",
-        fullSpan: true,
-      }),
+    ];
+
+    const audit = [
       form.renderTextInput({
         label: "Created at",
         field: "created_at",
@@ -2235,29 +2167,48 @@
         value: value.updated_at || "",
         readOnly: true,
       }),
+      form.renderTextInput({
+        label: "Updated by",
+        field: "updated_by",
+        value: value.updated_by || "",
+        readOnly: true,
+      }),
     ];
 
-    ui.catalogFields.innerHTML = fields.join("");
+    if (ui.catalogFieldsBasic) ui.catalogFieldsBasic.innerHTML = basics.join("");
+    if (ui.catalogFieldsTaxonomy) ui.catalogFieldsTaxonomy.innerHTML = taxonomy.join("");
+    if (ui.catalogFieldsMaterials) ui.catalogFieldsMaterials.innerHTML = materials.join("");
+    if (ui.catalogFieldsAudit) ui.catalogFieldsAudit.innerHTML = audit.join("");
+    if (ui.catalogFields && !ui.catalogFieldsBasic) {
+      ui.catalogFields.innerHTML = [...basics, ...taxonomy, ...materials, ...audit].join("");
+    }
 
     const handleCatalogChange = () => {
       refreshMissingInfo();
       updatePrimaryActionState();
       updateActionButtonState();
     };
-    form.init(ui.catalogFields, safeEnums, handleCatalogChange);
+    [ui.catalogFieldsBasic, ui.catalogFieldsTaxonomy, ui.catalogFieldsMaterials, ui.catalogFieldsAudit, ui.catalogFields]
+      .filter(Boolean)
+      .forEach((container) => {
+        form.init(container, safeEnums, handleCatalogChange);
+      });
 
-    const slugButton = ui.catalogFields.querySelector("[data-slug-generate]");
+    const slugButton = document.querySelector("[data-slug-generate]");
     if (slugButton) {
       slugButton.addEventListener("click", () => {
-        const nameInput = ui.catalogFields.querySelector('[data-field="name"]');
-        const slugInput = ui.catalogFields.querySelector('[data-field="slug"]');
+        const slugContainer = ui.catalogFieldsBasic || ui.catalogFields;
+        if (!slugContainer) return;
+        const nameInput = slugContainer.querySelector('[data-field="name"]');
+        const slugInput = slugContainer.querySelector('[data-field="slug"]');
         if (!nameInput || !slugInput || !window.CatalogUtils) return;
         slugInput.value = window.CatalogUtils.normalizeSlug(nameInput.value || "");
         slugInput.dispatchEvent(new Event("input", { bubbles: true }));
       });
     }
 
-    ui.catalogFields.querySelectorAll("[data-char-count]").forEach((input) => {
+    const counterFields = document.querySelectorAll("[data-char-count]");
+    counterFields.forEach((input) => {
       const counter = input.closest(".field")?.querySelector("[data-char-counter]");
       if (!counter) return;
       const updateCounter = () => {
@@ -2277,6 +2228,8 @@
     const slug = item?.slug || "";
     if (!slug) {
       state.catalogMediaState = { items: [] };
+      state.mediaLibraryItems = [];
+      updateExistingMediaOptions([]);
       ui.catalogMediaList.innerHTML = `<div class="muted">Save this record before linking media.</div>`;
       return;
     }
@@ -2288,37 +2241,85 @@
         apiFetch(`${mappingPath}?${mappingParam}=${encodeURIComponent(slug)}&limit=500&offset=0`),
       ]);
       state.catalogMediaState = { items: mappings.items || [] };
+      state.mediaLibraryItems = Array.isArray(mediaLibrary.items) ? mediaLibrary.items : [];
+      updateExistingMediaOptions(state.mediaLibraryItems);
       const libraryMap = new Map(
         (mediaLibrary.items || []).map((entry) => [entry.media_id, entry])
       );
-      const cards = (mappings.items || []).map((mapping) => {
+      const sortedMappings = (mappings.items || []).slice().sort((a, b) => {
+        const orderA = Number(a.sort_order || a.order || 0);
+        const orderB = Number(b.sort_order || b.order || 0);
+        if (orderA != orderB) return orderA - orderB;
+        const idA = Number(a.id || 0);
+        const idB = Number(b.id || 0);
+        return idA - idB;
+      });
+      const cards = sortedMappings.map((mapping) => {
         const media = libraryMap.get(mapping.media_id) || {};
         const url = normalizeImageUrl(media.url || "");
         const isVideo = String(media.media_type || "").toLowerCase().startsWith("video");
         const mediaNode = isVideo
           ? `<video src="${escapeAttribute(url)}" controls></video>`
           : `<img src="${escapeAttribute(url)}" alt="">`;
-        const position = mapping.position || "--";
-        const order = mapping.sort_order || mapping.order || "--";
+        const position = mapping.position || "";
+        const orderValue = String(mapping.sort_order || mapping.order || "");
+        const orderDisplay = orderValue || "--";
         const primary = String(mapping.is_primary || "") === "1" ? "Yes" : "No";
+        const isHero = String(mapping.position || "").toLowerCase() === "hero";
+        const heroBadge = isHero ? `<span class="media-hero-badge">Hero</span>` : "";
+        const labelValue = String(media.label || "");
+        const positionOptions = buildSelectOptions(
+          (state.catalogEnums || {}).media_positions || [],
+          position,
+          true,
+          "Select"
+        );
         return `
-          <div class="catalog-media-item">
+          <div class="catalog-media-item" data-position="${escapeAttribute(position)}" data-media-id="${escapeAttribute(
+          mapping.media_id || ""
+        )}">
             ${mediaNode}
-            <div class="catalog-media-meta">${escapeHtml(mapping.media_id || "--")}</div>
-            <div class="catalog-media-meta">${escapeHtml(media.label || media.description || "")}</div>
-            <div class="catalog-media-meta">Position: ${escapeHtml(position)} · Order: ${escapeHtml(
-          String(order)
-        )} · Primary: ${escapeHtml(primary)}</div>
-            <div class="catalog-media-actions">
-              <button class="btn btn-ghost btn-small" type="button" data-media-copy data-url="${escapeAttribute(
-                url
-              )}">Copy URL</button>
-              <button class="btn btn-ghost btn-small" type="button" data-media-hero data-url="${escapeAttribute(
-                url
-              )}">Set hero</button>
-              <a class="btn btn-ghost btn-small" href="${escapeAttribute(
-                url
-              )}" target="_blank" rel="noopener">Open</a>
+            <div class="catalog-media-header">
+              <div class="catalog-media-meta">${escapeHtml(mapping.media_id || "--")}</div>
+              <details class="catalog-media-info">
+                <summary aria-label="Media details">i</summary>
+                <div class="catalog-media-info-content">
+                  <div class="catalog-media-meta">${escapeHtml(media.label || media.description || "")}</div>
+                  <div class="catalog-media-meta">Position: ${escapeHtml(position || "--")} · Order: ${escapeHtml(
+          orderDisplay
+        )} · Primary: ${escapeHtml(primary)} ${heroBadge}</div>
+                </div>
+              </details>
+            </div>
+            <div class="catalog-media-controls">
+              <div class="media-control-row">
+                <label class="field field-inline">
+                  <span>Order</span>
+                  <input type="number" data-media-order value="${escapeAttribute(orderValue)}" />
+                </label>
+                <label class="field field-inline">
+                  <span>Position</span>
+                  <select data-media-position>${positionOptions}</select>
+                </label>
+                <label class="field field-inline">
+                  <span>Hero</span>
+                  <input type="checkbox" data-media-hero-toggle ${isHero ? "checked" : ""} />
+                </label>
+              </div>
+              <div class="media-control-row">
+                <label class="field field-inline media-label-field">
+                  <span>Label</span>
+                  <input type="text" data-media-label value="${escapeAttribute(labelValue)}" />
+                </label>
+              </div>
+              <div class="media-control-row media-control-actions">
+                <button class="btn btn-ghost btn-small" type="button" data-media-save data-mapping-id="${escapeAttribute(
+                  mapping.id || mapping.row_number || ""
+                )}">Save</button>
+                <button class="btn btn-ghost btn-small" type="button" data-media-delete data-mapping-id="${escapeAttribute(
+                  mapping.id || mapping.row_number || ""
+                )}">Delete</button>
+              </div>
             </div>
           </div>
         `;
@@ -2326,8 +2327,46 @@
       ui.catalogMediaList.innerHTML = cards.length ? cards.join("") : `<div class="muted">No media linked yet.</div>`;
     } catch (error) {
       state.catalogMediaState = { items: [] };
+      state.mediaLibraryItems = [];
+      updateExistingMediaOptions([]);
       ui.catalogMediaList.innerHTML = `<div class="muted">Unable to load media.</div>`;
     }
+  }
+
+  function updateExistingMediaOptions(items) {
+    if (!ui.mediaId) return;
+    const current = ui.mediaId.value || "";
+    const options = ['<option value="">Select</option>'];
+    (items || [])
+      .slice()
+      .sort((a, b) => String(a.media_id || "").localeCompare(String(b.media_id || "")))
+      .forEach((entry) => {
+        const mediaId = String(entry.media_id || "").trim();
+        if (!mediaId) return;
+        options.push(`<option value="${escapeAttribute(mediaId)}">${escapeHtml(mediaId)}</option>`);
+      });
+    ui.mediaId.innerHTML = options.join("");
+    if (current) ui.mediaId.value = current;
+    renderMediaPreview(ui.mediaId.value || "");
+  }
+
+  function renderMediaPreview(mediaId) {
+    if (!ui.mediaPreview) return;
+    const items = Array.isArray(state.mediaLibraryItems) ? state.mediaLibraryItems : [];
+    const match = items.find((entry) => String(entry.media_id || "") === String(mediaId || ""));
+    if (!match || !mediaId) {
+      ui.mediaPreview.innerHTML = `<span class="muted">Select a media item to preview.</span>`;
+      return;
+    }
+    const url = normalizeImageUrl(match.url || "");
+    if (!url) {
+      ui.mediaPreview.innerHTML = `<span class="muted">No URL available for this media.</span>`;
+      return;
+    }
+    const isVideo = String(match.media_type || "").toLowerCase().startsWith("video");
+    ui.mediaPreview.innerHTML = isVideo
+      ? `<video src="${escapeAttribute(url)}" controls></video>`
+      : `<img src="${escapeAttribute(url)}" alt="${escapeAttribute(match.alt || match.label || "")}">`;
   }
 
   function getStoneRoleOptions(enums) {
@@ -2354,10 +2393,6 @@
 
   function renderStoneOptionRow(entry, enums) {
     const roleOptions = getStoneRoleOptions(enums);
-    const stoneTypeOptions = enums.stone_types || [];
-    const cutOptions = enums.cuts || [];
-    const clarityOptions = enums.clarities || [];
-    const colorOptions = enums.colors || [];
     const isPrimary = String(entry.is_primary || entry.isPrimary || "") === "1" || entry.is_primary === true;
     return `
       <div class="catalog-stone-row" data-stone-option-id="${escapeAttribute(entry.id || "")}">
@@ -2369,52 +2404,20 @@
             </select>
           </label>
           <label class="field">
-            <span>Stone type</span>
-            <select data-stone-field="stone_type">
-              ${buildSelectOptions(stoneTypeOptions, entry.stone_type, true, "Select")}
-            </select>
-          </label>
-          <label class="field">
-            <span>Carat min</span>
-            <input type="number" step="0.01" min="0" data-stone-field="ct_min" value="${escapeAttribute(
-              entry.ct_min ?? ""
+            <span>Carat</span>
+            <input type="number" step="0.01" min="0" data-stone-field="carat" value="${escapeAttribute(
+              entry.carat ?? ""
             )}">
           </label>
           <label class="field">
-            <span>Carat max</span>
-            <input type="number" step="0.01" min="0" data-stone-field="ct_max" value="${escapeAttribute(
-              entry.ct_max ?? ""
+            <span>Count</span>
+            <input type="number" step="1" min="0" data-stone-field="count" value="${escapeAttribute(
+              entry.count ?? ""
             )}">
           </label>
           <label class="field">
-            <span>Count min</span>
-            <input type="number" step="1" min="0" data-stone-field="count_min" value="${escapeAttribute(
-              entry.count_min ?? ""
-            )}">
-          </label>
-          <label class="field">
-            <span>Count max</span>
-            <input type="number" step="1" min="0" data-stone-field="count_max" value="${escapeAttribute(
-              entry.count_max ?? ""
-            )}">
-          </label>
-          <label class="field">
-            <span>Cut</span>
-            <select data-stone-field="cut">
-              ${buildSelectOptions(cutOptions, entry.cut, true, "Select")}
-            </select>
-          </label>
-          <label class="field">
-            <span>Clarity</span>
-            <select data-stone-field="clarity">
-              ${buildSelectOptions(clarityOptions, entry.clarity, true, "Select")}
-            </select>
-          </label>
-          <label class="field">
-            <span>Color</span>
-            <select data-stone-field="color">
-              ${buildSelectOptions(colorOptions, entry.color, true, "Select")}
-            </select>
+            <span>Size type</span>
+            <input type="text" data-stone-field="size_type" value="${escapeAttribute(entry.size_type || "")}">
           </label>
           <label class="field">
             <span>Primary</span>
@@ -2422,10 +2425,6 @@
               <option value="" ${isPrimary ? "" : "selected"}>No</option>
               <option value="1" ${isPrimary ? "selected" : ""}>Yes</option>
             </select>
-          </label>
-          <label class="field full-span">
-            <span>Notes</span>
-            <input type="text" data-stone-field="notes" value="${escapeAttribute(entry.notes || "")}">
           </label>
         </div>
         <div class="catalog-stone-actions">
@@ -2443,16 +2442,10 @@
     };
     return {
       role: read("role"),
-      stone_type: read("stone_type"),
-      ct_min: read("ct_min"),
-      ct_max: read("ct_max"),
-      count_min: read("count_min"),
-      count_max: read("count_max"),
-      cut: read("cut"),
-      clarity: read("clarity"),
-      color: read("color"),
+      carat: read("carat"),
+      count: read("count"),
+      size_type: read("size_type"),
       is_primary: read("is_primary"),
-      notes: read("notes"),
     };
   }
 
@@ -2463,15 +2456,13 @@
       return;
     }
     const catalogId = item?.id || "";
-    const catalogSlug = item?.slug || "";
-    if (!catalogId && !catalogSlug) {
+    if (!catalogId) {
       state.catalogStoneOptions = { items: [] };
       ui.catalogStoneList.innerHTML = `<div class="muted">Save this record before adding stone options.</div>`;
       return;
     }
     const params = new URLSearchParams();
-    if (catalogId) params.set("catalog_id", catalogId);
-    if (catalogSlug) params.set("catalog_slug", catalogSlug);
+    params.set("catalog_id", catalogId);
     try {
       const data = await apiFetch(`/catalog-stone-options?${params.toString()}`);
       const items = Array.isArray(data.items) ? data.items : [];
@@ -2488,44 +2479,31 @@
   function getStoneAddValues() {
     return {
       role: ui.stoneAddRole?.value.trim() || "",
-      stone_type: ui.stoneAddType?.value.trim() || "",
-      ct_min: ui.stoneAddCtMin?.value.trim() || "",
-      ct_max: ui.stoneAddCtMax?.value.trim() || "",
-      count_min: ui.stoneAddCountMin?.value.trim() || "",
-      count_max: ui.stoneAddCountMax?.value.trim() || "",
-      cut: ui.stoneAddCut?.value.trim() || "",
-      clarity: ui.stoneAddClarity?.value.trim() || "",
-      color: ui.stoneAddColor?.value.trim() || "",
+      carat: ui.stoneAddCarat?.value.trim() || "",
+      count: ui.stoneAddCount?.value.trim() || "",
+      size_type: ui.stoneAddSizeType?.value.trim() || "",
       is_primary: ui.stoneAddPrimary?.value || "",
-      notes: ui.stoneAddNotes?.value.trim() || "",
     };
   }
 
   function resetStoneAddForm() {
     if (ui.stoneAddRole) ui.stoneAddRole.value = "";
-    if (ui.stoneAddType) ui.stoneAddType.value = "";
-    if (ui.stoneAddCtMin) ui.stoneAddCtMin.value = "";
-    if (ui.stoneAddCtMax) ui.stoneAddCtMax.value = "";
-    if (ui.stoneAddCountMin) ui.stoneAddCountMin.value = "";
-    if (ui.stoneAddCountMax) ui.stoneAddCountMax.value = "";
-    if (ui.stoneAddCut) ui.stoneAddCut.value = "";
-    if (ui.stoneAddClarity) ui.stoneAddClarity.value = "";
-    if (ui.stoneAddColor) ui.stoneAddColor.value = "";
+    if (ui.stoneAddCarat) ui.stoneAddCarat.value = "";
+    if (ui.stoneAddCount) ui.stoneAddCount.value = "";
+    if (ui.stoneAddSizeType) ui.stoneAddSizeType.value = "";
     if (ui.stoneAddPrimary) ui.stoneAddPrimary.value = "";
-    if (ui.stoneAddNotes) ui.stoneAddNotes.value = "";
   }
 
   async function addStoneOption() {
     if (!state.selectedItem) return;
     const catalogId = state.selectedItem.id || "";
-    const catalogSlug = state.selectedItem.slug || "";
-    if (!catalogId && !catalogSlug) {
+    if (!catalogId) {
       showToast("Save the item before adding stone options.", "error");
       return;
     }
     const fields = getStoneAddValues();
-    if (!fields.role || !fields.stone_type) {
-      showToast("Role and stone type are required.", "error");
+    if (!fields.role || !fields.carat) {
+      showToast("Role and carat are required.", "error");
       return;
     }
     try {
@@ -2535,7 +2513,6 @@
           action: "add_row",
           fields: {
             catalog_id: catalogId,
-            catalog_slug: catalogSlug,
             ...fields,
           },
         }),
@@ -2552,8 +2529,8 @@
     const id = row.getAttribute("data-stone-option-id") || "";
     if (!id) return;
     const fields = getStoneOptionRowValues(row);
-    if (!fields.role || !fields.stone_type) {
-      showToast("Role and stone type are required.", "error");
+    if (!fields.role || !fields.carat) {
+      showToast("Role and carat are required.", "error");
       return;
     }
     try {
@@ -2585,6 +2562,406 @@
       showToast("Stone option deleted.");
     } catch (error) {
       showToast("Unable to delete stone option.", "error");
+    }
+  }
+
+  function renderMetalOptionRow(entry) {
+    const isPrimary = String(entry.is_primary || entry.isPrimary || "") === "1" || entry.is_primary === true;
+    return `
+      <div class="catalog-stone-row" data-metal-option-id="${escapeAttribute(entry.id || "")}">
+        <div class="catalog-stone-grid">
+          <label class="field">
+            <span>Metal weight</span>
+            <input type="number" step="0.01" min="0" data-metal-field="metal_weight" value="${escapeAttribute(
+              entry.metal_weight ?? ""
+            )}">
+          </label>
+          <label class="field">
+            <span>Size type</span>
+            <input type="text" data-metal-field="size_type" value="${escapeAttribute(entry.size_type || "")}">
+          </label>
+          <label class="field">
+            <span>Primary</span>
+            <select data-metal-field="is_primary">
+              <option value="" ${isPrimary ? "" : "selected"}>No</option>
+              <option value="1" ${isPrimary ? "selected" : ""}>Yes</option>
+            </select>
+          </label>
+        </div>
+        <div class="catalog-stone-actions">
+          <button class="btn btn-ghost btn-small" type="button" data-metal-save>Save</button>
+          <button class="btn btn-ghost btn-small" type="button" data-metal-delete>Delete</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function getMetalOptionRowValues(row) {
+    const read = (key) => {
+      const field = row.querySelector(`[data-metal-field="${key}"]`);
+      return field ? field.value.trim() : "";
+    };
+    return {
+      metal_weight: read("metal_weight"),
+      size_type: read("size_type"),
+      is_primary: read("is_primary"),
+    };
+  }
+
+  async function renderCatalogMetalOptions(item) {
+    if (!ui.catalogMetalList) return;
+    if (!CATALOG_ITEM_TABS.has(state.tab)) {
+      ui.catalogMetalList.innerHTML = "";
+      return;
+    }
+    const catalogId = item?.id || "";
+    if (!catalogId) {
+      state.catalogMetalOptions = { items: [] };
+      ui.catalogMetalList.innerHTML = `<div class="muted">Save this record before adding metal options.</div>`;
+      return;
+    }
+    const params = new URLSearchParams({ catalog_id: catalogId });
+    try {
+      const data = await apiFetch(`/catalog-metal-options?${params.toString()}`);
+      const items = Array.isArray(data.items) ? data.items : [];
+      state.catalogMetalOptions = { items };
+      const rows = items.map((entry) => renderMetalOptionRow(entry));
+      ui.catalogMetalList.innerHTML = rows.length ? rows.join("") : `<div class="muted">No metal options yet.</div>`;
+    } catch (error) {
+      state.catalogMetalOptions = { items: [] };
+      ui.catalogMetalList.innerHTML = `<div class="muted">Unable to load metal options.</div>`;
+    }
+  }
+
+  function getMetalAddValues() {
+    return {
+      metal_weight: ui.metalAddWeight?.value.trim() || "",
+      size_type: ui.metalAddSizeType?.value.trim() || "",
+      is_primary: ui.metalAddPrimary?.value || "",
+    };
+  }
+
+  function resetMetalAddForm() {
+    if (ui.metalAddWeight) ui.metalAddWeight.value = "";
+    if (ui.metalAddSizeType) ui.metalAddSizeType.value = "";
+    if (ui.metalAddPrimary) ui.metalAddPrimary.value = "";
+  }
+
+  async function addMetalOption() {
+    if (!state.selectedItem) return;
+    const catalogId = state.selectedItem.id || "";
+    if (!catalogId) {
+      showToast("Save the item before adding metal options.", "error");
+      return;
+    }
+    const fields = getMetalAddValues();
+    if (!fields.metal_weight) {
+      showToast("Metal weight is required.", "error");
+      return;
+    }
+    try {
+      await apiFetch("/catalog-metal-options/action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "add_row",
+          fields: {
+            catalog_id: catalogId,
+            ...fields,
+          },
+        }),
+      });
+      resetMetalAddForm();
+      await renderCatalogMetalOptions(state.selectedItem);
+      showToast("Metal option added.");
+    } catch (error) {
+      showToast("Unable to add metal option.", "error");
+    }
+  }
+
+  async function saveMetalOption(row) {
+    const id = row.getAttribute("data-metal-option-id") || "";
+    if (!id) return;
+    const fields = getMetalOptionRowValues(row);
+    if (!fields.metal_weight) {
+      showToast("Metal weight is required.", "error");
+      return;
+    }
+    try {
+      await apiFetch("/catalog-metal-options/action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "update",
+          id,
+          fields,
+        }),
+      });
+      await renderCatalogMetalOptions(state.selectedItem);
+      showToast("Metal option saved.");
+    } catch (error) {
+      showToast("Unable to save metal option.", "error");
+    }
+  }
+
+  async function deleteMetalOption(row) {
+    const id = row.getAttribute("data-metal-option-id") || "";
+    if (!id) return;
+    if (!confirm("Delete this metal option?")) return;
+    try {
+      await apiFetch("/catalog-metal-options/action", {
+        method: "POST",
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      await renderCatalogMetalOptions(state.selectedItem);
+      showToast("Metal option deleted.");
+    } catch (error) {
+      showToast("Unable to delete metal option.", "error");
+    }
+  }
+
+  function getNoteEditor(kind) {
+    return ui.noteEditors.find((editor) => editor.dataset.noteEditor === kind) || null;
+  }
+
+  function getNoteRowsContainer(kind) {
+    return ui.noteRows.find((container) => container.dataset.noteRows === kind) || null;
+  }
+
+  function getNoteInput(kind) {
+    return ui.noteInputs.find((input) => input.dataset.noteInput === kind) || null;
+  }
+
+  function getNoteOrderInput(kind) {
+    return ui.noteOrders.find((input) => input.dataset.noteOrder === kind) || null;
+  }
+
+  function setNoteEditor(kind, note) {
+    const editor = getNoteEditor(kind);
+    if (!editor) return;
+    editor.value = note?.note || "";
+    editor.dataset.noteId = note?.id || "";
+  }
+
+  function renderNoteRows(kind, notes) {
+    const container = getNoteRowsContainer(kind);
+    if (!container) return;
+    if (!notes.length) {
+      container.innerHTML = `<div class="muted">No notes yet.</div>`;
+      return;
+    }
+    container.innerHTML = notes
+      .map(
+        (note) => `
+        <div class="note-row" data-note-id="${escapeAttribute(note.id || "")}">
+          <input type="text" data-note-field="note" value="${escapeAttribute(note.note || "")}" />
+          <input type="number" data-note-field="sort_order" value="${escapeAttribute(
+            note.sort_order || "0"
+          )}" />
+          <div class="note-actions">
+            <button class="btn btn-ghost btn-small" type="button" data-note-row-save>Save</button>
+            <button class="btn btn-ghost btn-small" type="button" data-note-row-delete>Delete</button>
+          </div>
+        </div>
+      `
+      )
+      .join("");
+  }
+
+  async function renderCatalogNotes(item) {
+    if (!ui.catalogNotesSection) return;
+    const catalogId = item?.id || "";
+    const catalogSlug = item?.slug || "";
+    if (!catalogId) {
+      ui.noteEditors.forEach((editor) => {
+        editor.value = "";
+        editor.dataset.noteId = "";
+        editor.disabled = true;
+      });
+      ui.noteInputs.forEach((input) => {
+        input.value = "";
+        input.disabled = true;
+      });
+      ui.noteOrders.forEach((input) => {
+        input.value = "";
+        input.disabled = true;
+      });
+      NOTE_KINDS_LIST.forEach((kind) => {
+        const container = getNoteRowsContainer(kind);
+        if (container) {
+          container.innerHTML = `<div class="muted">Save this record before adding notes.</div>`;
+        }
+      });
+      return;
+    }
+    ui.noteEditors.forEach((editor) => {
+      editor.disabled = false;
+    });
+    ui.noteInputs.forEach((input) => {
+      input.disabled = false;
+    });
+    ui.noteOrders.forEach((input) => {
+      input.disabled = false;
+    });
+    const params = new URLSearchParams({ catalog_id: catalogId });
+    if (catalogSlug) params.set("catalog_slug", catalogSlug);
+    try {
+      const data = await apiFetch(`/catalog-notes?${params.toString()}`);
+      const items = Array.isArray(data.items) ? data.items : [];
+      state.catalogNotes = items;
+      NOTE_KINDS_SINGLE.forEach((kind) => {
+        const note = items.find((entry) => String(entry.kind || "") === kind);
+        setNoteEditor(kind, note || null);
+      });
+      NOTE_KINDS_LIST.forEach((kind) => {
+        const list = items.filter((entry) => String(entry.kind || "") === kind);
+        renderNoteRows(kind, list);
+      });
+    } catch (error) {
+      state.catalogNotes = [];
+      NOTE_KINDS_SINGLE.forEach((kind) => setNoteEditor(kind, null));
+      NOTE_KINDS_LIST.forEach((kind) => renderNoteRows(kind, []));
+    }
+  }
+
+  async function saveSingleNote(kind) {
+    if (!state.selectedItem) return;
+    const editor = getNoteEditor(kind);
+    if (!editor) return;
+    const noteText = editor.value.trim();
+    const noteId = editor.dataset.noteId || "";
+    const catalogId = state.selectedItem.id || "";
+    const catalogSlug = state.selectedItem.slug || "";
+    if (!catalogId) {
+      showToast("Save the item before adding notes.", "error");
+      return;
+    }
+    if (!noteText) {
+      if (!noteId) return;
+      if (!confirm("Delete this note?")) return;
+      try {
+        await apiFetch("/catalog-notes/action", {
+          method: "POST",
+          body: JSON.stringify({ action: "delete", id: noteId }),
+        });
+        editor.value = "";
+        editor.dataset.noteId = "";
+        showToast("Note removed.");
+      } catch (error) {
+        showToast("Unable to delete note.", "error");
+      }
+      return;
+    }
+    const payload = noteId
+      ? {
+          action: "update",
+          id: noteId,
+          fields: { note: noteText, sort_order: "0" },
+        }
+      : {
+          action: "add_row",
+          fields: {
+            catalog_id: catalogId,
+            catalog_slug: catalogSlug,
+            kind,
+            note: noteText,
+            sort_order: "0",
+          },
+        };
+    try {
+      const result = await apiFetch("/catalog-notes/action", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (!noteId && result.id) {
+        editor.dataset.noteId = result.id;
+      }
+      showToast("Note saved.");
+    } catch (error) {
+      showToast("Unable to save note.", "error");
+    }
+  }
+
+  async function saveNoteRow(row) {
+    const id = row.getAttribute("data-note-id") || "";
+    if (!id) return;
+    const noteField = row.querySelector('[data-note-field="note"]');
+    const orderField = row.querySelector('[data-note-field="sort_order"]');
+    const noteText = noteField ? noteField.value.trim() : "";
+    const sortOrder = orderField ? orderField.value.trim() : "";
+    if (!noteText) {
+      showToast("Note text is required.", "error");
+      return;
+    }
+    try {
+      await apiFetch("/catalog-notes/action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "update",
+          id,
+          fields: {
+            note: noteText,
+            sort_order: sortOrder || "0",
+          },
+        }),
+      });
+      showToast("Note updated.");
+    } catch (error) {
+      showToast("Unable to save note.", "error");
+    }
+  }
+
+  async function deleteNoteRow(row) {
+    const id = row.getAttribute("data-note-id") || "";
+    if (!id) return;
+    if (!confirm("Delete this note?")) return;
+    try {
+      await apiFetch("/catalog-notes/action", {
+        method: "POST",
+        body: JSON.stringify({ action: "delete", id }),
+      });
+      await renderCatalogNotes(state.selectedItem);
+      showToast("Note deleted.");
+    } catch (error) {
+      showToast("Unable to delete note.", "error");
+    }
+  }
+
+  async function addListNote(kind) {
+    if (!state.selectedItem) return;
+    const catalogId = state.selectedItem.id || "";
+    const catalogSlug = state.selectedItem.slug || "";
+    if (!catalogId) {
+      showToast("Save the item before adding notes.", "error");
+      return;
+    }
+    const input = getNoteInput(kind);
+    if (!input) return;
+    const noteText = input.value.trim();
+    if (!noteText) {
+      showToast("Note text is required.", "error");
+      return;
+    }
+    const orderInput = getNoteOrderInput(kind);
+    const sortOrder = orderInput ? orderInput.value.trim() : "";
+    try {
+      await apiFetch("/catalog-notes/action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "add_row",
+          fields: {
+            catalog_id: catalogId,
+            catalog_slug: catalogSlug,
+            kind,
+            note: noteText,
+            sort_order: sortOrder || "0",
+          },
+        }),
+      });
+      input.value = "";
+      if (orderInput) orderInput.value = "";
+      await renderCatalogNotes(state.selectedItem);
+      showToast("Note added.");
+    } catch (error) {
+      showToast("Unable to add note.", "error");
     }
   }
 
@@ -2722,6 +3099,100 @@
       if (ui.mediaFile) ui.mediaFile.value = "";
     } catch (error) {
       showToast("Upload failed.", "error");
+    }
+  }
+
+  async function setMediaAsHero(mappingId) {
+    if (!mappingId) return;
+    try {
+      await apiFetch(getCatalogMappingEndpoint(), {
+        method: "POST",
+        body: JSON.stringify({
+          action: "edit",
+          rowNumber: mappingId,
+          fields: {
+            position: "hero",
+            is_primary: "1",
+            sort_order: "0",
+          },
+        }),
+      });
+      showToast("Hero media updated.");
+      renderCatalogMedia(state.selectedItem);
+    } catch (error) {
+      showToast("Unable to set hero media.", "error");
+    }
+  }
+
+  async function saveMediaMapping(mappingId, row) {
+    if (!mappingId || !row) return;
+    const orderInput = row.querySelector("[data-media-order]");
+    const positionSelect = row.querySelector("[data-media-position]");
+    const heroToggle = row.querySelector("[data-media-hero-toggle]");
+    const labelInput = row.querySelector("[data-media-label]");
+    const orderValue = orderInput ? orderInput.value.trim() : "";
+    if (orderValue && Number.isNaN(Number(orderValue))) {
+      showToast("Order must be a number.", "error");
+      return;
+    }
+    const originalPosition = row.dataset.position || "";
+    const positionValue = positionSelect ? positionSelect.value.trim() : "";
+    const heroChecked = heroToggle ? heroToggle.checked : false;
+    const forceHero = String(positionValue || "").toLowerCase() === "hero";
+    const heroSelected = heroChecked || forceHero;
+    let position = heroSelected ? "hero" : positionValue || originalPosition;
+    if (!heroSelected && String(originalPosition || "").toLowerCase() === "hero") {
+      position = "";
+    }
+    try {
+      const mediaId = row.dataset.mediaId || "";
+      if (mediaId && labelInput) {
+        await apiFetch("/media-library/action", {
+          method: "POST",
+          body: JSON.stringify({
+            action: "edit",
+            rowNumber: mediaId,
+            fields: {
+              label: labelInput.value.trim(),
+            },
+          }),
+        });
+      }
+      await apiFetch(getCatalogMappingEndpoint(), {
+        method: "POST",
+        body: JSON.stringify({
+          action: "edit",
+          rowNumber: mappingId,
+          fields: {
+            position,
+            is_primary: heroSelected ? "1" : "0",
+            sort_order: orderValue,
+          },
+        }),
+      });
+      showToast("Media updated.");
+      renderCatalogMedia(state.selectedItem);
+    } catch (error) {
+      showToast("Unable to update media.", "error");
+    }
+  }
+
+  async function deleteMediaMapping(mappingId) {
+    if (!mappingId) return;
+    if (!window.confirm("Delete this media?")) return;
+    try {
+      await apiFetch(getCatalogMappingEndpoint(), {
+        method: "POST",
+        body: JSON.stringify({
+          action: "delete",
+          rowNumber: mappingId,
+          delete_media: true,
+        }),
+      });
+      showToast("Media deleted.");
+      renderCatalogMedia(state.selectedItem);
+    } catch (error) {
+      showToast("Unable to delete media.", "error");
     }
   }
 
@@ -3570,8 +4041,20 @@
   }
 
   function collectCatalogFormState() {
-    if (!ui.catalogFields || !window.CatalogForm) return {};
-    return window.CatalogForm.readFormState(ui.catalogFields);
+    if (!window.CatalogForm) return {};
+    const fields = {};
+    [
+      ui.catalogFieldsBasic,
+      ui.catalogFieldsTaxonomy,
+      ui.catalogFieldsMaterials,
+      ui.catalogFieldsAudit,
+      ui.catalogFields,
+    ]
+      .filter(Boolean)
+      .forEach((container) => {
+        Object.assign(fields, window.CatalogForm.readFormState(container));
+      });
+    return fields;
   }
 
   function collectEditableUpdates() {
@@ -4057,13 +4540,11 @@
         );
         const roleOptions = getStoneRoleOptions(enums);
         window.CatalogForm.setSelectOptions(ui.stoneAddRole, roleOptions, true, "Select");
-        window.CatalogForm.setSelectOptions(ui.stoneAddType, enums.stone_types || [], true, "Select");
-        window.CatalogForm.setSelectOptions(ui.stoneAddCut, enums.cuts || [], true, "Select");
-        window.CatalogForm.setSelectOptions(ui.stoneAddClarity, enums.clarities || [], true, "Select");
-        window.CatalogForm.setSelectOptions(ui.stoneAddColor, enums.colors || [], true, "Select");
       }
       await renderCatalogMedia(parsed);
       await renderCatalogStoneOptions(parsed);
+      await renderCatalogMetalOptions(parsed);
+      await renderCatalogNotes(parsed);
     applyEditVisibility();
     renderActions();
     updateActionButtonState();
@@ -4667,12 +5148,22 @@
       field.addEventListener("change", handler);
     });
 
-    if (ui.catalogFields) {
-      ["input", "change"].forEach((eventName) => {
-        ui.catalogFields.addEventListener(eventName, () => {
-          refreshMissingInfo();
-          updatePrimaryActionState();
-          updateActionButtonState();
+    [ui.catalogFieldsBasic, ui.catalogFieldsTaxonomy, ui.catalogFieldsMaterials, ui.catalogFieldsAudit, ui.catalogFields]
+      .filter(Boolean)
+      .forEach((container) => {
+        ["input", "change"].forEach((eventName) => {
+          container.addEventListener(eventName, () => {
+            refreshMissingInfo();
+            updatePrimaryActionState();
+            updateActionButtonState();
+          });
+        });
+      });
+
+    if (ui.catalogTabs.length) {
+      ui.catalogTabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          setCatalogTab(tab.dataset.catalogTab || CATALOG_DEFAULT_TAB);
         });
       });
     }
@@ -4689,20 +5180,35 @@
       });
     }
 
+    if (ui.mediaId) {
+      ui.mediaId.addEventListener("change", () => {
+        renderMediaPreview(ui.mediaId.value || "");
+      });
+    }
+
     if (ui.catalogMediaList) {
       ui.catalogMediaList.addEventListener("click", (event) => {
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
-        const url = target.dataset.url || "";
-        if (target.hasAttribute("data-media-copy") && url) {
-          handleCopyText("Media URL", url);
+        const row = target.closest(".catalog-media-item");
+        if (target.hasAttribute("data-media-save")) {
+          const mappingId = target.dataset.mappingId || "";
+          if (mappingId) {
+            if (!row) {
+              showToast("Unable to locate media row.", "error");
+              return;
+            }
+            saveMediaMapping(mappingId, row);
+          } else {
+            showToast("Missing media mapping id.", "error");
+          }
         }
-        if (target.hasAttribute("data-media-hero") && url) {
-          const heroField = ui.catalogFields?.querySelector('[data-field="hero_image"]');
-          if (heroField instanceof HTMLInputElement) {
-            heroField.value = url;
-            heroField.dispatchEvent(new Event("input", { bubbles: true }));
-            showToast("Hero image updated");
+        if (target.hasAttribute("data-media-delete")) {
+          const mappingId = target.dataset.mappingId || "";
+          if (mappingId) {
+            deleteMediaMapping(mappingId);
+          } else {
+            showToast("Missing media mapping id.", "error");
           }
         }
       });
@@ -4725,6 +5231,51 @@
     if (ui.stoneAddButton) {
       ui.stoneAddButton.addEventListener("click", () => {
         addStoneOption();
+      });
+    }
+    if (ui.catalogMetalList) {
+      ui.catalogMetalList.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const row = target.closest("[data-metal-option-id]");
+        if (!row) return;
+        if (target.hasAttribute("data-metal-save")) {
+          saveMetalOption(row);
+          return;
+        }
+        if (target.hasAttribute("data-metal-delete")) {
+          deleteMetalOption(row);
+        }
+      });
+    }
+    if (ui.metalAddButton) {
+      ui.metalAddButton.addEventListener("click", () => {
+        addMetalOption();
+      });
+    }
+    if (ui.catalogNotesSection) {
+      ui.catalogNotesSection.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.hasAttribute("data-note-save")) {
+          const kind = target.dataset.noteSave || "";
+          if (kind) saveSingleNote(kind);
+          return;
+        }
+        if (target.hasAttribute("data-note-add")) {
+          const kind = target.dataset.noteAdd || "";
+          if (kind) addListNote(kind);
+          return;
+        }
+        const row = target.closest("[data-note-id]");
+        if (!row) return;
+        if (target.hasAttribute("data-note-row-save")) {
+          saveNoteRow(row);
+          return;
+        }
+        if (target.hasAttribute("data-note-row-delete")) {
+          deleteNoteRow(row);
+        }
       });
     }
     ui.quoteMetals.forEach((input) => {

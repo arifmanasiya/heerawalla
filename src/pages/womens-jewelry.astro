@@ -9,11 +9,11 @@ import { MEDIA_PLACEHOLDER_URL } from '../lib/placeholders';
 
 const editionLabel = "Women's Jewelry";
 const editionKey = 'women';
+const editionGender = 'female';
 const products = (await loadProductsWithMedia()).filter((product) => {
   const gender = (product.gender || '').toLowerCase();
-  if (gender) return gender === editionKey || gender === 'unisex';
-  const category = product.category || '';
-  return category.startsWith(`${editionKey}/`) || category.startsWith('unisex/');
+  if (!gender) return false;
+  return gender === editionGender || gender === 'unisex';
 });
 const heroImageById = Object.fromEntries(
   products
@@ -32,6 +32,17 @@ const seo = {
 };
 const catalogUrl = import.meta.env.PUBLIC_CATALOG_API_URL || '';
 const catalogMode = (import.meta.env.PUBLIC_CATALOG_MODE || 'hybrid').toLowerCase();
+const pricingApiBase = (() => {
+  const preferred = import.meta.env.PUBLIC_PRICING_API_URL || import.meta.env.PUBLIC_CATALOG_API_URL || '';
+  if (preferred && preferred.includes('://')) {
+    try {
+      return new URL(preferred).origin;
+    } catch {
+      return 'https://admin-api.heerawalla.com';
+    }
+  }
+  return 'https://admin-api.heerawalla.com';
+})();
 const basePath = import.meta.env.BASE_URL || '/';
 const metaTitle = `Heerawalla ${editionLabel} \u2014 Editions`;
 const metaDescription =
@@ -120,10 +131,11 @@ const breadcrumbs = [
   <Footer />
 </BaseLayout>
 
-<script is:inline define:vars={{ catalogUrl, catalogMode, basePath, editionKey, heroImageById, placeholderImage }}>
+<script is:inline define:vars={{ catalogUrl, catalogMode, pricingApiBase, basePath, editionGender, heroImageById, placeholderImage }}>
   (() => {
     let catalogUrlValue = String(catalogUrl || '');
     const catalogModeValue = String(catalogMode || '').toLowerCase();
+    const pricingApiBaseValue = String(pricingApiBase || '');
     if (!catalogUrlValue) {
       const host = window.location.hostname;
       if (host === 'localhost' || host === '127.0.0.1') {
@@ -131,7 +143,7 @@ const breadcrumbs = [
       }
     }
     const basePathValue = String(basePath || '/');
-    const editionKeyValue = String(editionKey || '');
+    const editionGenderValue = String(editionGender || '');
     const heroImageByIdValue = heroImageById || {};
     const placeholderImageValue = String(placeholderImage || '');
     const grid = document.querySelector('[data-product-grid]');
@@ -150,6 +162,16 @@ const breadcrumbs = [
       return `${normalizedBase}${cleaned}`;
     };
 
+    const resolvePricingBase = () => {
+      let base = pricingApiBaseValue || '';
+      if (!base) base = 'https://admin-api.heerawalla.com';
+      const host = window.location.hostname;
+      if ((host === 'localhost' || host === '127.0.0.1') && base.includes('admin-api.heerawalla.com')) {
+        base = 'http://localhost:8787';
+      }
+      return base.replace(/\/$/, '');
+    };
+
     const escapeHtml = (value) =>
       String(value || '')
         .replace(/&/g, '&amp;')
@@ -159,8 +181,23 @@ const breadcrumbs = [
         .replace(/'/g, '&#39;');
 
     const parseList = (value) => {
-      if (!value) return [];
-      return String(value)
+      if (value === undefined || value === null) return [];
+      if (Array.isArray(value)) {
+        return value.map((item) => String(item).trim()).filter(Boolean);
+      }
+      const trimmed = String(value).trim();
+      if (!trimmed) return [];
+      if (trimmed.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed.map((item) => String(item).trim()).filter(Boolean);
+          }
+        } catch {
+          // fall back to delimiter parsing
+        }
+      }
+      return trimmed
         .split('|')
         .map((item) => item.trim())
         .filter(Boolean);
@@ -181,6 +218,82 @@ const breadcrumbs = [
         .replace(/diamonds?\\b/gi, 'Diamond')
         .replace(/\\s+/g, ' ')
         .trim();
+
+    const buildStoneWeightFromOptions = (options) => {
+      if (!Array.isArray(options) || !options.length) return { total: '', breakdown: '' };
+      const groups = new Map();
+      options.forEach((option) => {
+        const sizeType = String(option.size_type || '').trim().toLowerCase() || 'size';
+        const carat = Number(option.carat);
+        const count = Number(option.count);
+        if (!Number.isFinite(carat) || !Number.isFinite(count) || carat <= 0 || count <= 0) return;
+        const entry = { carat, count };
+        const existing = groups.get(sizeType) || { entries: [], isPrimary: false };
+        existing.entries.push(entry);
+        if (option.is_primary) existing.isPrimary = true;
+        groups.set(sizeType, existing);
+      });
+      if (!groups.size) return { total: '', breakdown: '' };
+      const ordered = Array.from(groups.entries());
+      const primaryGroup = ordered.find(([, group]) => group.isPrimary) || ordered[0];
+      const entries = primaryGroup ? primaryGroup[1].entries : [];
+      const breakdown = entries.map((entry) => `${entry.carat} x ${entry.count}`).join(', ');
+      const total = entries.reduce((sum, entry) => sum + entry.carat * entry.count, 0);
+      return {
+        total: total > 0 ? total.toFixed(2) : '',
+        breakdown,
+      };
+    };
+
+    const buildMetalWeightFromOptions = (options) => {
+      if (!Array.isArray(options) || !options.length) return '';
+      const primary = options.find((option) => option.is_primary) || options[0];
+      const raw = primary ? String(primary.metal_weight || '').trim() : '';
+      return raw;
+    };
+
+    const buildPricingPayload = (product) => {
+      const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
+      const lab = stoneTypes.find((item) => /lab/i.test(item));
+      const natural = stoneTypes.find((item) => /natural/i.test(item));
+      const stone = lab || natural || stoneTypes[0] || '';
+
+      const metalOptions = parseList(product.metal_options || product.metals || product.metal);
+      const metal = metalOptions[0] || product.metal || '18K Gold';
+
+      const stoneOptionData = buildStoneWeightFromOptions(product.stone_options);
+      const stoneWeight = stoneOptionData.total || String(product.stone_weight || product.carat || '');
+      const diamondBreakdown = stoneOptionData.breakdown || '';
+
+      const metalWeight =
+        buildMetalWeightFromOptions(product.metal_weight_options) ||
+        String(product.metal_weight || '').trim();
+
+      const clarityOptions = parseList(product.clarity);
+      const colorOptions = parseList(product.color);
+      const cutOptions = parseList(product.cut);
+      const clarity = clarityOptions.length ? clarityOptions[clarityOptions.length - 1] : '';
+      const color = colorOptions.length ? colorOptions[colorOptions.length - 1] : '';
+      const cut = cutOptions.length ? cutOptions[cutOptions.length - 1] : '';
+
+      const tags = parseList(product.tags).map((tag) => tag.toLowerCase());
+      const hasChainTag = tags.some((tag) => ['necklace', 'necklaces', 'pendant', 'pendants', 'chain', 'chains'].includes(tag));
+      const sizeLabel = hasChainTag ? 'Chain length' : '';
+      const size = hasChainTag ? '16\"' : '';
+
+      return {
+        metal,
+        metal_weight: metalWeight,
+        stone,
+        stone_weight: stoneWeight,
+        diamond_breakdown: diamondBreakdown,
+        clarity,
+        color,
+        cut,
+        size,
+        size_label: sizeLabel,
+      };
+    };
 
 
     const formatCarat = (value) => {
@@ -246,46 +359,9 @@ const breadcrumbs = [
     const buildEstimateTooltip = (product) => {
       const sections = [];
       const ariaParts = [];
-      const diamondParts = [];
-      const clarity = clarityToMarketing(product.clarity);
-      const cut = cutToMarketing(product.cut);
-      const color = colorToMarketing(product.color);
-      if (clarity) diamondParts.push(clarity);
-      if (cut) diamondParts.push(cut);
-      if (color) diamondParts.push(color);
-
-      const stoneWeight = parseNumber(product.stone_weight || product.carat);
-      const caratText = formatCarat(stoneWeight);
-      const diamondQualityText = diamondParts.length
-        ? caratText
-          ? `${caratText}ct TW, IGI-certified, ${diamondParts.join(', ')}`
-          : `IGI-certified, ${diamondParts.join(', ')}`
-        : '';
-      if (diamondQualityText) {
-        sections.push({ label: 'Diamond Quality', text: diamondQualityText });
-        ariaParts.push(`Diamond Quality. ${diamondQualityText}.`);
-      }
-
-      const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
-      if (stoneTypes.length) {
-        sections.push({ label: 'Diamond Options', items: stoneTypes });
-        ariaParts.push(`Diamond Options. ${stoneTypes.join('; ')}.`);
-      }
-
-      const metal18Label = normalizeMetalLabel(product.metal);
-      const metal14Label = metal18Label.replace(/18K/gi, '14K');
-      const metalPlatinumLabel = 'Platinum';
-      const metalOptionItems = Array.from(
-        new Set([metal18Label, metal14Label, metalPlatinumLabel].filter(Boolean))
-      );
-      const metalWeightText = formatWeight(parseNumber(product.metal_weight));
-      if (metalWeightText) {
-        metalOptionItems.push(`Approx. metal weight: ${metalWeightText}g`);
-      }
-      if (metalOptionItems.length) {
-        sections.push({ label: 'Metal Options', items: metalOptionItems });
-        ariaParts.push(`Metal Options. ${metalOptionItems.join('; ')}.`);
-      }
+      const diamondQualityText = 'IGI-certified.';
+      sections.push({ label: 'Diamond Quality', text: diamondQualityText });
+      ariaParts.push(`Diamond Quality. ${diamondQualityText}`);
 
       if (!sections.length) return null;
       return { sections, ariaLabel: ariaParts.join(' ') };
@@ -372,7 +448,12 @@ const breadcrumbs = [
                   ${escapeHtml(product.name || '')}
                 </a>
                 <span class="flex items-center gap-2">
-                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap">
+                <span
+                  class="text-xs uppercase tracking-[0.18em] text-slate-500 whitespace-nowrap"
+                  data-price
+                  data-product-id="${escapeHtml(product.id || '')}"
+                  data-product-slug="${escapeHtml(product.slug || '')}"
+                >
                   ${escapeHtml(priceLabel)}
                 </span>
                   ${tooltipHtml}
@@ -454,6 +535,44 @@ const breadcrumbs = [
 
     window.__hwApplyDesignFilter = () => apply(activeCode);
 
+    const updatePrices = async (items) => {
+      const base = resolvePricingBase();
+      if (!base || !Array.isArray(items) || !items.length) return;
+      const priceNodes = Array.from(document.querySelectorAll('[data-price]'));
+      const bySlug = new Map(priceNodes.map((node) => [node.getAttribute('data-product-slug') || '', node]));
+      const byId = new Map(priceNodes.map((node) => [node.getAttribute('data-product-id') || '', node]));
+      await Promise.all(
+        items.map(async (product) => {
+          const slug = String(product.slug || '');
+          const id = String(product.id || '');
+          const target = bySlug.get(slug) || byId.get(id);
+          if (!target) return;
+          const payload = buildPricingPayload(product);
+          if (!payload.metal_weight) return;
+          target.textContent = 'Calculating...';
+          try {
+            const response = await fetch(`${base}/pricing/estimate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (data && data.ok && typeof data.price === 'number') {
+              const formatted = data.price.toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                maximumFractionDigits: 0
+              });
+              target.textContent = `Starting at ${formatted}`;
+            }
+          } catch {
+            // Ignore pricing errors.
+          }
+        })
+      );
+    };
+
     const renderProducts = (items) => {
       if (!grid) return;
       grid.innerHTML = items.map(buildProductCard).join('');
@@ -463,10 +582,11 @@ const breadcrumbs = [
         empty.classList.toggle('hidden', items.length !== 0);
       }
       apply(activeCode);
+      updatePrices(items);
     };
 
     const fetchCatalog = async () => {
-      if (!catalogUrlValue || catalogModeValue === 'ssr') return;
+      if (!catalogUrlValue) return;
       const joiner = catalogUrlValue.includes('?') ? '&' : '?';
       const cacheBust = /localhost|127\\.0\\.0\\.1/i.test(catalogUrlValue)
         ? `&bust=${Date.now()}`
@@ -479,11 +599,14 @@ const breadcrumbs = [
         if (!data || !Array.isArray(data.products)) return;
         const items = data.products.filter((product) => {
           const gender = String(product.gender || '').toLowerCase();
-          if (gender) return gender === editionKeyValue || gender === 'unisex';
-          const category = String(product.category || '').toLowerCase();
-          return category.startsWith(`${editionKeyValue}/`) || category.startsWith('unisex/');
+          if (!gender) return false;
+          return gender === editionGenderValue || gender === 'unisex';
         });
-        renderProducts(items);
+        if (catalogModeValue === 'ssr') {
+          updatePrices(items);
+        } else {
+          renderProducts(items);
+        }
       } catch {
         // Ignore catalog errors; fall back to static content.
       }
