@@ -262,7 +262,7 @@ const breadcrumbs = [
       const stone = lab || natural || stoneTypes[0] || '';
 
       const metalOptions = parseList(product.metal_options || product.metals || product.metal);
-      const metal = metalOptions[0] || product.metal || '18K Gold';
+      const metal = metalOptions[metalOptions.length - 1] || product.metal || '18K Gold';
 
       const stoneOptionData = buildStoneWeightFromOptions(product.stone_options);
       const stoneWeight = stoneOptionData.total || String(product.stone_weight || product.carat || '');

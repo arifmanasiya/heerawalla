@@ -326,8 +326,8 @@ const metalOptions =
           { value: 'Platinum', label: 'Platinum' }
         ];
       })();
-const defaultMetalValue = metalOptions[0]?.value || '18K Gold';
-const defaultMetalLabel = metalOptions[0]?.label || defaultMetalValue;
+const defaultMetalValue = metalOptions[metalOptions.length - 1]?.value || '18K Gold';
+const defaultMetalLabel = metalOptions[metalOptions.length - 1]?.label || defaultMetalValue;
 const diamondDefaultLabel = diamondDefault === 'lab' ? labStoneLabel : naturalStoneLabel;
 const designCode = product.design_code || 'Signature';
 const designCodeSlug = designCode.toLowerCase();
@@ -1769,7 +1769,7 @@ void jsonLdString;
         const labStoneLabel =
           stoneTypes.find((entry) => /lab/i.test(entry)) || 'Lab Grown Diamond';
         const metalOptions = buildMetalOptions(item.metal_options || item.metals, item.metal || '18K Gold');
-        const defaultMetalValue = metalOptions[0]?.value || '18K Gold';
+        const defaultMetalValue = metalOptions[metalOptions.length - 1]?.value || '18K Gold';
         const stoneOptions = [
           ...(labAvailable ? [{ value: labStoneLabel, label: labStoneLabel }] : []),
           ...(naturalAvailable ? [{ value: naturalStoneLabel, label: naturalStoneLabel }] : [])
