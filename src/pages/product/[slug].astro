@@ -1345,7 +1345,7 @@ void jsonLdString;
         }
       }
       const productSlugValue = String(productSlug || '');
-      if (!catalogUrlValue || catalogModeValue === 'ssr' || !productSlugValue) return;
+      if (!catalogUrlValue || !productSlugValue) return;
 
       const priceEl = document.getElementById('price-display');
       if (!priceEl) return;
