@@ -23,8 +23,9 @@ const logoImage = LOGO_MARK_URL;
 const url = new URL(Astro.url.pathname, siteOrigin).toString();
 const gaMeasurementId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID ?? '';
 const isDev = import.meta.env.DEV;
-const devConnect = isDev ? ' http://localhost:8787' : '';
-const devImg = isDev ? ' http://localhost:8787' : '';
+const isLocalHost = Astro.url.hostname === 'localhost' || Astro.url.hostname === '127.0.0.1';
+const devConnect = isDev || isLocalHost ? ' http://localhost:8787' : '';
+const devImg = isDev || isLocalHost ? ' http://localhost:8787' : '';
 const csp = `default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://static.cloudflareinsights.com; script-src-elem 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com https://static.cloudflareinsights.com; script-src-attr 'self' 'unsafe-inline'; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://herawalla-email-atelier.arifmanasiya.workers.dev https://admin-api.heerawalla.com https://cloudflareinsights.com https://static.cloudflareinsights.com${devConnect}; img-src 'self' data: https:${devImg}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src https://challenges.cloudflare.com;`;
 const titleCase = (value: string) =>
   value
