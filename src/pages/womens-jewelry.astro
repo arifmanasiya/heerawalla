@@ -605,11 +605,7 @@ const breadcrumbs = [
           if (!gender) return false;
           return editionGenderList.includes(gender);
         });
-        if (catalogModeValue === 'ssr') {
-          updatePrices(items);
-        } else {
-          renderProducts(items);
-        }
+        renderProducts(items);
       } catch {
         // Ignore catalog errors; fall back to static content.
       }

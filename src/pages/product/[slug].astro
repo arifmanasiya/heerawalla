@@ -473,7 +473,7 @@ void jsonLdString;
       </div>
       <div class="space-y-6">
         <div>
-          <h1 class="text-3xl font-semibold tracking-tight">{product.name}</h1>
+          <h1 class="text-3xl font-semibold tracking-tight" data-product-title>{product.name}</h1>
         </div>
         <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-500">
           <a href={designCodeHref} class="hover:text-ink">{designCode}</a>
@@ -866,7 +866,7 @@ void jsonLdString;
       const nextBtn = document.querySelector('[data-image-next]');
       const descEl = document.querySelector('[data-product-description]');
       const heroText = imageMeta[0]?.description || '';
-      const defaultText = heroText || (descEl ? descEl.textContent || '' : '');
+      let defaultText = heroText || (descEl ? descEl.textContent || '' : '');
       let index = imageMeta.findIndex((item) => item?.url === (mainImage.getAttribute('src') || ''));
       if (index < 0) index = 0;
 
@@ -881,6 +881,19 @@ void jsonLdString;
           descEl.textContent = next?.description || defaultText;
         }
       };
+
+      const applyMeta = (nextMeta, productDescription, productName) => {
+        if (!Array.isArray(nextMeta) || nextMeta.length === 0) return;
+        imageMeta = nextMeta;
+        mainImage.setAttribute('data-product-image-meta', JSON.stringify(imageMeta));
+        if (productName) {
+          mainImage.setAttribute('alt', productName);
+        }
+        const nextHeroText = imageMeta[0]?.description || '';
+        defaultText = nextHeroText || productDescription || defaultText;
+        setIndex(0);
+      };
+      window.__hwSetProductMedia = applyMeta;
 
       if (descEl) {
         descEl.textContent = defaultText;
@@ -924,6 +937,8 @@ void jsonLdString;
       const chainWeightInfo = document.querySelector('[data-chain-weight-info]');
       const chainWeightValue = document.querySelector('[data-chain-weight-value]');
       const chainWeightUnit = document.querySelector('[data-chain-weight-unit]');
+      const titleEl = document.querySelector('[data-product-title]');
+      const descEl = document.querySelector('[data-product-description]');
       const sizeHelper = document.querySelector('[data-size-helper]');
       const selectedMetal = document.querySelector('[data-selected-metal]');
       const selectedStone = document.querySelector('[data-selected-stone]');
@@ -1717,6 +1732,31 @@ void jsonLdString;
       };
 
       const updatePricingFromProduct = (item) => {
+        const productName = String(item.name || '').trim();
+        const productDescription = String(item.description || '').trim();
+        if (titleEl && productName) {
+          titleEl.textContent = productName;
+          document.title = `${productName} | Heerawalla`;
+        }
+        if (descEl && productDescription) {
+          descEl.textContent = productDescription;
+        }
+        const mediaImages = Array.isArray(item.media)
+          ? item.media.filter((entry) => entry && entry.media_type === 'image' && entry.url)
+          : [];
+        const mediaMeta = mediaImages.length
+          ? mediaImages.map((entry) => ({
+              url: entry.url,
+              description: entry.description || ''
+            }))
+          : (Array.isArray(item.images) ? item.images : []).map((url) => ({
+              url,
+              description: ''
+            }));
+        if (window.__hwSetProductMedia && mediaMeta.length) {
+          window.__hwSetProductMedia(mediaMeta, productDescription, productName);
+        }
+
         const stoneTypes = parseList(
           item.stone_type_options || item.stone_types
         )

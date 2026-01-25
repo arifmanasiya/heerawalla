@@ -509,7 +509,7 @@ const buildEstimateMeta = (item: Inspiration) => {
     };
 
     const fetchCatalog = async () => {
-      if (!catalogUrlValue || catalogModeValue === 'ssr') return;
+      if (!catalogUrlValue) return;
       const joiner = catalogUrlValue.includes('?') ? '&' : '?';
       const url = `${catalogUrlValue}${joiner}include=inspirations`;
       try {
