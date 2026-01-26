@@ -4712,6 +4712,10 @@ function resolveDiamondClarityTokens(
     const composite = detailToComposite?.get(normalized);
     if (composite) return [composite];
   }
+
+  const composite = detailToComposite?.get(normalized);
+  if (composite) return [composite];
+
   if (compositeToDetails?.has(normalized)) {
     return compositeToDetails.get(normalized) || [];
   }
