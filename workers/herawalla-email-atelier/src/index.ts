@@ -3502,7 +3502,7 @@ function mapD1RowToRecord(row: Record<string, unknown>) {
     let sql = "SELECT * FROM catalog_stone_options";
     const bindings: string[] = [];
     if (catalogId) {
-      sql += " WHERE catalog_id = ?";
+      sql += " WHERE catalog_id = ? order by carat asc";
       bindings.push(catalogId);
     }
     const rows = await d1All(env, sql, bindings);
