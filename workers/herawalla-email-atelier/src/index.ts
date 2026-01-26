@@ -301,6 +301,7 @@ export default {
         const color = getString(payload.color);
         const costValues = await loadCostChartValues(env);
         const diamondPrices = await loadDiamondPriceChart(env);
+        const clarityGroups = await loadDiamondClarityGroups(env);
         const adjustments = await loadPriceChartAdjustments(env);
         const discountDetails = resolveDiscountDetails(costValues, record);
         const result = computeOptionPriceFromCosts(
@@ -309,6 +310,7 @@ export default {
           color,
           costValues,
           diamondPrices,
+          clarityGroups,
           adjustments,
           discountDetails,
           diamondComponents
@@ -4177,6 +4179,10 @@ type DiamondPriceEntry = {
   weightMax: number;
   pricePerCt: number;
 };
+type DiamondClarityGroups = {
+  detailToComposite: Map<string, string>;
+  compositeToDetails: Map<string, string[]>;
+};
 
 async function fetchPublicSheetRecords(config: SheetConfig, expectedHeaders: string[]) {
   const candidateNames = [
@@ -4634,23 +4640,47 @@ function findDiamondPricePerCt(
   return best ? best.entry.pricePerCt : null;
 }
 
-const DIAMOND_CLARITY_GROUPS: Record<string, string[]> = {
-  IF: ["IF", "IF-VVS"],
-  VVS: ["IF-VVS", "VVS1", "VVS2"],
-  VS: ["VS1", "VS2"],
-  SI: ["SI1", "SI2", "SI3"],
-  I: ["I1", "I2", "I3"],
-};
+const FALLBACK_DIAMOND_CLARITY_GROUP_ROWS = [
+  { group_key: "IF", clarity: "IF-VVS" },
+  { group_key: "VVS1", clarity: "IF-VVS" },
+  { group_key: "VVS2", clarity: "IF-VVS" },
+  { group_key: "VS1", clarity: "VS" },
+  { group_key: "VS2", clarity: "VS" },
+  { group_key: "VS3", clarity: "VS" },
+];
+const SMALL_DIAMOND_WEIGHT_THRESHOLD = 0.3;
+
+function buildDiamondClarityGroups(
+  rows: Array<Record<string, string | number | null>> = []
+): DiamondClarityGroups {
+  const detailToComposite = new Map<string, string>();
+  const compositeToDetails = new Map<string, string[]>();
+  const source = rows.length ? rows : FALLBACK_DIAMOND_CLARITY_GROUP_ROWS;
+  source.forEach((row) => {
+    const record = row as Record<string, unknown>;
+    const detail = normalizeDiamondToken(String(record.group_key || ""));
+    const composite = normalizeDiamondToken(String(record.clarity || ""));
+    if (!detail || !composite) return;
+    detailToComposite.set(detail, composite);
+    const list = compositeToDetails.get(composite) || [];
+    if (!list.includes(detail)) list.push(detail);
+    compositeToDetails.set(composite, list);
+  });
+  return { detailToComposite, compositeToDetails };
+}
+
+async function loadDiamondClarityGroups(env: Env): Promise<DiamondClarityGroups> {
+  if (hasD1(env)) {
+    const rows = await d1All(env, "SELECT group_key, clarity FROM diamond_clarity_groups");
+    return buildDiamondClarityGroups(rows);
+  }
+  return buildDiamondClarityGroups([]);
+}
 
 function parseDiamondTokens(value: string) {
   if (!value) return [];
   const normalized = normalizeDiamondToken(value);
-  if (DIAMOND_CLARITY_GROUPS[normalized]) {
-    return DIAMOND_CLARITY_GROUPS[normalized];
-  }
-  if (normalized === "VVS1" || normalized === "VVS2") {
-    return [normalized, "IF-VVS"];
-  }
+  if (!normalized) return [];
   const rangeMatch = normalized.match(/^([A-Z])\s*-\s*([A-Z])$/);
   if (rangeMatch) {
     const start = rangeMatch[1].charCodeAt(0);
@@ -4663,6 +4693,29 @@ function parseDiamondTokens(value: string) {
     return tokens;
   }
   return normalized.split(/[^A-Z0-9]+/).filter(Boolean);
+}
+
+function resolveDiamondClarityTokens(
+  value: string,
+  weight: number,
+  groups?: DiamondClarityGroups | null
+) {
+  const normalized = normalizeDiamondToken(value || "");
+  if (!normalized) return [];
+  const useComposite = Number.isFinite(weight) && weight > 0 && weight < SMALL_DIAMOND_WEIGHT_THRESHOLD;
+  const compositeToDetails = groups?.compositeToDetails;
+  const detailToComposite = groups?.detailToComposite;
+  if (useComposite) {
+    if (compositeToDetails?.has(normalized)) {
+      return [normalized];
+    }
+    const composite = detailToComposite?.get(normalized);
+    if (composite) return [composite];
+  }
+  if (compositeToDetails?.has(normalized)) {
+    return compositeToDetails.get(normalized) || [];
+  }
+  return parseDiamondTokens(normalized);
 }
 
 function matchesDiamondToken(entryValue: string, tokens: string[], allowPrefix: boolean) {
@@ -4720,6 +4773,7 @@ function computeOptionPriceFromCosts(
   color: string,
   costValues: CostChartValues,
   diamondPrices: DiamondPriceEntry[],
+  clarityGroups?: DiamondClarityGroups | null,
   adjustments?: Record<string, PriceAdjustment>,
   discountDetails?: DiscountDetails,
   diamondComponents?: DiamondBreakdownComponent[]
@@ -4817,12 +4871,24 @@ function computeOptionPriceFromCosts(
   const metalCost = metalCostPerGram * metalWeight;
 
   let diamondCost = 0;
-  const clarityTokens = parseDiamondTokens(clarity || "");
+  const diamondDebug: Array<{
+    weight: number;
+    count: number;
+    clarityTokens: string[];
+    colorTokens: string[];
+    pricePerCt: number;
+    pieceType: string;
+  }> = [];
   const colorTokens = parseDiamondTokens(color || "");
   const labRelativeCost = getCostPercent(costValues, ["lab_diamonds_relative_cost_pct"]);
   const labMultiplier = labRelativeCost > 0 ? labRelativeCost : 0.2;
   if (pieces.length) {
     for (const piece of pieces) {
+      const clarityTokens = resolveDiamondClarityTokens(
+        clarity || "",
+        piece.weight,
+        clarityGroups
+      );
       let pricePerCt = findDiamondPricePerCtAverage(
         diamondPrices,
         clarityTokens,
@@ -4850,6 +4916,14 @@ function computeOptionPriceFromCosts(
       }
       const pieceType = normalizeStoneTypeToken(piece.stoneType || "") || defaultType;
       const multiplier = pieceType === "lab" ? labMultiplier : 1;
+      diamondDebug.push({
+        weight: piece.weight,
+        count: piece.count,
+        clarityTokens,
+        colorTokens,
+        pricePerCt,
+        pieceType: pieceType || "",
+      });
       diamondCost += pricePerCt * piece.weight * piece.count * multiplier;
     }
   }
@@ -4922,6 +4996,8 @@ function computeOptionPriceFromCosts(
       ringSize,
       ringStep,
       ringBase,
+      diamondCost,
+      diamondDebug,
     },
   } as const;
 }
@@ -5016,6 +5092,7 @@ async function computeQuoteOptionPrices(
   }
 
   const diamondPrices = await loadDiamondPriceChart(env);
+  const clarityGroups = await loadDiamondClarityGroups(env);
   const adjustments = await loadPriceChartAdjustments(env);
   for (let i = 1; i <= 3; i += 1) {
     const priceRaw = record[`quote_option_${i}_price_18k`] || "";
@@ -5030,6 +5107,7 @@ async function computeQuoteOptionPrices(
       color,
       costValues,
       diamondPrices,
+      clarityGroups,
       adjustments,
       discountDetails
     );

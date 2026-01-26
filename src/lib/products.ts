@@ -1,6 +1,7 @@
 import { getEnv } from './csvFetch';
 import { productSchema, type Product, type ProductInput } from './schema';
 import { getMediaForProduct, type MediaCollection } from './media';
+import pLimit from 'p-limit';
 
 const normalizeListValue = (value: unknown): string => {
   if (Array.isArray(value)) {
@@ -109,7 +110,8 @@ async function loadProductsFromApi(): Promise<Product[]> {
       .filter((p) => p.is_active);
     return parsed;
   }
-  catch {
+  catch (error) {
+    console.error('Original D1 API Error:', error);
     throw new Error('Failed to load products from D1 catalog API.');
   }
 }
@@ -126,12 +128,13 @@ export async function loadProductBySlug(slug: string): Promise<Product | undefin
 export type ProductWithMedia = Product & { media: MediaCollection };
 
 export async function loadProductsWithMedia(): Promise<ProductWithMedia[]> {
+  const limit = pLimit(10);
   const products = await loadProducts();
   const withMedia = await Promise.all(
-    products.map(async (product) => {
+    products.map((product) => limit(async () => {
       const media = await getMediaForProduct(product);
       return { ...product, media };
-    })
+    }))
   );
   return withMedia;
 }

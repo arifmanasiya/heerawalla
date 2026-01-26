@@ -64,6 +64,63 @@ const parseList = (value?: string) => {
   }
   return [];
 };
+const expandStandardOptions = (value: string | undefined, standardOptions: string[]) => {
+  const tokens = parseList(value);
+  if (!tokens.length) return [];
+  const standardIndex = new Map(standardOptions.map((option, index) => [option.toUpperCase(), index]));
+  const standardByUpper = new Map(standardOptions.map((option) => [option.toUpperCase(), option]));
+  const seen = new Set<string>();
+  const result: string[] = [];
+  const addValue = (entry: string) => {
+    const trimmed = String(entry).trim();
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    result.push(trimmed);
+  };
+  const addStandardValue = (entry: string) => {
+    const upper = String(entry).trim().toUpperCase();
+    addValue(standardByUpper.get(upper) || entry);
+  };
+  const parseRange = (entry: string) => {
+    const normalized = String(entry || '').replace(/[\u2013\u2014]/g, '-');
+    if (normalized.includes('-')) {
+      const parts = normalized.split('-').map((part) => part.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        return [parts[0], parts[parts.length - 1]];
+      }
+    }
+    const toMatch = normalized.match(/^(.+?)\s+to\s+(.+)$/i);
+    if (toMatch) {
+      return [toMatch[1].trim(), toMatch[2].trim()];
+    }
+    return null;
+  };
+  const addRange = (start: string, end: string) => {
+    const startKey = start.trim().toUpperCase();
+    const endKey = end.trim().toUpperCase();
+    const startIndex = standardIndex.get(startKey);
+    const endIndex = standardIndex.get(endKey);
+    if (startIndex === undefined || endIndex === undefined) {
+      addStandardValue(start);
+      addStandardValue(end);
+      return;
+    }
+    const from = Math.min(startIndex, endIndex);
+    const to = Math.max(startIndex, endIndex);
+    standardOptions.slice(from, to + 1).forEach(addValue);
+  };
+  tokens.forEach((token) => {
+    const cleaned = String(token).trim();
+    if (!cleaned) return;
+    const range = parseRange(cleaned);
+    if (range) {
+      addRange(range[0], range[1]);
+      return;
+    }
+    addStandardValue(cleaned);
+  });
+  return result;
+};
 const normalizeStoneType = (value: string) =>
   value
     .replace(/diamond\(s\)/gi, 'Diamond')
@@ -73,19 +130,44 @@ const normalizeStoneType = (value: string) =>
 const stoneTypes = parseList(product.stone_type_options || product.stone_types)
   .map(normalizeStoneType)
   .filter(Boolean);
-const naturalAvailable = stoneTypes.some((item) => /natural/i.test(item));
-const labAvailable = stoneTypes.some((item) => /lab/i.test(item));
 const naturalStoneLabel =
   stoneTypes.find((item) => /natural/i.test(item)) || 'Natural Diamond';
 const labStoneLabel =
   stoneTypes.find((item) => /lab/i.test(item)) || 'Lab Grown Diamond';
-const stoneOptions = [
-  ...(labAvailable ? [{ value: labStoneLabel, label: labStoneLabel, mode: 'lab' }] : []),
-  ...(naturalAvailable
-    ? [{ value: naturalStoneLabel, label: naturalStoneLabel, mode: 'natural' }]
-    : [])
+const STANDARD_STONE_TYPE_CONFIG = [
+  { key: 'lab', summaryLabel: 'Lab', displayLabel: 'LAB', matcher: /lab/i },
+  { key: 'natural', summaryLabel: 'Natural', displayLabel: 'NATURAL', matcher: /natural/i }
 ];
+const stoneTypeDisplay = STANDARD_STONE_TYPE_CONFIG.map((entry) => {
+  const match = stoneTypes.find((item) => entry.matcher.test(item));
+  const available = Boolean(match);
+  const value = match
+    ? match
+    : entry.key === 'lab'
+      ? labStoneLabel
+      : naturalStoneLabel;
+  return {
+    key: entry.key,
+    summaryLabel: entry.summaryLabel,
+    displayLabel: entry.displayLabel,
+    value,
+    available
+  };
+});
+const stoneOptions = stoneTypeDisplay
+  .filter((option) => option.available)
+  .map((option) => ({
+    value: option.value,
+    label: option.summaryLabel,
+    key: option.key
+  }));
 const hasStoneOptions = stoneOptions.length > 0;
+const diamondDefaultEntry =
+  stoneTypeDisplay.find((option) => option.available && option.key === 'lab') ||
+  stoneTypeDisplay.find((option) => option.available);
+const diamondDefault = diamondDefaultEntry?.value || stoneTypeDisplay[0]?.value || labStoneLabel;
+const diamondDefaultLabel =
+  diamondDefaultEntry?.summaryLabel || stoneTypeDisplay[0]?.summaryLabel || 'Diamond';
 const parseOptionList = (value: unknown) => {
   if (value === null || value === undefined) return [];
   if (Array.isArray(value)) {
@@ -122,6 +204,138 @@ const formatWeightFixed2 = (value: unknown) => {
   const num = typeof value === 'number' ? value : Number(String(value || '').trim());
   if (!Number.isFinite(num)) return '';
   return num.toFixed(2);
+};
+const formatDiamondMm = (carat: number) => {
+  if (!Number.isFinite(carat) || carat <= 0) return '';
+  const mm = Math.cbrt(carat / 0.0037);
+  if (!Number.isFinite(mm)) return '';
+  return mm.toFixed(1);
+};
+const getDiamondMmNumber = (carat: number) => {
+  if (!Number.isFinite(carat) || carat <= 0) return 0;
+  const mm = Math.cbrt(carat / 0.0037);
+  return Number.isFinite(mm) ? mm : 0;
+};
+const STANDARD_METAL_OPTIONS = [
+  '14K Yellow Gold',
+  '14K Rose Gold',
+  '14K White Gold',
+  '18K Yellow Gold',
+  '18K Rose Gold',
+  '18K White Gold',
+  'Platinum'
+];
+const STANDARD_CLARITY_OPTIONS = ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'VS3', 'SI1', 'SI2', 'SI3', 'I1', 'I2', 'I3'];
+const STANDARD_COLOR_OPTIONS = ['D', 'E', 'F', 'G', 'H', 'I', 'J'];
+const STANDARD_CUT_OPTIONS = ['IDEAL', 'EXCELLENT', 'VERY GOOD', 'GOOD'];
+const parseStoneWeightBreakdown = (rawValue: string) => {
+  const trimmed = String(rawValue || '').trim();
+  if (!trimmed) return [];
+  const normalized = trimmed.replace(/(\d),(\d)/g, '$1.$2');
+  return normalized
+    .split(/\n|;|,|\|/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const match = entry.match(/([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[xX]\s*([0-9]*\.?[0-9]+)/);
+      if (match) {
+        return { weight: Number(match[1]), count: Number(match[2]) };
+      }
+      const numbers = entry.match(/[0-9]*\.?[0-9]+/g) || [];
+      if (numbers.length >= 2) {
+        const first = Number(numbers[0]);
+        const second = Number(numbers[1]);
+        const weight = first <= second ? first : second;
+        const count = first <= second ? second : first;
+        return { weight, count };
+      }
+      if (numbers.length === 1) {
+        return { weight: Number(numbers[0]), count: 1 };
+      }
+      return { weight: 0, count: 0 };
+    })
+    .filter((entry) => Number.isFinite(entry.weight) && entry.weight > 0 && Number.isFinite(entry.count) && entry.count > 0);
+};
+const formatStoneWeightBriefLabel = (rawValue: string) => {
+  const trimmed = String(rawValue || '').trim();
+  if (!trimmed) return '';
+  const breakdown = parseStoneWeightBreakdown(trimmed);
+  if (!breakdown.length) {
+    const numeric = Number(trimmed.replace(/[^0-9.]/g, ''));
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return `${formatWeightNumber(numeric)}ct`;
+    }
+    return trimmed;
+  }
+  const weights = breakdown
+    .map((entry) => formatWeightNumber(entry.weight))
+    .filter(Boolean);
+  const unique = Array.from(new Set(weights));
+  return unique.map((weight) => `${weight}ct`).join(', ');
+};
+const buildStoneWeightVisual = (rawValue: string) => {
+  const trimmed = String(rawValue || '').trim();
+  if (!trimmed) {
+    return {
+      items: [] as Array<{ size: number }>,
+      breakdown: [] as Array<{ weight: number; count: number; mm: number }>,
+      overflow: 0,
+      countLabel: 'Stones: --',
+      largestLabel: 'Largest: --',
+      totalLabel: 'Total: --',
+      isApprox: false
+    };
+  }
+  const breakdown = parseStoneWeightBreakdown(trimmed);
+  let entries = breakdown;
+  let isApprox = false;
+  if (!entries.length) {
+    const numeric = Number(trimmed.replace(/[^0-9.]/g, ''));
+    if (Number.isFinite(numeric) && numeric > 0) {
+      entries = [{ weight: numeric, count: 1 }];
+      isApprox = true;
+    }
+  }
+  if (!entries.length) {
+    return {
+      items: [],
+      breakdown: [],
+      overflow: 0,
+      countLabel: 'Stones: --',
+      largestLabel: 'Largest: --',
+      totalLabel: trimmed,
+      isApprox: false
+    };
+  }
+  const breakdownItems = entries.map((entry) => ({
+    weight: entry.weight,
+    count: entry.count,
+    mm: getDiamondMmNumber(entry.weight)
+  }));
+  const totalCount = entries.reduce((sum, entry) => sum + entry.count, 0);
+  const totalCarat = entries.reduce((sum, entry) => sum + entry.weight * entry.count, 0);
+  const largestWeight = entries.reduce((max, entry) => Math.max(max, entry.weight), 0);
+  const largestMmValue = getDiamondMmNumber(largestWeight);
+  const maxPieces = 6;
+  const items: Array<{ size: number }> = [];
+  const sorted = [...entries].sort((a, b) => b.weight - a.weight);
+  sorted.forEach((entry) => {
+    for (let i = 0; i < entry.count && items.length < maxPieces; i += 1) {
+      const size = getDiamondMmNumber(entry.weight);
+      items.push({ size: Number.isFinite(size) ? size : 0 });
+    }
+  });
+  const overflow = Math.max(0, totalCount - items.length);
+  const countLabel = totalCount
+    ? `${isApprox ? 'Approx. ' : ''}Stones: ${formatWeightNumber(totalCount)}`
+    : 'Stones: --';
+  const largestLabel =
+    largestMmValue > 0 ? `Largest: ${largestMmValue.toFixed(1)}mm` : 'Largest: --';
+  const totalLabel =
+    totalCarat > 0
+      ? `${isApprox ? 'Approx. ' : ''}Total: ${formatWeightFixed2(totalCarat)} ct`
+      : 'Total: --';
+  return { items, breakdown: breakdownItems, overflow, countLabel, largestLabel, totalLabel, isApprox };
 };
 const buildStoneWeightInfoValue = (rawValue: string) => {
   const trimmed = String(rawValue || '').trim();
@@ -251,11 +465,18 @@ const buildStoneWeightInfoValue = (rawValue: string) => {
   const stoneWeightGroups = buildStoneWeightGroupsFromOptions(
     Array.isArray(product.stone_options) ? product.stone_options : []
   );
-  const stoneWeightOptions = stoneWeightGroups.map((group) => ({
-    value: group.value,
-    label: group.label,
-    size_type: group.size_type,
+  const stoneWeightFallback = parseOptionList(product.stone_weight).map((value) => ({
+    value,
+    label: value,
+    size_type: 'size'
   }));
+const stoneWeightOptions = (stoneWeightGroups.length ? stoneWeightGroups : stoneWeightFallback).map(
+  (group) => ({
+    value: group.value,
+    label: formatStoneWeightBriefLabel(group.value),
+    size_type: group.size_type,
+  })
+);
   const hasStoneWeight = stoneWeightOptions.length > 0;
   const buildMetalWeightOptionsFromOptions = (options?: Array<Record<string, unknown>>) => {
     if (!Array.isArray(options) || !options.length) return [];
@@ -276,10 +497,12 @@ const buildStoneWeightInfoValue = (rawValue: string) => {
   const hasSizeType = sizeTypeOptions.length > 0;
   const selectedSizeType = sizeTypeOptions[0]?.value || '';
 const selectedStoneWeightValue =
-  stoneWeightGroups.find((group) => group.size_type === selectedSizeType)?.value ||
-  stoneWeightGroups[0]?.value ||
-  '';
+    stoneWeightGroups.find((group) => group.size_type === selectedSizeType)?.value ||
+    stoneWeightGroups[0]?.value ||
+    stoneWeightFallback[0]?.value ||
+    '';
 const selectedStoneWeightInfo = buildStoneWeightInfoValue(selectedStoneWeightValue);
+const selectedStoneWeightVisual = buildStoneWeightVisual(selectedStoneWeightValue);
   const metalWeightOptions = (() => {
     const fromOptions = buildMetalWeightOptionsFromOptions(
       Array.isArray(product.metal_weight_options) ? product.metal_weight_options : []
@@ -294,14 +517,24 @@ const selectedStoneWeightInfo = buildStoneWeightInfoValue(selectedStoneWeightVal
     metalWeightOptions[0] ||
     '';
   const hasMetalWeight = metalWeightOptions.length > 0;
-const clarityOptions = parseList(product.clarity);
-const colorOptions = parseList(product.color);
-const cutOptions = parseList(product.cut);
-const diamondDefault = labAvailable
-  ? labStoneLabel
-  : naturalAvailable
-    ? naturalStoneLabel
-    : naturalStoneLabel;
+const clarityOptions = expandStandardOptions(product.clarity, STANDARD_CLARITY_OPTIONS);
+const colorOptions = expandStandardOptions(product.color, STANDARD_COLOR_OPTIONS);
+const cutOptions = expandStandardOptions(product.cut, STANDARD_CUT_OPTIONS);
+const clarityDisplayOptions = STANDARD_CLARITY_OPTIONS.map((value) => ({
+  value,
+  available: clarityOptions.includes(value)
+}));
+const colorDisplayOptions = STANDARD_COLOR_OPTIONS.map((value) => ({
+  value,
+  available: colorOptions.includes(value)
+}));
+const cutDisplayOptions = STANDARD_CUT_OPTIONS.map((value) => ({
+  value,
+  available: cutOptions.includes(value)
+}));
+const clarityDefaultValue = clarityOptions[clarityOptions.length - 1] || '';
+const colorDefaultValue = colorOptions[colorOptions.length - 1] || '';
+const cutDefaultValue = cutOptions[cutOptions.length - 1] || '';
 const metalOptionLabels = parseList(product.metal_options || product.metal);
 const metalOptions =
   metalOptionLabels.length > 0
@@ -325,10 +558,34 @@ const metalOptions =
           })),
           { value: 'Platinum', label: 'Platinum' }
         ];
-      })();
+})();
+const metalDisplayOptions = (() => {
+  const availableMetals = new Set(metalOptions.map((option) => option.value));
+  return STANDARD_METAL_OPTIONS.map((value) => ({
+    value,
+    available: availableMetals.has(value)
+  }));
+})();
+const metalSwatchTone = (value: string) => {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('rose')) return 'rose';
+  if (normalized.includes('platinum')) return 'platinum';
+  if (normalized.includes('white')) return 'white';
+  if (normalized.includes('yellow')) return 'yellow';
+  return 'neutral';
+};
+const metalSwatchLabel = (value: string) => {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('platinum')) return { karat: 'PT', label: 'Platinum' };
+  const karatMatch = normalized.match(/\b(10|14|18|22|24)k\b/);
+  const karat = karatMatch ? `${karatMatch[1]}K` : '';
+  if (normalized.includes('rose')) return { karat, label: 'Rose' };
+  if (normalized.includes('white')) return { karat, label: 'White' };
+  if (normalized.includes('yellow')) return { karat, label: 'Yellow' };
+  return { karat, label: value.replace(/gold/gi, '').trim() || value };
+};
 const defaultMetalValue = metalOptions[metalOptions.length - 1]?.value || '18K Gold';
 const defaultMetalLabel = metalOptions[metalOptions.length - 1]?.label || defaultMetalValue;
-const diamondDefaultLabel = diamondDefault === 'lab' ? labStoneLabel : naturalStoneLabel;
 const designCode = product.design_code || 'Signature';
 const designCodeSlug = designCode.toLowerCase();
 const isDesignCode = ['axis', 'continuum', 'eclipse'].includes(designCodeSlug);
@@ -537,14 +794,41 @@ void jsonLdString;
               data-stone-field
             >
               <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Stone Type</span>
+              <div
+                class="stone-type-grid"
+                data-stone-swatch
+                data-stone-display={JSON.stringify(stoneTypeDisplay)}
+              >
+                {stoneTypeDisplay.map((option) => (
+                  <button
+                    type="button"
+                    class={`stone-type-swatch${option.value === diamondDefault ? ' is-active' : ''}${
+                      option.available ? '' : ' stone-type-swatch--disabled'
+                    }`}
+                    data-stone-option
+                    data-stone-value={option.value}
+                    data-stone-key={option.key}
+                    aria-pressed={option.value === diamondDefault ? 'true' : 'false'}
+                    disabled={!option.available}
+                  >
+                    <span class="stone-type-label">{option.displayLabel}</span>
+                  </button>
+                ))}
+              </div>
               <select
-                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                class="stone-type-hidden"
                 data-stone-select
                 disabled={!hasStoneOptions}
+                aria-hidden="true"
+                tabindex="-1"
               >
                 {stoneOptions.length ? (
                   stoneOptions.map((option) => (
-                    <option value={option.value} selected={option.value === diamondDefault}>
+                    <option
+                      value={option.value}
+                      data-stone-key={option.key}
+                      selected={option.value === diamondDefault}
+                    >
                       {option.label}
                     </option>
                   ))
@@ -555,9 +839,36 @@ void jsonLdString;
             </label>
             <label class="text-sm space-y-1">
               <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Metal Type</span>
+              <div
+                class="metal-swatch-grid"
+                data-metal-swatch
+                data-metal-display={JSON.stringify(metalDisplayOptions)}
+              >
+                {metalDisplayOptions.map((option) => (
+                  <button
+                    type="button"
+                    class={`metal-swatch${option.value === defaultMetalValue ? ' is-active' : ''}${
+                      option.available ? '' : ' metal-swatch--disabled'
+                    }`}
+                    data-metal-option
+                    data-metal-value={option.value}
+                    data-metal-tone={metalSwatchTone(option.value)}
+                    aria-pressed={option.value === defaultMetalValue ? 'true' : 'false'}
+                    aria-disabled={!option.available}
+                    disabled={!option.available}
+                  >
+                    <span class={`metal-dot metal-dot--${metalSwatchTone(option.value)}`}>
+                      {metalSwatchLabel(option.value).karat}
+                    </span>
+                    <span class="metal-label" aria-hidden="true"></span>
+                  </button>
+                ))}
+              </div>
               <select
-                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                class="metal-select-hidden"
                 data-metal-select
+                aria-hidden="true"
+                tabindex="-1"
               >
                 {metalOptions.map((option) => (
                   <option value={option.value} selected={option.value === defaultMetalValue}>
@@ -567,7 +878,7 @@ void jsonLdString;
               </select>
             </label>
             <label
-              class={`text-sm space-y-1${hasSizeType ? '' : ' hidden'}`}
+              class={`text-sm space-y-1 hidden`}
               data-size-type-field
             >
               <span class="text-xs uppercase tracking-[0.18em] text-slate-500 flex items-center gap-2">
@@ -636,128 +947,156 @@ void jsonLdString;
                 )}
               </select>
             </label>
-            <label
-              class="text-sm space-y-1 hidden"
-              data-stone-weight-field
-            >
-              <span class="text-xs uppercase tracking-[0.18em] text-slate-500 flex items-center gap-2">
-                Stone Weight
-                <span class="relative group inline-flex items-center" data-stone-weight-info>
+              <label
+                class={`text-sm space-y-1${clarityOptions.length ? '' : ' hidden'}`}
+                data-clarity-field
+              >
+              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Clarity</span>
+              <div
+                class="diamond-clarity-grid"
+                data-clarity-swatch
+                data-clarity-display={JSON.stringify(clarityDisplayOptions)}
+              >
+                {clarityDisplayOptions.map((option) => (
                   <button
                     type="button"
-                    class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-                    aria-describedby="stone-weight-tooltip"
+                    class={`diamond-clarity-swatch${clarityDefaultValue === option.value ? ' is-active' : ''}${
+                      option.available ? '' : ' diamond-clarity-swatch--disabled'
+                    }`}
+                    data-clarity-option
+                    data-clarity-value={option.value}
+                    aria-pressed={clarityDefaultValue === option.value ? 'true' : 'false'}
+                    aria-disabled={!option.available}
+                    disabled={!option.available}
                   >
-                    i
+                    <span class="diamond-clarity-dot">{option.value}</span>
                   </button>
-                  <span
-                    id="stone-weight-tooltip"
-                    class="pointer-events-none absolute left-0 top-full z-10 mt-2 w-64 max-w-[90vw] translate-x-0 border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 sm:left-1/2 sm:-translate-x-1/2"
-                    role="tooltip"
-                  >
-                    <span class="block font-semibold text-slate-700">Stone breakdown</span>
-                    <span class="block whitespace-pre-line" data-stone-weight-details>
-                      {selectedStoneWeightInfo.details}
-                    </span>
-                    <span class="block" data-stone-weight-total-label>
-                      {selectedStoneWeightInfo.totalLabel}
-                    </span>
-                  </span>
-                </span>
-              </span>
+                ))}
+              </div>
               <select
-                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
-                data-stone-weight-select
-                disabled={!hasStoneWeight || hasSizeType}
+                class="diamond-clarity-hidden"
+                data-clarity-select
+                aria-hidden="true"
+                tabindex="-1"
               >
-                {stoneWeightOptions.length ? (
-                    stoneWeightOptions.map((option) => (
-                      <option
-                        value={option.value}
-                        data-size-type={option.size_type}
-                        selected={selectedStoneWeightValue === option.value}
-                      >
-                        {option.label}
-                      </option>
-                    ))
-                ) : (
-                  <option value="">Not specified</option>
-                )}
-              </select>
-              <span class="text-xs text-slate-500" data-stone-weight-total></span>
-            </label>
-            <label
-              class="text-sm space-y-1 hidden"
-              data-metal-weight-field
-            >
-              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Metal Weight</span>
-              <select
-                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
-                data-metal-weight-select
-                disabled={!hasMetalWeight || hasSizeType}
-              >
-                {metalWeightOptions.length ? (
-                  metalWeightOptions.map((option) => (
-                    <option value={option} selected={selectedMetalWeightValue === option}>
-                      {option} g
-                    </option>
-                  ))
-                ) : (
-                  <option value="">Not specified</option>
-                )}
-              </select>
-            </label>
-            <label
-              class={`text-sm space-y-1${clarityOptions.length ? '' : ' hidden'}`}
-              data-clarity-field
-            >
-              <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Clarity</span>
-              <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink" data-clarity-select>
                 {clarityOptions.length ? (
                   clarityOptions.map((option) => (
-                    <option value={option} selected={clarityOptions[clarityOptions.length - 1] === option}>
+                    <option value={option} selected={clarityDefaultValue === option}>
                       {option}
                     </option>
                   ))
                 ) : (
                   <option value="">Standard</option>
                 )}
-              </select>
-            </label>
-            <label
-              class={`text-sm space-y-1${colorOptions.length ? '' : ' hidden'}`}
+                </select>
+              </label>
+              <label
+                class={`text-sm space-y-1${colorOptions.length ? '' : ' hidden'}`}
               data-color-field
             >
               <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Color</span>
-              <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink" data-color-select>
+              <div
+                class="diamond-color-grid"
+                data-color-swatch
+                data-color-display={JSON.stringify(colorDisplayOptions)}
+              >
+                {colorDisplayOptions.map((option) => (
+                  <button
+                    type="button"
+                    class={`diamond-color-swatch${colorDefaultValue === option.value ? ' is-active' : ''}${
+                      option.available ? '' : ' diamond-color-swatch--disabled'
+                    }`}
+                    data-color-option
+                    data-color-value={option.value}
+                    aria-pressed={colorDefaultValue === option.value ? 'true' : 'false'}
+                    aria-disabled={!option.available}
+                    disabled={!option.available}
+                  >
+                    <span class="diamond-color-dot">{option.value}</span>
+                  </button>
+                ))}
+              </div>
+              <select
+                class="diamond-color-hidden"
+                data-color-select
+                aria-hidden="true"
+                tabindex="-1"
+              >
                 {colorOptions.length ? (
                   colorOptions.map((option) => (
-                    <option value={option} selected={colorOptions[colorOptions.length - 1] === option}>
+                    <option value={option} selected={colorDefaultValue === option}>
                       {option}
                     </option>
                   ))
                 ) : (
                   <option value="">Standard</option>
                 )}
-              </select>
-            </label>
-            <label
-              class={`text-sm space-y-1${cutOptions.length ? '' : ' hidden'}`}
-              data-cut-field
+                </select>
+              </label>
+              <label
+                class={`text-sm space-y-1${cutOptions.length ? '' : ' hidden'}`}
+                data-cut-field
             >
               <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Cut</span>
-              <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink" data-cut-select>
+              <div
+                class="diamond-cut-grid"
+                data-cut-swatch
+                data-cut-display={JSON.stringify(cutDisplayOptions)}
+              >
+                {cutDisplayOptions.map((option) => (
+                  <button
+                    type="button"
+                    class={`diamond-cut-swatch${cutDefaultValue === option.value ? ' is-active' : ''}${
+                      option.available ? '' : ' diamond-cut-swatch--disabled'
+                    }`}
+                    data-cut-option
+                    data-cut-value={option.value}
+                    aria-pressed={cutDefaultValue === option.value ? 'true' : 'false'}
+                    aria-disabled={!option.available}
+                    disabled={!option.available}
+                  >
+                    <span class="diamond-cut-dot">{option.value}</span>
+                  </button>
+                ))}
+              </div>
+              <select
+                class="diamond-cut-hidden"
+                data-cut-select
+                aria-hidden="true"
+                tabindex="-1"
+              >
                 {cutOptions.length ? (
                   cutOptions.map((option) => (
-                    <option value={option} selected={cutOptions[cutOptions.length - 1] === option}>
+                    <option value={option} selected={cutDefaultValue === option}>
                       {option}
                     </option>
                   ))
                 ) : (
                   <option value="">Standard</option>
                 )}
-              </select>
-            </label>
+                </select>
+              </label>
+              <label
+                class="text-sm space-y-1 hidden"
+                data-metal-weight-field
+              >
+                <span class="text-xs uppercase tracking-[0.18em] text-slate-500">Metal Weight</span>
+                <select
+                  class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                  data-metal-weight-select
+                  disabled={!hasMetalWeight || hasSizeType}
+                >
+                  {metalWeightOptions.length ? (
+                    metalWeightOptions.map((option) => (
+                      <option value={option} selected={selectedMetalWeightValue === option}>
+                        {option} g
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">Not specified</option>
+                  )}
+                </select>
+              </label>
             <label
               class={`text-sm space-y-1${sizeSpec ? '' : ' hidden'}`}
               data-size-field
@@ -794,34 +1133,182 @@ void jsonLdString;
                   </span>
                 ) : null}
               </span>
-              <select
-                class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
-                data-size-select
-                data-size-required={sizeSpec?.options?.length ? 'true' : 'false'}
-                disabled={!sizeSpec}
-              >
-                {sizeSpec?.options?.length ? (
-                  <>
-                    {defaultSizeValue ? null : (
-                      <option value="" selected>
-                        Select {sizeSpec.label.toLowerCase()}
-                      </option>
+              {sizeSpec?.label === 'Chain length' ? (
+                <>
+                  <div class="chain-swatch-grid" data-chain-swatch>
+                    {sizeSpec?.options?.length
+                      ? sizeSpec.options.map((option, index) => (
+                          <button
+                            type="button"
+                            class={`chain-swatch${defaultSizeValue === option || (!defaultSizeValue && index === 0) ? ' is-active' : ''}`}
+                            data-chain-option
+                            data-chain-value={option}
+                            aria-pressed={defaultSizeValue === option || (!defaultSizeValue && index === 0) ? 'true' : 'false'}
+                          >
+                            <span class="chain-dot">{option.replace(/\"/g, '')}</span>
+                          </button>
+                        ))
+                      : null}
+                  </div>
+                  <select
+                    class="chain-select-hidden"
+                    data-size-select
+                    data-size-required={sizeSpec?.options?.length ? 'true' : 'false'}
+                    disabled={!sizeSpec}
+                    aria-hidden="true"
+                    tabindex="-1"
+                  >
+                    {sizeSpec?.options?.length ? (
+                      <>
+                        {defaultSizeValue ? null : (
+                          <option value="" selected>
+                            Select {sizeSpec.label.toLowerCase()}
+                          </option>
+                        )}
+                        {sizeSpec.options.map((option, index) => (
+                          <option
+                            value={option}
+                            selected={defaultSizeValue === option || (!defaultSizeValue && index === 0)}
+                          >
+                            {option}
+                          </option>
+                        ))}
+                      </>
+                    ) : (
+                      <option value="">Not applicable</option>
                     )}
-                    {sizeSpec.options.map((option, index) => (
-                      <option
-                        value={option}
-                        selected={defaultSizeValue === option || (!defaultSizeValue && index === 0)}
-                      >
-                        {option}
-                      </option>
-                    ))}
-                  </>
-                ) : (
-                  <option value="">Not applicable</option>
-                )}
-              </select>
+                  </select>
+                </>
+              ) : (
+                <select
+                  class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink"
+                  data-size-select
+                  data-size-required={sizeSpec?.options?.length ? 'true' : 'false'}
+                  disabled={!sizeSpec}
+                >
+                  {sizeSpec?.options?.length ? (
+                    <>
+                      {defaultSizeValue ? null : (
+                        <option value="" selected>
+                          Select {sizeSpec.label.toLowerCase()}
+                        </option>
+                      )}
+                      {sizeSpec.options.map((option, index) => (
+                        <option
+                          value={option}
+                          selected={defaultSizeValue === option || (!defaultSizeValue && index === 0)}
+                        >
+                          {option}
+                        </option>
+                      ))}
+                    </>
+                  ) : (
+                    <option value="">Not applicable</option>
+                  )}
+                </select>
+              )}
               <span class="text-xs text-slate-500" data-size-helper></span>
             </label>
+              <label
+                class={`text-sm space-y-1 sm:col-span-2${hasStoneWeight ? '' : ' hidden'}`}
+                data-stone-weight-field
+              >
+                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 flex items-center gap-2">
+                  Stone Weight
+                </span>
+                <div class="stone-weight-grid" data-stone-weight-swatch>
+                  {stoneWeightOptions.length ? (
+                    stoneWeightOptions.map((option) => (
+                      <button
+                        type="button"
+                        class={`stone-weight-swatch${selectedStoneWeightValue === option.value ? ' is-active' : ''}`}
+                        data-stone-weight-option
+                        data-stone-weight-value={option.value}
+                        data-size-type={option.size_type}
+                        aria-pressed={selectedStoneWeightValue === option.value ? 'true' : 'false'}
+                      >
+                        <span class="stone-weight-pill">{option.label}</span>
+                      </button>
+                    ))
+                  ) : null}
+                </div>
+                <select
+                  class="stone-weight-hidden"
+                  data-stone-weight-select
+                  disabled={!hasStoneWeight}
+                  aria-hidden="true"
+                  tabindex="-1"
+                >
+                  {stoneWeightOptions.length ? (
+                    stoneWeightOptions.map((option) => (
+                      <option
+                        value={option.value}
+                        data-size-type={option.size_type}
+                        selected={selectedStoneWeightValue === option.value}
+                      >
+                        {option.label}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">Not specified</option>
+                  )}
+                </select>
+                <div
+                  class={`stone-weight-visual${selectedStoneWeightValue ? '' : ' hidden'}`}
+                  data-stone-weight-visual
+                >
+                  <div class="stone-weight-visual-row" data-stone-weight-visual-row>
+                    {selectedStoneWeightVisual.items.length ? (
+                      selectedStoneWeightVisual.items.map((item) => (
+                        <span
+                          class="stone-weight-gem"
+                          style={`--stone-size:${item.size || 1.2}`}
+                          aria-hidden="true"
+                        ></span>
+                      ))
+                    ) : (
+                      <span class="stone-weight-gem stone-weight-gem--empty" aria-hidden="true"></span>
+                    )}
+                    {selectedStoneWeightVisual.overflow > 0 ? (
+                      <span class="stone-weight-overflow" aria-hidden="true">
+                        +{selectedStoneWeightVisual.overflow}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div class="stone-weight-visual-meta">
+                    <span class="stone-weight-meta" data-stone-weight-piece-count>
+                      {selectedStoneWeightVisual.countLabel}
+                    </span>
+                    <span class="stone-weight-meta" data-stone-weight-largest>
+                      {selectedStoneWeightVisual.largestLabel}
+                    </span>
+                    <span class="stone-weight-meta" data-stone-weight-total-ct>
+                      {selectedStoneWeightVisual.totalLabel}
+                    </span>
+                    <span class="stone-weight-scale" data-stone-weight-scale>
+                      {selectedStoneWeightVisual.isApprox ? 'Approx.' : 'Scale'}: round brilliant diameter
+                    </span>
+                  </div>
+                  {selectedStoneWeightVisual.breakdown.length ? (
+                    <div class="stone-weight-legend" data-stone-weight-legend>
+                      {selectedStoneWeightVisual.breakdown.map((entry) => (
+                        <div class="stone-weight-legend-row">
+                          <span
+                            class="stone-weight-legend-gem"
+                            style={`--stone-size:${entry.mm || 1.2}`}
+                            aria-hidden="true"
+                          ></span>
+                          <span class="stone-weight-legend-text">
+                            {formatWeightNumber(entry.count)}x {formatWeightNumber(entry.weight)}ct ·
+                            {` ${entry.mm ? entry.mm.toFixed(1) : '0.0'}mm`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <span class="text-xs text-slate-500" data-stone-weight-total></span>
+              </label>
           </div>
         </div>
         <p class="text-sm leading-relaxed text-slate-600 whitespace-pre-line" data-product-description>
@@ -915,10 +1402,16 @@ void jsonLdString;
       const priceEl = document.getElementById('price-display');
       if (!priceEl) return;
         const stoneSelect = document.querySelector('[data-stone-select]');
-        const metalSelect = document.querySelector('[data-metal-select]');
-        const sizeTypeSelect = document.querySelector('[data-size-type-select]');
-        const stoneWeightSelect = document.querySelector('[data-stone-weight-select]');
-        const metalWeightSelect = document.querySelector('[data-metal-weight-select]');
+      const metalSelect = document.querySelector('[data-metal-select]');
+      const sizeTypeSelect = document.querySelector('[data-size-type-select]');
+      const stoneWeightSelect = document.querySelector('[data-stone-weight-select]');
+      const metalWeightSelect = document.querySelector('[data-metal-weight-select]');
+      const metalSwatchWrap = document.querySelector('[data-metal-swatch]');
+      const stoneWeightSwatchWrap = document.querySelector('[data-stone-weight-swatch]');
+      const colorSwatchWrap = document.querySelector('[data-color-swatch]');
+      const claritySwatchWrap = document.querySelector('[data-clarity-swatch]');
+      const stoneSwatchWrap = document.querySelector('[data-stone-swatch]');
+      const cutSwatchWrap = document.querySelector('[data-cut-swatch]');
       const claritySelect = document.querySelector('[data-clarity-select]');
       const colorSelect = document.querySelector('[data-color-select]');
       const cutSelect = document.querySelector('[data-cut-select]');
@@ -929,6 +1422,13 @@ void jsonLdString;
       const stoneWeightInfo = document.querySelector('[data-stone-weight-info]');
       const stoneWeightDetails = document.querySelector('[data-stone-weight-details]');
       const stoneWeightTotalLabel = document.querySelector('[data-stone-weight-total-label]');
+      const stoneWeightVisual = document.querySelector('[data-stone-weight-visual]');
+      const stoneWeightVisualRow = document.querySelector('[data-stone-weight-visual-row]');
+      const stoneWeightPieceCount = document.querySelector('[data-stone-weight-piece-count]');
+      const stoneWeightLargest = document.querySelector('[data-stone-weight-largest]');
+      const stoneWeightTotalCt = document.querySelector('[data-stone-weight-total-ct]');
+      const stoneWeightLegend = document.querySelector('[data-stone-weight-legend]');
+      const stoneWeightScale = document.querySelector('[data-stone-weight-scale]');
       const sizeTypeInfo = document.querySelector('[data-size-type-info]');
       const sizeTypeMetal = document.querySelector('[data-size-type-metal]');
       const sizeTypeMetalUnit = document.querySelector('[data-size-type-metal-unit]');
@@ -937,6 +1437,7 @@ void jsonLdString;
       const chainWeightInfo = document.querySelector('[data-chain-weight-info]');
       const chainWeightValue = document.querySelector('[data-chain-weight-value]');
       const chainWeightUnit = document.querySelector('[data-chain-weight-unit]');
+      const chainSwatchWrap = document.querySelector('[data-chain-swatch]');
       const titleEl = document.querySelector('[data-product-title]');
       const descEl = document.querySelector('[data-product-description]');
       const sizeHelper = document.querySelector('[data-size-helper]');
@@ -949,6 +1450,22 @@ void jsonLdString;
       const sizeWarning = document.querySelector('[data-size-warning]');
       const priceLabel = priceEl.textContent || 'Pricing on request';
       let pricingBase = priceEl.dataset.pricingBase || '';
+      const STANDARD_STONE_TYPE_CONFIG = [
+        { key: 'lab', summaryLabel: 'Lab', displayLabel: 'LAB', matcher: /lab/i },
+        { key: 'natural', summaryLabel: 'Natural', displayLabel: 'NATURAL', matcher: /natural/i }
+      ];
+      const STANDARD_METAL_OPTIONS = [
+        '14K Yellow Gold',
+        '14K Rose Gold',
+        '14K White Gold',
+        '18K Yellow Gold',
+        '18K Rose Gold',
+        '18K White Gold',
+        'Platinum'
+      ];
+      const STANDARD_CLARITY_OPTIONS = ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'VS3', 'SI1', 'SI2', 'SI3', 'I1', 'I2', 'I3'];
+      const STANDARD_COLOR_OPTIONS = ['D', 'E', 'F', 'G', 'H', 'I', 'J'];
+      const STANDARD_CUT_OPTIONS = ['IDEAL', 'EXCELLENT', 'VERY GOOD', 'GOOD'];
       const resolvePricingBase = () => {
         let base = pricingBase || '';
         if (!base) base = 'https://admin-api.heerawalla.com';
@@ -966,6 +1483,392 @@ void jsonLdString;
         const match = options.find((option) => option.value === value);
         select.value = match ? value : options[0].value;
       };
+      const parseDisplayOptions = (element, key) => {
+        if (!element) return [];
+        const raw = element.dataset[key] || '[]';
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {
+          // ignore
+        }
+        return [];
+      };
+      const syncDisplayOptions = (element, key, options) => {
+        if (!element) return;
+        element.dataset[key] = JSON.stringify(options);
+      };
+      const buildStoneTypeDisplay = (stoneTypes, labStoneLabel, naturalStoneLabel) =>
+        STANDARD_STONE_TYPE_CONFIG.map((entry) => {
+          const match = stoneTypes.find((value) => entry.matcher.test(value));
+          const available = Boolean(match);
+          const value = match
+            ? match
+            : entry.key === 'lab'
+              ? labStoneLabel
+              : naturalStoneLabel;
+          return {
+            key: entry.key,
+            summaryLabel: entry.summaryLabel,
+            displayLabel: entry.displayLabel,
+            value,
+            available
+          };
+        });
+      const buildStandardDisplayOptions = (standardList, availableValues) =>
+        standardList.map((value) => ({
+          value,
+          available: availableValues.has(value)
+        }));
+      const metalToneClass = (value) => {
+        const normalized = String(value || '').toLowerCase();
+        if (normalized.includes('rose')) return 'rose';
+        if (normalized.includes('platinum')) return 'platinum';
+        if (normalized.includes('white')) return 'white';
+        if (normalized.includes('yellow')) return 'yellow';
+        return 'neutral';
+      };
+      const metalSwatchParts = (value) => {
+        const normalized = String(value || '').toLowerCase();
+        if (normalized.includes('platinum')) return { karat: 'PT', label: 'Platinum' };
+        const karatMatch = normalized.match(/\b(10|14|18|22|24)k\b/);
+        const karat = karatMatch ? `${karatMatch[1]}K` : '';
+        if (normalized.includes('rose')) return { karat, label: 'Rose' };
+        if (normalized.includes('white')) return { karat, label: 'White' };
+        if (normalized.includes('yellow')) return { karat, label: 'Yellow' };
+        const trimmed = String(value || '').replace(/gold/gi, '').trim();
+        return { karat, label: trimmed || String(value || '') };
+      };
+      const renderMetalSwatches = (displayOptions = parseDisplayOptions(metalSwatchWrap, 'metalDisplay'), selectedValue = metalSelect?.value || '') => {
+        if (!metalSwatchWrap) return;
+        const html = displayOptions
+          .map((option) => {
+            const active = option.value === selectedValue;
+            const tone = metalToneClass(option.value);
+            const parts = metalSwatchParts(option.value);
+            const disabled = option.available ? '' : ' metal-swatch--disabled';
+            const ariaDisabled = option.available ? '' : ' aria-disabled="true"';
+            const disabledAttr = option.available ? '' : ' disabled';
+            return `<button type="button" class="metal-swatch${active ? ' is-active' : ''}${disabled}" data-metal-option data-metal-value="${option.value}" data-metal-tone="${tone}" aria-pressed="${active}"${ariaDisabled}${disabledAttr}>
+              <span class="metal-dot metal-dot--${tone}">${parts.karat}</span>
+              <span class="metal-label" aria-hidden="true"></span>
+            </button>`;
+          })
+          .join('');
+        metalSwatchWrap.innerHTML = html;
+        syncDisplayOptions(metalSwatchWrap, 'metalDisplay', displayOptions);
+        const buttons = Array.from(metalSwatchWrap.querySelectorAll('[data-metal-option]'));
+        buttons.forEach((button) => {
+          if (button.disabled) return;
+          button.addEventListener('click', () => {
+            const nextValue = button.getAttribute('data-metal-value') || '';
+            setSelectValue(metalSelect, nextValue);
+            buttons.forEach((node) => {
+              const isActive = node.getAttribute('data-metal-value') === nextValue;
+              node.classList.toggle('is-active', isActive);
+              node.setAttribute('aria-pressed', String(isActive));
+            });
+            apply(false);
+          });
+        });
+      };
+      const syncMetalSwatches = () => {
+        if (!metalSwatchWrap || !metalSelect) return;
+        const selectedValue = metalSelect.value;
+        metalSwatchWrap.querySelectorAll('[data-metal-option]').forEach((node) => {
+          const isActive = node.getAttribute('data-metal-value') === selectedValue;
+          node.classList.toggle('is-active', isActive);
+          node.setAttribute('aria-pressed', String(isActive));
+        });
+      };
+      const renderColorSwatches = (displayOptions = parseDisplayOptions(colorSwatchWrap, 'colorDisplay'), selectedValue = colorSelect?.value || '') => {
+        if (!colorSwatchWrap) return;
+        const html = displayOptions
+          .map((option) => {
+            const value = option.value || '';
+            const active = value === selectedValue;
+            const disabled = option.available ? '' : ' diamond-color-swatch--disabled';
+            const ariaDisabled = option.available ? '' : ' aria-disabled="true"';
+            const disabledAttr = option.available ? '' : ' disabled';
+            return `<button type="button" class="diamond-color-swatch${active ? ' is-active' : ''}${disabled}" data-color-option data-color-value="${value}" aria-pressed="${active}"${ariaDisabled}${disabledAttr}>
+              <span class="diamond-color-dot">${value}</span>
+            </button>`;
+          })
+          .join('');
+        colorSwatchWrap.innerHTML = html;
+        syncDisplayOptions(colorSwatchWrap, 'colorDisplay', displayOptions);
+        const buttons = Array.from(colorSwatchWrap.querySelectorAll('[data-color-option]'));
+        buttons.forEach((button) => {
+          if (button.disabled) return;
+          button.addEventListener('click', () => {
+            const nextValue = button.getAttribute('data-color-value') || '';
+            setSelectValue(colorSelect, nextValue);
+            buttons.forEach((node) => {
+              const isActive = node.getAttribute('data-color-value') === nextValue;
+              node.classList.toggle('is-active', isActive);
+              node.setAttribute('aria-pressed', String(isActive));
+            });
+            apply(false);
+          });
+        });
+      };
+      const syncColorSwatches = () => {
+        if (!colorSwatchWrap || !colorSelect) return;
+        const selectedValue = colorSelect.value;
+        colorSwatchWrap.querySelectorAll('[data-color-option]').forEach((node) => {
+          const isActive = node.getAttribute('data-color-value') === selectedValue;
+          node.classList.toggle('is-active', isActive);
+          node.setAttribute('aria-pressed', String(isActive));
+        });
+      };
+      const renderClaritySwatches = (displayOptions = parseDisplayOptions(claritySwatchWrap, 'clarityDisplay'), selectedValue = claritySelect?.value || '') => {
+        if (!claritySwatchWrap) return;
+        const html = displayOptions
+          .map((option) => {
+            const value = option.value || '';
+            const active = value === selectedValue;
+            const disabled = option.available ? '' : ' diamond-clarity-swatch--disabled';
+            const ariaDisabled = option.available ? '' : ' aria-disabled="true"';
+            const disabledAttr = option.available ? '' : ' disabled';
+            return `<button type="button" class="diamond-clarity-swatch${active ? ' is-active' : ''}${disabled}" data-clarity-option data-clarity-value="${value}" aria-pressed="${active}"${ariaDisabled}${disabledAttr}>
+              <span class="diamond-clarity-dot">${value}</span>
+            </button>`;
+          })
+          .join('');
+        claritySwatchWrap.innerHTML = html;
+        syncDisplayOptions(claritySwatchWrap, 'clarityDisplay', displayOptions);
+        const buttons = Array.from(claritySwatchWrap.querySelectorAll('[data-clarity-option]'));
+        buttons.forEach((button) => {
+          if (button.disabled) return;
+          button.addEventListener('click', () => {
+            const nextValue = button.getAttribute('data-clarity-value') || '';
+            setSelectValue(claritySelect, nextValue);
+            buttons.forEach((node) => {
+              const isActive = node.getAttribute('data-clarity-value') === nextValue;
+              node.classList.toggle('is-active', isActive);
+              node.setAttribute('aria-pressed', String(isActive));
+            });
+            apply(false);
+          });
+        });
+      };
+      const syncClaritySwatches = () => {
+        if (!claritySwatchWrap || !claritySelect) return;
+        const selectedValue = claritySelect.value;
+        claritySwatchWrap.querySelectorAll('[data-clarity-option]').forEach((node) => {
+          const isActive = node.getAttribute('data-clarity-value') === selectedValue;
+          node.classList.toggle('is-active', isActive);
+          node.setAttribute('aria-pressed', String(isActive));
+        });
+      };
+      const renderStoneSwatches = (displayOptions = parseDisplayOptions(stoneSwatchWrap, 'stoneDisplay'), selectedValue = stoneSelect?.value || '') => {
+        if (!stoneSwatchWrap) return;
+        const html = displayOptions
+          .map((option) => {
+            const value = option.value || '';
+            const label = option.displayLabel || option.summaryLabel || option.value || '';
+            const active = value === selectedValue;
+            const disabled = option.available ? '' : ' stone-type-swatch--disabled';
+            const ariaDisabled = option.available ? '' : ' aria-disabled="true"';
+            const disabledAttr = option.available ? '' : ' disabled';
+            const keyAttr = option.key ? ` data-stone-key="${option.key}"` : '';
+            return `<button type="button" class="stone-type-swatch${active ? ' is-active' : ''}${disabled}" data-stone-option data-stone-value="${value}"${keyAttr} aria-pressed="${active}"${ariaDisabled}${disabledAttr}>
+              <span class="stone-type-label">${label}</span>
+            </button>`;
+          })
+          .join('');
+        stoneSwatchWrap.innerHTML = html;
+        syncDisplayOptions(stoneSwatchWrap, 'stoneDisplay', displayOptions);
+        const buttons = Array.from(stoneSwatchWrap.querySelectorAll('[data-stone-option]'));
+        buttons.forEach((button) => {
+          if (button.disabled) return;
+          button.addEventListener('click', () => {
+            const nextValue = button.getAttribute('data-stone-value') || '';
+            setSelectValue(stoneSelect, nextValue);
+            buttons.forEach((node) => {
+              const isActive = node.getAttribute('data-stone-value') === nextValue;
+              node.classList.toggle('is-active', isActive);
+              node.setAttribute('aria-pressed', String(isActive));
+            });
+            apply(false);
+          });
+        });
+      };
+      const syncStoneSwatches = () => {
+        if (!stoneSwatchWrap || !stoneSelect) return;
+        const selectedValue = stoneSelect.value;
+        stoneSwatchWrap.querySelectorAll('[data-stone-option]').forEach((node) => {
+          const isActive = node.getAttribute('data-stone-value') === selectedValue;
+          node.classList.toggle('is-active', isActive);
+          node.setAttribute('aria-pressed', String(isActive));
+        });
+      };
+      const bindStoneWeightSwatchEvents = () => {
+        if (!stoneWeightSwatchWrap || stoneWeightSwatchWrap.dataset.bound === 'true') return;
+        stoneWeightSwatchWrap.dataset.bound = 'true';
+        stoneWeightSwatchWrap.addEventListener('click', (event) => {
+          const target = event.target instanceof Element
+            ? event.target.closest('[data-stone-weight-option]')
+            : null;
+          if (!target) return;
+          const nextValue = target.getAttribute('data-stone-weight-value') || '';
+          const fallbackLabel = target.textContent ? target.textContent.trim() : '';
+          if (!stoneWeightSelect) return;
+          const options = Array.from(stoneWeightSelect.options);
+          const match =
+            options.find((option) => option.value === nextValue) ||
+            options.find((option) => option.textContent === fallbackLabel);
+          if (!match) return;
+          stoneWeightSelect.value = match.value;
+          syncStoneWeightSwatches();
+          apply(false);
+        });
+      };
+      const renderStoneWeightSwatches = () => {
+        if (!stoneWeightSwatchWrap || !stoneWeightSelect) return;
+        const options = Array.from(stoneWeightSelect.options)
+          .map((option) => ({
+            value: option.value,
+            label: option.textContent || option.value,
+            sizeType: option.dataset.sizeType || ''
+          }))
+          .filter((option) => option.value);
+        const selectedValue = stoneWeightSelect.value;
+        stoneWeightSwatchWrap.innerHTML = '';
+        options.forEach((option) => {
+          const active = option.value === selectedValue;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = `stone-weight-swatch${active ? ' is-active' : ''}`;
+          button.dataset.stoneWeightOption = 'true';
+          button.dataset.stoneWeightValue = option.value;
+          if (option.sizeType) button.dataset.sizeType = option.sizeType;
+          button.setAttribute('aria-pressed', String(active));
+          const pill = document.createElement('span');
+          pill.className = 'stone-weight-pill';
+          pill.textContent = option.label;
+          button.appendChild(pill);
+          stoneWeightSwatchWrap.appendChild(button);
+        });
+        bindStoneWeightSwatchEvents();
+      };
+      const syncStoneWeightSwatches = () => {
+        if (!stoneWeightSwatchWrap || !stoneWeightSelect) return;
+        const selectedValue = stoneWeightSelect.value;
+        stoneWeightSwatchWrap.querySelectorAll('[data-stone-weight-option]').forEach((node) => {
+          const isActive = node.getAttribute('data-stone-weight-value') === selectedValue;
+          node.classList.toggle('is-active', isActive);
+          node.setAttribute('aria-pressed', String(isActive));
+        });
+      };
+      const renderCutSwatches = (displayOptions = parseDisplayOptions(cutSwatchWrap, 'cutDisplay'), selectedValue = cutSelect?.value || '') => {
+        if (!cutSwatchWrap) return;
+        const html = displayOptions
+          .map((option) => {
+            const value = option.value || '';
+            const active = value === selectedValue;
+            const disabled = option.available ? '' : ' diamond-cut-swatch--disabled';
+            const ariaDisabled = option.available ? '' : ' aria-disabled="true"';
+            const disabledAttr = option.available ? '' : ' disabled';
+            return `<button type="button" class="diamond-cut-swatch${active ? ' is-active' : ''}${disabled}" data-cut-option data-cut-value="${value}" aria-pressed="${active}"${ariaDisabled}${disabledAttr}>
+              <span class="diamond-cut-dot">${value}</span>
+            </button>`;
+          })
+          .join('');
+        cutSwatchWrap.innerHTML = html;
+        syncDisplayOptions(cutSwatchWrap, 'cutDisplay', displayOptions);
+        const buttons = Array.from(cutSwatchWrap.querySelectorAll('[data-cut-option]'));
+        buttons.forEach((button) => {
+          if (button.disabled) return;
+          button.addEventListener('click', () => {
+            const nextValue = button.getAttribute('data-cut-value') || '';
+            setSelectValue(cutSelect, nextValue);
+            buttons.forEach((node) => {
+              const isActive = node.getAttribute('data-cut-value') === nextValue;
+              node.classList.toggle('is-active', isActive);
+              node.setAttribute('aria-pressed', String(isActive));
+            });
+            apply(false);
+          });
+        });
+      };
+      const syncCutSwatches = () => {
+        if (!cutSwatchWrap || !cutSelect) return;
+        const selectedValue = cutSelect.value;
+        cutSwatchWrap.querySelectorAll('[data-cut-option]').forEach((node) => {
+          const isActive = node.getAttribute('data-cut-value') === selectedValue;
+          node.classList.toggle('is-active', isActive);
+          node.setAttribute('aria-pressed', String(isActive));
+        });
+      };
+      const renderChainSwatches = (options, selectedValue) => {
+        if (!chainSwatchWrap) return;
+        const html = options
+          .map((option) => {
+            const value = option.value || option.label || '';
+            const active = value === selectedValue;
+            const dotLabel = String(value).replace(/\"/g, '');
+            return `<button type="button" class="chain-swatch${active ? ' is-active' : ''}" data-chain-option data-chain-value="${value}" aria-pressed="${active}">
+              <span class="chain-dot">${dotLabel}</span>
+            </button>`;
+          })
+          .join('');
+        chainSwatchWrap.innerHTML = html;
+        const buttons = Array.from(chainSwatchWrap.querySelectorAll('[data-chain-option]'));
+        buttons.forEach((button) => {
+          button.addEventListener('click', () => {
+            const nextValue = button.getAttribute('data-chain-value') || '';
+            setSelectValue(sizeSelect, nextValue);
+            updateChainWeightInfo(nextValue);
+            buttons.forEach((node) => {
+              const isActive = node.getAttribute('data-chain-value') === nextValue;
+              node.classList.toggle('is-active', isActive);
+              node.setAttribute('aria-pressed', String(isActive));
+            });
+            apply(false);
+          });
+        });
+      };
+      const syncChainSwatches = () => {
+        if (!chainSwatchWrap || !sizeSelect) return;
+        const selectedValue = sizeSelect.value;
+        chainSwatchWrap.querySelectorAll('[data-chain-option]').forEach((node) => {
+          const isActive = node.getAttribute('data-chain-value') === selectedValue;
+          node.classList.toggle('is-active', isActive);
+          node.setAttribute('aria-pressed', String(isActive));
+        });
+      };
+      if (metalSelect) {
+        const initialMetalDisplay = parseDisplayOptions(metalSwatchWrap, 'metalDisplay');
+        renderMetalSwatches(initialMetalDisplay, metalSelect.value);
+      }
+      if (stoneSelect) {
+        const initialStoneDisplay = parseDisplayOptions(stoneSwatchWrap, 'stoneDisplay');
+        renderStoneSwatches(initialStoneDisplay, stoneSelect.value);
+      }
+      if (stoneWeightSelect) {
+        renderStoneWeightSwatches();
+        bindStoneWeightSwatchEvents();
+      }
+      if (cutSelect) {
+        const initialCutDisplay = parseDisplayOptions(cutSwatchWrap, 'cutDisplay');
+        renderCutSwatches(initialCutDisplay, cutSelect.value);
+      }
+      if (claritySelect) {
+        const initialClarityDisplay = parseDisplayOptions(claritySwatchWrap, 'clarityDisplay');
+        renderClaritySwatches(initialClarityDisplay, claritySelect.value);
+      }
+      if (colorSelect) {
+        const initialColorDisplay = parseDisplayOptions(colorSwatchWrap, 'colorDisplay');
+        renderColorSwatches(initialColorDisplay, colorSelect.value);
+      }
+      if (sizeSelect && chainSwatchWrap) {
+        const initialOptions = Array.from(sizeSelect.options).map((option) => ({
+          value: option.value,
+          label: option.textContent || option.value
+        }));
+        renderChainSwatches(initialOptions, sizeSelect.value);
+      }
       const formatWeightNumber = (value) => {
         const num = typeof value === 'number' ? value : Number(String(value || '').trim());
         if (!Number.isFinite(num)) return '';
@@ -977,6 +1880,23 @@ void jsonLdString;
         const num = typeof value === 'number' ? value : Number(String(value || '').trim());
         if (!Number.isFinite(num)) return '';
         return num.toFixed(2);
+      };
+      const formatStoneWeightBriefLabelLocal = (rawValue) => {
+        const trimmed = String(rawValue || '').trim();
+        if (!trimmed) return '';
+        const breakdown = parseBreakdown(trimmed);
+        if (!breakdown.length) {
+          const numeric = Number(trimmed.replace(/[^0-9.]/g, ''));
+          if (Number.isFinite(numeric) && numeric > 0) {
+            return `${formatWeightNumber(numeric)}ct`;
+          }
+          return trimmed;
+        }
+        const weights = breakdown
+          .map((entry) => formatWeightNumber(entry.weight))
+          .filter(Boolean);
+        const unique = Array.from(new Set(weights));
+        return unique.map((weight) => `${weight}ct`).join(', ');
       };
       const parseSizeInches = (value) => {
         if (!value) return Number.NaN;
@@ -1009,6 +1929,129 @@ void jsonLdString;
             return { weight: 0, count: 0 };
           })
           .filter((entry) => Number.isFinite(entry.weight) && entry.weight > 0 && Number.isFinite(entry.count) && entry.count > 0);
+      };
+      const getDiamondMmNumber = (carat) => {
+        if (!Number.isFinite(carat) || carat <= 0) return 0;
+        const mm = Math.cbrt(carat / 0.0037);
+        return Number.isFinite(mm) ? mm : 0;
+      };
+      const buildStoneWeightVisual = (rawValue) => {
+        const trimmed = String(rawValue || '').trim();
+        if (!trimmed) {
+          return {
+            items: [],
+            breakdown: [],
+            overflow: 0,
+            countLabel: 'Stones: --',
+            largestLabel: 'Largest: --',
+            totalLabel: 'Total: --',
+            isApprox: false
+          };
+        }
+        const breakdown = parseBreakdown(trimmed);
+        let entries = breakdown;
+        let isApprox = false;
+        if (!entries.length) {
+          const numeric = Number(trimmed.replace(/[^0-9.]/g, ''));
+          if (Number.isFinite(numeric) && numeric > 0) {
+            entries = [{ weight: numeric, count: 1 }];
+            isApprox = true;
+          }
+        }
+        if (!entries.length) {
+          return {
+            items: [],
+            breakdown: [],
+            overflow: 0,
+            countLabel: 'Stones: --',
+            largestLabel: 'Largest: --',
+            totalLabel: trimmed,
+            isApprox: false
+          };
+        }
+        const breakdownItems = entries.map((entry) => ({
+          weight: entry.weight,
+          count: entry.count,
+          mm: getDiamondMmNumber(entry.weight)
+        }));
+        const totalCount = entries.reduce((sum, entry) => sum + entry.count, 0);
+        const totalCarat = entries.reduce((sum, entry) => sum + entry.weight * entry.count, 0);
+        const largestWeight = entries.reduce((max, entry) => Math.max(max, entry.weight), 0);
+        const largestMmValue = getDiamondMmNumber(largestWeight);
+        const maxPieces = 6;
+        const items = [];
+        const sorted = entries.slice().sort((a, b) => b.weight - a.weight);
+        sorted.forEach((entry) => {
+          for (let i = 0; i < entry.count && items.length < maxPieces; i += 1) {
+            const size = getDiamondMmNumber(entry.weight);
+            items.push({ size: Number.isFinite(size) ? size : 0 });
+          }
+        });
+        const overflow = Math.max(0, totalCount - items.length);
+        const countLabel = totalCount
+          ? `${isApprox ? 'Approx. ' : ''}Stones: ${formatWeightNumber(totalCount)}`
+          : 'Stones: --';
+        const largestLabel =
+          largestMmValue > 0 ? `Largest: ${largestMmValue.toFixed(1)}mm` : 'Largest: --';
+        const totalLabel =
+          totalCarat > 0
+            ? `${isApprox ? 'Approx. ' : ''}Total: ${formatWeightFixed2(totalCarat)} ct`
+            : 'Total: --';
+        return { items, breakdown: breakdownItems, overflow, countLabel, largestLabel, totalLabel, isApprox };
+      };
+      const renderStoneWeightVisual = (rawValue) => {
+        if (!stoneWeightVisual || !stoneWeightVisualRow) return;
+        const visual = buildStoneWeightVisual(rawValue);
+        stoneWeightVisualRow.innerHTML = '';
+        if (visual.items.length) {
+          visual.items.forEach((item) => {
+            const gem = document.createElement('span');
+            gem.className = 'stone-weight-gem';
+            gem.style.setProperty('--stone-size', String(item.size || 1.2));
+            gem.setAttribute('aria-hidden', 'true');
+            stoneWeightVisualRow.appendChild(gem);
+          });
+        } else {
+          const gem = document.createElement('span');
+          gem.className = 'stone-weight-gem stone-weight-gem--empty';
+          gem.setAttribute('aria-hidden', 'true');
+          stoneWeightVisualRow.appendChild(gem);
+        }
+        if (visual.overflow > 0) {
+          const overflow = document.createElement('span');
+          overflow.className = 'stone-weight-overflow';
+          overflow.setAttribute('aria-hidden', 'true');
+          overflow.textContent = `+${visual.overflow}`;
+          stoneWeightVisualRow.appendChild(overflow);
+        }
+        if (stoneWeightPieceCount) stoneWeightPieceCount.textContent = visual.countLabel;
+        if (stoneWeightLargest) stoneWeightLargest.textContent = visual.largestLabel;
+        if (stoneWeightTotalCt) stoneWeightTotalCt.textContent = visual.totalLabel;
+        if (stoneWeightScale) {
+          stoneWeightScale.textContent = `${visual.isApprox ? 'Approx.' : 'Scale'}: round brilliant diameter`;
+        }
+        if (stoneWeightLegend) {
+          stoneWeightLegend.innerHTML = '';
+          visual.breakdown.forEach((entry) => {
+            const row = document.createElement('div');
+            row.className = 'stone-weight-legend-row';
+            const gem = document.createElement('span');
+            gem.className = 'stone-weight-legend-gem';
+            gem.style.setProperty('--stone-size', String(entry.mm || 1.2));
+            gem.setAttribute('aria-hidden', 'true');
+            const text = document.createElement('span');
+            text.className = 'stone-weight-legend-text';
+            const countLabel = formatWeightNumber(entry.count);
+            const weightLabel = formatWeightNumber(entry.weight);
+            const mmLabel = Number.isFinite(entry.mm) && entry.mm > 0 ? entry.mm.toFixed(1) : '0.0';
+            text.textContent = `${countLabel}x ${weightLabel}ct · ${mmLabel}mm`;
+            row.appendChild(gem);
+            row.appendChild(text);
+            stoneWeightLegend.appendChild(row);
+          });
+          stoneWeightLegend.classList.toggle('hidden', visual.breakdown.length === 0);
+        }
+        stoneWeightVisual.classList.toggle('hidden', !rawValue);
       };
       const buildStoneWeightInfo = (rawValue) => {
         if (!rawValue) {
@@ -1047,7 +2090,6 @@ void jsonLdString;
         return { total: Number.isFinite(numeric) ? numeric : 0, isBreakdown: false };
       };
       const updateStoneWeightInfo = () => {
-        if (!stoneWeightInfo) return;
         const rawValue = stoneWeightSelect ? stoneWeightSelect.value : '';
         const info = buildStoneWeightInfo(rawValue);
         if (stoneWeightDetails) stoneWeightDetails.textContent = info.details;
@@ -1055,7 +2097,10 @@ void jsonLdString;
           stoneWeightTotalLabel.textContent = info.totalLabel;
           stoneWeightTotalLabel.classList.toggle('hidden', !info.totalLabel);
         }
-        stoneWeightInfo.classList.toggle('hidden', !rawValue);
+        if (stoneWeightInfo) {
+          stoneWeightInfo.classList.toggle('hidden', !rawValue);
+        }
+        renderStoneWeightVisual(rawValue);
       };
       const updateSizeTypeInfo = (stoneWeightValue, metalWeightValue) => {
         if (!sizeTypeInfo) return;
@@ -1200,23 +2245,18 @@ void jsonLdString;
             let match = null;
             options.forEach((option) => {
               const matches = option.dataset.sizeType === sizeTypeValue;
-              option.hidden = !matches;
-              option.disabled = !matches;
               if (matches && !match) match = option;
             });
             if (match) {
               setSelectValue(stoneWeightSelect, match.value);
-            } else {
-              options.forEach((option) => {
-                option.hidden = false;
-                option.disabled = false;
-              });
-              if (stoneWeightValue) setSelectValue(stoneWeightSelect, stoneWeightValue);
+            } else if (stoneWeightValue) {
+              setSelectValue(stoneWeightSelect, stoneWeightValue);
             }
           }
           if (metalWeightSelect && metalWeightValue) {
             setSelectValue(metalWeightSelect, metalWeightValue);
           }
+          syncStoneWeightSwatches();
           updateStoneWeightInfo();
         };
         const apply = (refreshDefaults) => {
@@ -1228,6 +2268,7 @@ void jsonLdString;
             }
             if (metalSelect) {
               setSelectValue(metalSelect, priceEl.dataset.metalDefault || metalSelect.value);
+              syncMetalSwatches();
             }
             applySizeTypeSelection();
           }
@@ -1246,6 +2287,7 @@ void jsonLdString;
           }
         }
         updateStoneWeightInfo();
+        syncStoneWeightSwatches();
         updateChainWeightInfo(sizeSelect ? sizeSelect.value : '');
         if (sizeHelper) {
           sizeHelper.textContent = '';
@@ -1285,10 +2327,16 @@ void jsonLdString;
         setPurchaseState(false);
       };
       if (stoneSelect) {
-        stoneSelect.addEventListener('change', () => apply(false));
+        stoneSelect.addEventListener('change', () => {
+          syncStoneSwatches();
+          apply(false);
+        });
       }
         if (metalSelect) {
-          metalSelect.addEventListener('change', () => apply(false));
+          metalSelect.addEventListener('change', () => {
+            syncMetalSwatches();
+            apply(false);
+          });
         }
         if (sizeTypeSelect) {
           sizeTypeSelect.addEventListener('change', () => {
@@ -1305,17 +2353,27 @@ void jsonLdString;
       if (metalWeightSelect) {
         metalWeightSelect.addEventListener('change', () => apply(false));
       }
-      if (claritySelect) {
-        claritySelect.addEventListener('change', () => apply(false));
-      }
-      if (colorSelect) {
-        colorSelect.addEventListener('change', () => apply(false));
-      }
+        if (claritySelect) {
+          claritySelect.addEventListener('change', () => {
+            syncClaritySwatches();
+            apply(false);
+          });
+        }
+        if (colorSelect) {
+          colorSelect.addEventListener('change', () => {
+            syncColorSwatches();
+            apply(false);
+          });
+        }
       if (cutSelect) {
-        cutSelect.addEventListener('change', () => apply(false));
+        cutSelect.addEventListener('change', () => {
+          syncCutSwatches();
+          apply(false);
+        });
       }
       if (sizeSelect) {
         sizeSelect.addEventListener('change', () => {
+          syncChainSwatches();
           updateChainWeightInfo(sizeSelect.value);
           apply(false);
         });
@@ -1332,6 +2390,10 @@ void jsonLdString;
       window.__hwApplyPricing = () => apply(false);
       window.__hwRefreshPricingDefaults = () => apply(true);
       window.__hwUpdateChainWeightInfo = updateChainWeightInfo;
+      window.__hwRenderStoneWeightSwatches = renderStoneWeightSwatches;
+      window.__hwSyncStoneWeightSwatches = syncStoneWeightSwatches;
+      window.__hwUpdateStoneWeightVisual = () =>
+        renderStoneWeightVisual(stoneWeightSelect ? stoneWeightSelect.value : '');
     })();
   </script>
   <script is:inline define:vars={{ catalogUrl, catalogMode, productSlug }}>
@@ -1406,6 +2468,63 @@ void jsonLdString;
           .split(/[|,]/)
           .map((item) => item.trim())
           .filter(Boolean);
+      };
+      const expandStandardOptions = (value, standardOptions) => {
+        const tokens = parseList(value);
+        if (!tokens.length) return [];
+        const standardIndex = new Map(standardOptions.map((option, index) => [String(option).toUpperCase(), index]));
+        const standardByUpper = new Map(standardOptions.map((option) => [String(option).toUpperCase(), option]));
+        const seen = new Set();
+        const result = [];
+        const addValue = (entry) => {
+          const trimmed = String(entry || '').trim();
+          if (!trimmed || seen.has(trimmed)) return;
+          seen.add(trimmed);
+          result.push(trimmed);
+        };
+        const addStandardValue = (entry) => {
+          const upper = String(entry || '').trim().toUpperCase();
+          addValue(standardByUpper.get(upper) || entry);
+        };
+        const parseRange = (entry) => {
+          const normalized = String(entry || '').replace(/[\u2013\u2014]/g, '-');
+          if (normalized.includes('-')) {
+            const parts = normalized.split('-').map((part) => part.trim()).filter(Boolean);
+            if (parts.length >= 2) {
+              return [parts[0], parts[parts.length - 1]];
+            }
+          }
+          const toMatch = normalized.match(/^(.+?)\s+to\s+(.+)$/i);
+          if (toMatch) {
+            return [toMatch[1].trim(), toMatch[2].trim()];
+          }
+          return null;
+        };
+        const addRange = (start, end) => {
+          const startKey = String(start || '').trim().toUpperCase();
+          const endKey = String(end || '').trim().toUpperCase();
+          const startIndex = standardIndex.get(startKey);
+          const endIndex = standardIndex.get(endKey);
+          if (startIndex === undefined || endIndex === undefined) {
+            addStandardValue(start);
+            addStandardValue(end);
+            return;
+          }
+          const from = Math.min(startIndex, endIndex);
+          const to = Math.max(startIndex, endIndex);
+          standardOptions.slice(from, to + 1).forEach(addValue);
+        };
+        tokens.forEach((token) => {
+          const cleaned = String(token || '').trim();
+          if (!cleaned) return;
+          const range = parseRange(cleaned);
+          if (range) {
+            addRange(range[0], range[1]);
+            return;
+          }
+          addStandardValue(cleaned);
+        });
+        return result;
       };
       const parseOptionList = (value) => {
         if (!value) return [];
@@ -1632,9 +2751,12 @@ void jsonLdString;
           select.appendChild(placeholder);
         }
         options.forEach((option) => {
-          const el = document.createElement('option');
-          el.value = option.value;
-          el.textContent = option.label;
+        const el = document.createElement('option');
+        el.value = option.value;
+        el.textContent = option.label;
+        if (option.key) {
+          el.dataset.stoneKey = option.key;
+        }
           if (selectedValue && option.value === selectedValue) {
             el.selected = true;
           }
@@ -1762,25 +2884,40 @@ void jsonLdString;
         )
           .map(normalizeStoneType)
           .filter(Boolean);
-        const naturalAvailable = stoneTypes.some((entry) => /natural/i.test(entry));
-        const labAvailable = stoneTypes.some((entry) => /lab/i.test(entry));
         const naturalStoneLabel =
           stoneTypes.find((entry) => /natural/i.test(entry)) || 'Natural Diamond';
         const labStoneLabel =
           stoneTypes.find((entry) => /lab/i.test(entry)) || 'Lab Grown Diamond';
+        const stoneTypeDisplay = buildStoneTypeDisplay(stoneTypes, labStoneLabel, naturalStoneLabel);
+        const stoneOptions = stoneTypeDisplay
+          .filter((option) => option.available)
+          .map((option) => ({
+            value: option.value,
+            label: option.summaryLabel,
+            key: option.key
+          }));
+        const stoneDefaultEntry =
+          stoneTypeDisplay.find((option) => option.available && option.key === 'lab') ||
+          stoneTypeDisplay.find((option) => option.available);
+        const stoneDefaultValue = stoneDefaultEntry?.value || stoneTypeDisplay[0]?.value || labStoneLabel;
         const metalOptions = buildMetalOptions(item.metal_options || item.metals, item.metal || '18K Gold');
         const defaultMetalValue = metalOptions[metalOptions.length - 1]?.value || '18K Gold';
-        const stoneOptions = [
-          ...(labAvailable ? [{ value: labStoneLabel, label: labStoneLabel }] : []),
-          ...(naturalAvailable ? [{ value: naturalStoneLabel, label: naturalStoneLabel }] : [])
-        ];
+        const metalDisplayOptions = buildStandardDisplayOptions(
+          STANDARD_METAL_OPTIONS,
+          new Set(metalOptions.map((option) => option.value))
+        );
         const stoneWeightGroups = buildStoneWeightGroupsFromOptions(item.stone_options);
+        const stoneWeightFallback = parseOptionList(item.stone_weight).map((value) => ({
+          value,
+          label: value,
+          size_type: 'size'
+        }));
         const stoneWeightOptions = (stoneWeightGroups.length
             ? stoneWeightGroups
-            : []
+            : stoneWeightFallback
           ).map((option) => ({
             value: option.value,
-            label: option.label,
+            label: formatStoneWeightBriefLabelLocal(option.value),
             size_type: option.size_type
           }));
         const metalWeightSource = buildMetalWeightOptionsFromOptions(item.metal_weight_options);
@@ -1790,6 +2927,7 @@ void jsonLdString;
         const selectedStoneWeightValue =
           stoneWeightGroups.find((group) => group.size_type === selectedSizeType)?.value ||
           stoneWeightGroups[0]?.value ||
+          stoneWeightFallback[0]?.value ||
           '';
         const metalWeightOptions = (metalWeightSource.length
             ? metalWeightSource
@@ -1802,22 +2940,34 @@ void jsonLdString;
           (selectedSizeType ? metalWeightBySizeType.get(selectedSizeType) : '') ||
           metalWeightOptions[0]?.value ||
           '';
-        const clarityOptions = parseList(item.clarity).map((option) => ({
+        const clarityOptions = expandStandardOptions(item.clarity, STANDARD_CLARITY_OPTIONS).map((option) => ({
           value: option,
           label: option
         }));
-        const colorOptions = parseList(item.color).map((option) => ({
+        const colorOptions = expandStandardOptions(item.color, STANDARD_COLOR_OPTIONS).map((option) => ({
           value: option,
           label: option
         }));
-        const cutOptions = parseList(item.cut).map((option) => ({
+        const cutOptions = expandStandardOptions(item.cut, STANDARD_CUT_OPTIONS).map((option) => ({
           value: option,
           label: option
         }));
+        const clarityDisplayOptions = buildStandardDisplayOptions(
+          STANDARD_CLARITY_OPTIONS,
+          new Set(clarityOptions.map((option) => option.value))
+        );
+        const colorDisplayOptions = buildStandardDisplayOptions(
+          STANDARD_COLOR_OPTIONS,
+          new Set(colorOptions.map((option) => option.value))
+        );
+        const cutDisplayOptions = buildStandardDisplayOptions(
+          STANDARD_CUT_OPTIONS,
+          new Set(cutOptions.map((option) => option.value))
+        );
         const sizeSpec = buildSizeSpec(item.tags, item.category || item.categories);
 
         if (stoneTypes.length) {
-          priceEl.dataset.diamondDefault = labAvailable ? labStoneLabel : naturalStoneLabel;
+          priceEl.dataset.diamondDefault = stoneDefaultValue;
         }
         priceEl.dataset.metalDefault = defaultMetalValue;
 
@@ -1825,8 +2975,9 @@ void jsonLdString;
           setSelectOptions(
             stoneSelect,
             stoneOptions,
-            priceEl.dataset.diamondDefault || (labAvailable ? labStoneLabel : naturalStoneLabel)
+            priceEl.dataset.diamondDefault || stoneDefaultValue
           );
+          renderStoneSwatches(stoneTypeDisplay, priceEl.dataset.diamondDefault || stoneDefaultValue);
           stoneSelect.disabled = stoneOptions.length === 0;
         }
         if (stoneField && stoneTypes.length) {
@@ -1834,6 +2985,7 @@ void jsonLdString;
         }
         if (metalSelect) {
           setSelectOptions(metalSelect, metalOptions, defaultMetalValue);
+          renderMetalSwatches(metalDisplayOptions, defaultMetalValue);
         }
         if (sizeTypeSelect) {
           setSelectOptions(sizeTypeSelect, sizeTypeOptions, selectedSizeType);
@@ -1848,7 +3000,7 @@ void jsonLdString;
           });
         }
         if (sizeTypeField) {
-          sizeTypeField.classList.toggle('hidden', sizeTypeOptions.length === 0);
+          sizeTypeField.classList.add('hidden');
         }
         if (stoneWeightSelect) {
           setSelectOptions(stoneWeightSelect, stoneWeightOptions, selectedStoneWeightValue);
@@ -1857,10 +3009,10 @@ void jsonLdString;
             if (!optionEl) return;
             if (option.size_type) optionEl.dataset.sizeType = option.size_type;
           });
-          stoneWeightSelect.disabled = stoneWeightOptions.length === 0 || sizeTypeOptions.length > 0;
+          stoneWeightSelect.disabled = stoneWeightOptions.length === 0;
         }
         if (stoneWeightField) {
-          stoneWeightField.classList.add('hidden');
+          stoneWeightField.classList.toggle('hidden', stoneWeightOptions.length === 0);
         }
         if (metalWeightSelect) {
           setSelectOptions(metalWeightSelect, metalWeightOptions, selectedMetalWeightValue);
@@ -1870,23 +3022,29 @@ void jsonLdString;
           metalWeightField.classList.add('hidden');
         }
         if (claritySelect) {
-          setSelectOptions(claritySelect, clarityOptions, clarityOptions[clarityOptions.length - 1]?.value);
+          const clarityDefault = clarityOptions[clarityOptions.length - 1]?.value || '';
+          setSelectOptions(claritySelect, clarityOptions, clarityDefault);
+          renderClaritySwatches(clarityDisplayOptions, clarityDefault);
           claritySelect.disabled = clarityOptions.length === 0;
         }
         if (clarityField) {
           clarityField.classList.toggle('hidden', clarityOptions.length === 0);
         }
         if (colorSelect) {
-          setSelectOptions(colorSelect, colorOptions, colorOptions[colorOptions.length - 1]?.value);
+          const colorDefault = colorOptions[colorOptions.length - 1]?.value || '';
+          setSelectOptions(colorSelect, colorOptions, colorDefault);
+          renderColorSwatches(colorDisplayOptions, colorDefault);
           colorSelect.disabled = colorOptions.length === 0;
         }
         if (colorField) {
           colorField.classList.toggle('hidden', colorOptions.length === 0);
         }
-        if (cutSelect) {
-          setSelectOptions(cutSelect, cutOptions, cutOptions[cutOptions.length - 1]?.value);
-          cutSelect.disabled = cutOptions.length === 0;
-        }
+          if (cutSelect) {
+            const cutDefault = cutOptions[cutOptions.length - 1]?.value || '';
+            setSelectOptions(cutSelect, cutOptions, cutDefault);
+            cutSelect.disabled = cutOptions.length === 0;
+            renderCutSwatches(cutDisplayOptions, cutDefault);
+          }
         if (cutField) {
           cutField.classList.toggle('hidden', cutOptions.length === 0);
         }
@@ -1904,6 +3062,12 @@ void jsonLdString;
               defaultSize,
               defaultSize ? '' : `Select ${sizeSpec.label.toLowerCase()}`
             );
+            if (sizeSpec.label === 'Chain length') {
+              renderChainSwatches(sizeOptions, defaultSize || sizeSelect.value);
+              syncChainSwatches();
+            } else if (chainSwatchWrap) {
+              chainSwatchWrap.innerHTML = '';
+            }
           } else if (!sizeSelect.options.length) {
             sizeField.classList.add('hidden');
             sizeSelect.disabled = true;
@@ -1920,6 +3084,15 @@ void jsonLdString;
           }
         } else {
           updateSizeTypeInfo(selectedStoneWeightValue, selectedMetalWeightValue);
+        }
+        if (window.__hwRenderStoneWeightSwatches) {
+          window.__hwRenderStoneWeightSwatches();
+        }
+        if (window.__hwSyncStoneWeightSwatches) {
+          window.__hwSyncStoneWeightSwatches();
+        }
+        if (window.__hwUpdateStoneWeightVisual) {
+          window.__hwUpdateStoneWeightVisual();
         }
         if (window.__hwUpdateChainWeightInfo && sizeSelect) {
           window.__hwUpdateChainWeightInfo(sizeSelect.value);
