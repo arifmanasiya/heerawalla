@@ -39,7 +39,7 @@ const samples = [
       categories: "women/sets|women/sets",
       metals: '["18K Yellow Gold"]',
       stone_types: "Lab Grown Diamond",
-      cut: "IDEAL|EXCELLENT",
+      cut: "BRILLIANT",
       clarity: "VVS1",
       color: "E|F",
       takeaways: "One|Two",

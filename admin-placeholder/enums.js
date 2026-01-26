@@ -40,8 +40,7 @@
       { value: "halo", label: "Halo" },
     ],
     cuts: [
-      { value: "Ideal", label: "Ideal" },
-      { value: "Excellent", label: "Excellent" },
+      { value: "Brilliant", label: "Brilliant" },
       { value: "Very Good", label: "Very Good" },
     ],
     clarities: [

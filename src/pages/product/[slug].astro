@@ -227,7 +227,7 @@ const STANDARD_METAL_OPTIONS = [
 ];
 const STANDARD_CLARITY_OPTIONS = ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'VS3', 'SI1', 'SI2', 'SI3', 'I1', 'I2', 'I3'];
 const STANDARD_COLOR_OPTIONS = ['D', 'E', 'F', 'G', 'H', 'I', 'J'];
-const STANDARD_CUT_OPTIONS = ['IDEAL', 'EXCELLENT', 'VERY GOOD', 'GOOD'];
+const STANDARD_CUT_OPTIONS = ['BRILLIANT', 'VERY GOOD', 'GOOD'];
 const parseStoneWeightBreakdown = (rawValue: string) => {
   const trimmed = String(rawValue || '').trim();
   if (!trimmed) return [];
@@ -1465,7 +1465,7 @@ void jsonLdString;
       ];
       const STANDARD_CLARITY_OPTIONS = ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'VS3', 'SI1', 'SI2', 'SI3', 'I1', 'I2', 'I3'];
       const STANDARD_COLOR_OPTIONS = ['D', 'E', 'F', 'G', 'H', 'I', 'J'];
-      const STANDARD_CUT_OPTIONS = ['IDEAL', 'EXCELLENT', 'VERY GOOD', 'GOOD'];
+      const STANDARD_CUT_OPTIONS = ['BRILLIANT', 'VERY GOOD', 'GOOD'];
       const resolvePricingBase = () => {
         let base = pricingBase || '';
         if (!base) base = 'https://admin-api.heerawalla.com';
