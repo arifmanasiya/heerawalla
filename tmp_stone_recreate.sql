@@ -1,0 +1,44 @@
+PRAGMA foreign_keys = OFF;
+DROP TABLE IF EXISTS catalog_stone_options;
+CREATE TABLE catalog_stone_options (
+  id TEXT PRIMARY KEY,
+  catalog_id TEXT NOT NULL,
+  role TEXT,
+  carat REAL,
+  count INTEGER,
+  is_primary INTEGER NOT NULL DEFAULT 0,
+  size_type TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  shape TEXT
+);
+INSERT INTO catalog_stone_options (id,catalog_id,role,carat,count,is_primary,size_type,created_at,updated_at,shape) VALUES
+('stoneopt_031f70ae0384f811','hw-003','center',1,1,1,'small','2026-01-23 02:33:32','2026-01-25T20:51:26.621Z',NULL),
+('stoneopt_2b3ce2d024adc720','hwp-001','Accent',0.02,15,1,'small','2026-01-23 02:33:32','2026-01-23 02:33:32',NULL),
+('stoneopt_20b5910cdc1b7c75','hw-002','Accent',1,1,1,'small','2026-01-23 02:33:32','2026-01-23 02:33:32',NULL),
+('stoneopt_dd5c97b7982f2a69','hw-003','center',1.5,1,0,'medium','2026-01-23 02:33:32','2026-01-25T20:51:29.287Z',NULL),
+('stoneopt_75ec99b841ae8bbd','hwp-001','Accent',0.03,15,0,'medium','2026-01-23 02:33:32','2026-01-23 02:33:32',NULL),
+('stoneopt_a5b72ffbcb2bb6ac','hw-003','center',2,1,0,'large','2026-01-23 02:33:32','2026-01-25T20:51:33.211Z',NULL),
+('stoneopt_53feab19c21889b5','hw-003','accent',2.5,1,0,'xlarge','2026-01-23 02:33:32','2026-01-25T20:51:36.834Z',NULL),
+('stoneopt_13bb27c21aa769d6','hw-003','center',3,1,0,'xxlarge','2026-01-23 02:33:32','2026-01-25T20:51:40.713Z',NULL),
+('stoneopt_99bec7618dab7e43','hwp-001','Accent',0.15,1,1,'small','2026-01-23 02:33:32','2026-01-23 02:33:32',NULL),
+('stoneopt_965a4decd14c7140','hwp-001','Accent',0.2,1,0,'medium','2026-01-23 02:33:32','2026-01-23 02:33:32',NULL),
+('578b95f4-c187-4807-9736-c5b34c1efc89','hws-005','center',2,4,1,'Medium','2026-01-24T18:44:06.821Z','2026-01-24T21:11:33.183Z',NULL),
+('8210c7d7-ef0f-4752-9ae7-27cdfed3bd55','hws-005','accent',0.05,88,0,'Medium','2026-01-24T18:44:30.191Z','2026-01-24T21:00:19.564Z',NULL),
+('d0657218-d873-4fd4-af65-417d31b3b69f','hws-005','center',0.1,36,0,'Medium','2026-01-24T21:01:12.689Z','2026-01-24T21:01:12.689Z',NULL),
+('d50a245e-c802-449b-9501-b69f4a6bbc17','hwp-002','accent',0.03,12,1,'small','2026-01-25T05:03:44.788Z','2026-01-25T05:04:10.346Z',NULL),
+('2a41c8a8-7a10-479d-8a19-a9c6842378ff','hwp-002','accent',0.05,12,0,'medium','2026-01-25T05:04:24.813Z','2026-01-25T05:04:24.813Z',NULL),
+('65c64b01-6308-4f7c-a1a9-2042f610d637','hwp-002','accent',0.07,12,0,'large','2026-01-25T05:04:50.125Z','2026-01-25T05:04:50.125Z',NULL),
+('487d58e8-fab6-4a52-a9f1-defa3280a637','hw-001','accent',0.02,22,0,'small','2026-01-25T07:12:59.371Z','2026-01-25T18:27:53.787Z',NULL),
+('4601dc0c-915d-4d6f-b788-bd788719d587','hw-001','accent',0.03,18,0,'medium','2026-01-25T07:13:28.180Z','2026-01-25T18:25:25.913Z',NULL),
+('e004fe02-c617-47ca-9863-01adac0beab7','hw-001','accent',0.05,15,0,'large','2026-01-25T07:41:25.528Z','2026-01-25T18:27:47.411Z',NULL),
+('e0cfe686-fef4-45b6-ab04-7ebfc4a5786d','hw-003','center',0.5,1,1,'xsmall','2026-01-25T20:47:40.122Z','2026-01-25T20:47:40.122Z',NULL),
+('6528bd98-b47f-4a27-ab46-329024fd915f','hws-006','center',0.5,4,1,'xsmall','2026-01-26T07:32:55.245Z','2026-01-26T07:35:40.396Z',NULL),
+('d156f5f3-63cd-4b11-9ab6-d0054bf0ec59','hws-006','center',0.2,25,1,'xsmall','2026-01-26T07:33:29.808Z','2026-01-26T07:35:45.574Z',NULL),
+('3c35fd13-54f2-4b82-adda-7b04cc2d27b5','hws-006','center',1,4,0,'small','2026-01-26T07:34:13.107Z','2026-01-26T07:35:38.255Z',NULL),
+('ae24817c-f7ff-433b-b6ba-cab300bcefe2','hws-006','center',0.2,25,0,'small','2026-01-26T07:34:51.728Z','2026-01-26T07:35:43.009Z',NULL),
+('e4d83d79-c82e-4158-91a7-c12424ef94f5','hws-006','center',1.5,4,0,'medium','2026-01-26T07:35:12.253Z','2026-01-26T07:36:28.406Z',NULL),
+('380ab2d5-0408-4680-bd93-6d4ada820fb7','hws-006','center',0.2,25,0,'medium','2026-01-26T07:35:35.395Z','2026-01-26T07:35:41.640Z',NULL),
+('05beae7c-84d5-47b1-b69b-7254e216254a','hws-006','center',0.2,25,0,'large','2026-01-26T07:36:25.395Z','2026-01-26T07:36:25.395Z',NULL),
+('baa27123-7864-4cf9-8ca8-9d502b29f3be','hws-006','center',2,4,0,'large','2026-01-26T07:36:42.112Z','2026-01-26T07:36:42.112Z',NULL);
+PRAGMA foreign_keys = ON;

@@ -476,7 +476,6 @@ export const ADMIN_ENUMS = {
     { value: "VVS2", label: "VVS2" },
     { value: "VS1", label: "VS1" },
     { value: "VS2", label: "VS2" },
-    { value: "VS3", label: "VS3" },
     { value: "SI1", label: "SI1" },
     { value: "SI2", label: "SI2" },
     { value: "SI3", label: "SI3" },
@@ -822,4 +821,3 @@ export const REJECT_HTML = `<!DOCTYPE html>
   </table>
 </body>
 </html>`;
-

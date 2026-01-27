@@ -593,9 +593,11 @@
 }
 
 .stone-weight-gem {
-  width: clamp(0.9rem, calc(0.55rem + var(--stone-size, 1.2) * 0.35rem), 2.2rem);
-  height: clamp(0.9rem, calc(0.55rem + var(--stone-size, 1.2) * 0.35rem), 2.2rem);
-  border-radius: 8px;
+  /* Interpret --stone-size as millimetres so dots mirror real-world diameter */
+  --stone-mm: var(--stone-size, 1.2);
+  width: calc(var(--stone-mm) * 1mm);
+  height: calc(var(--stone-mm) * 1mm);
+  border-radius: 50%;
   border: 1px solid rgba(15, 23, 42, 0.12);
   background: linear-gradient(135deg, #ffffff 0%, #edf2f7 40%, #dbe3ec 100%);
   box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.9),
@@ -613,7 +615,7 @@
   content: '';
   position: absolute;
   inset: 18% 18%;
-  border-radius: 4px;
+  border-radius: 50%;
   border: 1px solid rgba(15, 23, 42, 0.08);
   transform: rotate(-45deg);
 }
@@ -662,14 +664,54 @@
 }
 
 .stone-weight-legend-gem {
-  width: clamp(0.7rem, calc(0.45rem + var(--stone-size, 1.2) * 0.3rem), 1.6rem);
-  height: clamp(0.7rem, calc(0.45rem + var(--stone-size, 1.2) * 0.3rem), 1.6rem);
-  border-radius: 6px;
+  --stone-mm: var(--stone-size, 1.2);
+  width: calc(var(--stone-mm) * 1mm);
+  height: calc(var(--stone-mm) * 1mm);
+  border-radius: 50%;
   border: 1px solid rgba(15, 23, 42, 0.12);
   background: linear-gradient(135deg, #ffffff 0%, #e9edf2 45%, #dbe3ec 100%);
   box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.9),
     inset 0 -2px 4px rgba(15, 23, 42, 0.08);
   transform: rotate(45deg);
+  position: relative;
+}
+
+.stone-weight-legend-gem[data-stone-shape='round'],
+.stone-weight-legend-gem[data-stone-shape='oval'] {
+  border-radius: 50%;
+  clip-path: none;
+}
+
+.stone-weight-legend-gem[data-stone-shape='oval'] {
+  transform: rotate(45deg) scaleX(1.15);
+}
+
+.stone-weight-legend-gem[data-stone-shape='princess'],
+.stone-weight-legend-gem[data-stone-shape='square'] {
+  border-radius: 10%;
+  transform: rotate(0deg);
+}
+
+.stone-weight-legend-gem[data-stone-shape='emerald'],
+.stone-weight-legend-gem[data-stone-shape='radiant'] {
+  border-radius: 12%;
+  transform: rotate(0deg);
+  clip-path: inset(6% 10% 6% 10% round 12%);
+}
+
+.stone-weight-legend-gem[data-stone-shape='pear'] {
+  transform: rotate(0deg);
+  clip-path: polygon(50% 0%, 88% 38%, 88% 88%, 50% 100%, 12% 88%, 12% 38%);
+}
+
+.stone-weight-legend-gem[data-stone-shape='marquise'] {
+  transform: rotate(0deg);
+  clip-path: ellipse(50% 38% at 50% 50%);
+}
+
+.stone-weight-legend-gem[data-stone-shape='heart'] {
+  transform: rotate(0deg);
+  clip-path: path('M50 90 C-5 40 20 5 50 28 C80 5 105 40 50 90 Z');
 }
 
 .stone-weight-legend-text {

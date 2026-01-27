@@ -806,6 +806,23 @@
   }
 
   function buildSizingSpec(entry) {
+    const rawTags = entry?.tags;
+    const tags = (Array.isArray(rawTags) ? rawTags : String(rawTags || "").split(/[|,;\n]/))
+      .map((tag) => String(tag || "").trim().toLowerCase())
+      .filter(Boolean);
+    const hasTag = (values) => values.some((value) => tags.includes(value));
+    const isSet = hasTag(["set", "sets"]);
+    const wantsRing = hasTag(["ring", "rings", "band", "bands"]);
+    const wantsBracelet = hasTag(["bracelet", "bracelets", "bangle", "bangles", "wrist"]);
+    const wantsChain = hasTag(["pendant", "pendants", "necklace", "necklaces", "chain", "chains"]);
+    if (tags.length) {
+      const fallback = isSet && !wantsRing && !wantsBracelet && !wantsChain;
+      return {
+        ring: wantsRing || fallback,
+        bracelet: wantsBracelet || fallback,
+        chain: wantsChain || fallback,
+      };
+    }
     const category = String(entry?.category || entry?.categories || "")
       .toLowerCase()
       .replace(/\s+/g, " ");

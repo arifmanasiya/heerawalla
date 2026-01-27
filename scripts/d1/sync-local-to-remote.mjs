@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 const DB_NAME = "heerawalla";
 const CONFIG_PATH = "workers/herawalla-email-atelier/wrangler.toml";
 const OUTPUT_PATH = "scripts/d1/seed/local_dump.sql";
-const D1_PERSIST_DIR = ".wrangler/state/v3";
+const D1_PERSIST_DIR = "workers/herawalla-email-atelier/.wrangler/state/v3";
 const TABLES = [
   "catalog_items",
   "catalog_notes",

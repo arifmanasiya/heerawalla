@@ -1,4 +1,5 @@
 name = "herawalla-email-atelier"
+account_id = "e5d9a808708aaa27a77d1320c17227e6"
 main = "src/index.ts"
 compatibility_date = "2025-01-11"
 routes = [

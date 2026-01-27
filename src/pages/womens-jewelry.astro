@@ -283,6 +283,7 @@ const breadcrumbs = [
       const hasChainTag = tags.some((tag) => ['necklace', 'necklaces', 'pendant', 'pendants', 'chain', 'chains'].includes(tag));
       const sizeLabel = hasChainTag ? 'Chain length' : '';
       const size = hasChainTag ? '16\"' : '';
+      const sizeChain = hasChainTag ? size : '';
 
       return {
         metal,
@@ -295,6 +296,7 @@ const breadcrumbs = [
         cut,
         size,
         size_label: sizeLabel,
+        size_chain: sizeChain,
       };
     };
 

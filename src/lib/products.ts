@@ -53,7 +53,7 @@ function toOptionalNumberFromUnknown(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-async function loadProductsFromApi(): Promise<Product[]> {
+async function loadProductsFromApi(slug?: string): Promise<Product[]> {
   const apiBase = (getEnv('PUBLIC_CATALOG_API_URL') || '').trim();
   if (!apiBase) {
     throw new Error('PUBLIC_CATALOG_API_URL is required to load products from D1.');
@@ -61,7 +61,8 @@ async function loadProductsFromApi(): Promise<Product[]> {
   const joiner = apiBase.includes('?') ? '&' : '?';
   const isLocal = /localhost|127\.0\.0\.1/i.test(apiBase);
   const cacheBust = isLocal ? `&bust=${Date.now()}` : '';
-  const url = `${apiBase}${joiner}include=products${cacheBust}`;
+  const slugParam = slug ? `&slug=${encodeURIComponent(slug)}` : '';
+  const url = `${apiBase}${joiner}include=products${slugParam}${cacheBust}`;
   try {
     const response = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!response.ok) {
@@ -78,6 +79,17 @@ async function loadProductsFromApi(): Promise<Product[]> {
         const metalWeightRange = normalizeListValue(row.metal_weight_range ?? row.metal_weight);
         const categoryValue = normalizeListValue(row.category ?? row.categories);
         const genderValue = normalizeListValue(row.gender);
+        let stoneOptions: unknown[] | undefined;
+        if (Array.isArray(row.stone_options)) {
+          stoneOptions = row.stone_options;
+        } else if (typeof row.stone_options === 'string') {
+          try {
+            const parsed = JSON.parse(row.stone_options);
+            if (Array.isArray(parsed)) stoneOptions = parsed;
+          } catch {
+            // ignore parse errors; leave undefined
+          }
+        }
         const base = {
           id: String(row.id || ''),
           name: String(row.name || ''),
@@ -94,7 +106,7 @@ async function loadProductsFromApi(): Promise<Product[]> {
           stone_weight_range: stoneWeightRange || '',
           metal_weight: toOptionalNumberFromUnknown(row.metal_weight) ?? toOptionalNumberFromList(metalWeightRange),
           metal_weight_range: metalWeightRange || '',
-          stone_options: Array.isArray(row.stone_options) ? row.stone_options : undefined,
+          stone_options: stoneOptions,
           metal_weight_options: Array.isArray(row.metal_weight_options) ? row.metal_weight_options : undefined,
           cut: String(row.cut || ''),
           clarity: String(row.clarity || ''),
@@ -116,12 +128,12 @@ async function loadProductsFromApi(): Promise<Product[]> {
   }
 }
 
-export async function loadProducts(): Promise<Product[]> {
-  return loadProductsFromApi();
+export async function loadProducts(slug?: string): Promise<Product[]> {
+  return loadProductsFromApi(slug);
 }
 
 export async function loadProductBySlug(slug: string): Promise<Product | undefined> {
-  const products = await loadProducts();
+  const products = await loadProducts(slug);
   return products.find((p) => p.slug === slug);
 }
 
@@ -140,8 +152,10 @@ export async function loadProductsWithMedia(): Promise<ProductWithMedia[]> {
 }
 
 export async function loadProductBySlugWithMedia(slug: string): Promise<ProductWithMedia | undefined> {
-  const products = await loadProductsWithMedia();
-  return products.find((p) => p.slug === slug);
+  const product = await loadProductBySlug(slug);
+  if (!product) return undefined;
+  const media = await getMediaForProduct(product);
+  return { ...product, media };
 }
 
 export async function loadCollections(products?: Product[]) {

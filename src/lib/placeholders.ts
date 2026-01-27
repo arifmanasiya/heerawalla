@@ -4,8 +4,8 @@ export const MEDIA_PLACEHOLDER_URL =
 const LOGO_MARK_FALLBACK =
   "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" fill=\"%23ffffff\"/><rect x=\"8\" y=\"8\" width=\"48\" height=\"48\" fill=\"%230b1928\"/><text x=\"32\" y=\"38\" text-anchor=\"middle\" font-family=\"Arial\" font-size=\"28\" fill=\"%23ffffff\">H</text></svg>";
 
-const MEDIA_BASE_URL = import.meta.env.PUBLIC_MEDIA_BASE_URL ?? "";
-const MEDIA_BASE = MEDIA_BASE_URL ? MEDIA_BASE_URL.replace(/\/$/, "") : "";
+// Always serve brand assets directly from public R2 (skip Worker proxy)
+const MEDIA_BASE = "https://pub-0758b0d6fde14b47943c5b58be0ca424.r2.dev";
 
 export const LOGO_MARK_URL = MEDIA_BASE
   ? `${MEDIA_BASE}/media/brand/favicon.svg`
