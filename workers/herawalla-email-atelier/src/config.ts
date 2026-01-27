@@ -425,8 +425,7 @@ export const ADMIN_ENUMS = {
     { value: "Axis", label: "Axis" },
     { value: "Continuum", label: "Continuum" },
     { value: "Eclipse", label: "Eclipse" },
-    { value: "Meridian", label: "Meridian" },
-    { value: "Helix", label: "Helix" },
+    { value: "Signature", label: "Signature" },
   ],
   genders: [
     { value: "male", label: "Male" },
@@ -465,6 +464,7 @@ export const ADMIN_ENUMS = {
     { value: "accent", label: "Accent" },
     { value: "side", label: "Side" },
     { value: "halo", label: "Halo" },
+    { value: "main", label: "Main" },
   ],
   cuts: [
     { value: "Brilliant", label: "Brilliant" },
@@ -476,8 +476,13 @@ export const ADMIN_ENUMS = {
     { value: "VVS2", label: "VVS2" },
     { value: "VS1", label: "VS1" },
     { value: "VS2", label: "VS2" },
+    { value: "VS3", label: "VS3" },
     { value: "SI1", label: "SI1" },
     { value: "SI2", label: "SI2" },
+    { value: "SI3", label: "SI3" },
+    { value: "I1", label: "I1" },
+    { value: "I2", label: "I2" },
+    { value: "I3", label: "I3" },
   ],
   colors: [
     { value: "D", label: "D" },

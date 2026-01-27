@@ -4478,6 +4478,10 @@ function resolveDiscountDetails(costValues: CostChartValues, record?: Record<str
 
 type DiamondPiece = { weight: number; count: number; stoneType?: "lab" | "natural" };
 type DiamondBreakdownComponent = { stoneType?: "lab" | "natural"; breakdown: string };
+type DiamondBreakdownParseOptions = {
+  defaultType?: string;
+  allowInlineType?: boolean;
+};
 
 function normalizeStoneTypeToken(value: string) {
   const normalized = value.toLowerCase();
@@ -4486,39 +4490,37 @@ function normalizeStoneTypeToken(value: string) {
   return "";
 }
 
-function parseDiamondBreakdown(input: string): DiamondPiece[] {
-  if (!input) return [];
-  return input
-    .split(/\n|;|,|\|/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const match = line.match(/([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[x×]\s*([0-9]*\.?[0-9]+)/i);
-      if (match) {
-        const weight = Number(match[1]);
-        const count = Number(match[2]);
-        return { weight, count };
-      }
-      const numbers = line.match(/[0-9]*\.?[0-9]+/g) || [];
-      if (numbers.length >= 2) {
-        const first = Number(numbers[0]);
-        const second = Number(numbers[1]);
-        const weight = first <= second ? first : second;
-        const count = first <= second ? second : first;
-        return { weight, count };
-      }
-      if (numbers.length === 1) {
-        const weight = Number(numbers[0]);
-        return { weight, count: 1 };
-      }
-      return { weight: 0, count: 0 };
-    })
-    .filter((entry) => Number.isFinite(entry.weight) && entry.weight > 0 && Number.isFinite(entry.count) && entry.count > 0);
+function parseDiamondBreakdownLine(payload: string) {
+  const match = payload.match(
+    /([0-9]*\.?[0-9]+)\s*(?:ct)?\s*(?:x|\u00d7|\*)\s*([0-9]*\.?[0-9]+)/i
+  );
+  if (match) {
+    const weight = Number(match[1]);
+    const count = Number(match[2]);
+    return { weight, count };
+  }
+  const numbers = payload.match(/[0-9]*\.?[0-9]+/g) || [];
+  if (numbers.length >= 2) {
+    const first = Number(numbers[0]);
+    const second = Number(numbers[1]);
+    const weight = first <= second ? first : second;
+    const count = first <= second ? second : first;
+    return { weight, count };
+  }
+  if (numbers.length === 1) {
+    const weight = Number(numbers[0]);
+    return { weight, count: 1 };
+  }
+  return { weight: 0, count: 0 };
 }
 
-function parseDiamondBreakdownWithType(input: string, defaultType: string): DiamondPiece[] {
+function parseDiamondBreakdownUnified(
+  input: string,
+  options: DiamondBreakdownParseOptions = {}
+): DiamondPiece[] {
   if (!input) return [];
-  const fallbackType = normalizeStoneTypeToken(defaultType);
+  const fallbackType = normalizeStoneTypeToken(options.defaultType || "");
+  const allowInlineType = options.allowInlineType !== false;
   return input
     .split(/\n|;|,|\|/)
     .map((line) => line.trim())
@@ -4526,34 +4528,17 @@ function parseDiamondBreakdownWithType(input: string, defaultType: string): Diam
     .map((line) => {
       let payload = line;
       let stoneType = fallbackType;
-      const typeMatch = line.match(
-        /^(lab(?:\s+grown)?|natural)(?:\s+diamond)?\s*[:=-]\s*(.+)$/i
-      );
-      if (typeMatch) {
-        stoneType = normalizeStoneTypeToken(typeMatch[1]) || fallbackType;
-        payload = typeMatch[2];
+      if (allowInlineType) {
+        const typeMatch = line.match(
+          /^(lab(?:\s+grown)?|natural)(?:\s+diamond)?\s*[:=-]\s*(.+)$/i
+        );
+        if (typeMatch) {
+          stoneType = normalizeStoneTypeToken(typeMatch[1]) || fallbackType;
+          payload = typeMatch[2];
+        }
       }
-      const match = payload.match(
-        /([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[xA-]\s*([0-9]*\.?[0-9]+)/i
-      );
-      if (match) {
-        const weight = Number(match[1]);
-        const count = Number(match[2]);
-        return { weight, count, stoneType: stoneType || undefined };
-      }
-      const numbers = payload.match(/[0-9]*\.?[0-9]+/g) || [];
-      if (numbers.length >= 2) {
-        const first = Number(numbers[0]);
-        const second = Number(numbers[1]);
-        const weight = first <= second ? first : second;
-        const count = first <= second ? second : first;
-        return { weight, count, stoneType: stoneType || undefined };
-      }
-      if (numbers.length === 1) {
-        const weight = Number(numbers[0]);
-        return { weight, count: 1, stoneType: stoneType || undefined };
-      }
-      return { weight: 0, count: 0, stoneType: stoneType || undefined };
+      const parsed = parseDiamondBreakdownLine(payload);
+      return { ...parsed, stoneType: stoneType || undefined };
     })
     .filter(
       (entry) =>
@@ -4562,6 +4547,17 @@ function parseDiamondBreakdownWithType(input: string, defaultType: string): Diam
         Number.isFinite(entry.count) &&
         entry.count > 0
     );
+}
+
+function parseDiamondBreakdown(input: string): DiamondPiece[] {
+  return parseDiamondBreakdownUnified(input, { allowInlineType: false });
+}
+
+function parseDiamondBreakdownWithType(input: string, defaultType: string): DiamondPiece[] {
+  return parseDiamondBreakdownUnified(input, {
+    defaultType,
+    allowInlineType: true,
+  });
 }
 
 function parseDiamondBreakdownComponentsPayload(value: unknown): DiamondBreakdownComponent[] {
@@ -4620,24 +4616,17 @@ function findDiamondPricePerCt(
   entries: DiamondPriceEntry[],
   clarity: string,
   color: string,
-  weight: number
+  weight: number,
+  groups?: DiamondClarityGroups | null
 ) {
-  const normalizedClarity = normalizeDiamondToken(clarity || "");
-  const normalizedColor = normalizeDiamondToken(color || "");
-  let best: { entry: DiamondPriceEntry; score: number; range: number } | null = null;
-  for (const entry of entries) {
-    if (weight < entry.weightMin || weight > entry.weightMax) continue;
-    if (!isDiamondWildcard(entry.clarity) && entry.clarity !== normalizedClarity) continue;
-    if (!isDiamondWildcard(entry.color) && entry.color !== normalizedColor) continue;
-    let score = 0;
-    if (!isDiamondWildcard(entry.clarity)) score += 2;
-    if (!isDiamondWildcard(entry.color)) score += 1;
-    const range = entry.weightMax - entry.weightMin;
-    if (!best || score > best.score || (score === best.score && range < best.range)) {
-      best = { entry, score, range };
-    }
-  }
-  return best ? best.entry.pricePerCt : null;
+  const result = findDiamondPricePerCtWithPriority(
+    entries,
+    clarity,
+    color,
+    weight,
+    groups
+  );
+  return result.pricePerCt;
 }
 
 const FALLBACK_DIAMOND_CLARITY_GROUP_ROWS = [
@@ -4649,6 +4638,25 @@ const FALLBACK_DIAMOND_CLARITY_GROUP_ROWS = [
   { group_key: "VS3", clarity: "VS" },
 ];
 const SMALL_DIAMOND_WEIGHT_THRESHOLD = 0.3;
+const DIAMOND_CLARITY_ORDER = [
+  "FL",
+  "IF",
+  "VVS1",
+  "VVS2",
+  "VVS",
+  "VS1",
+  "VS2",
+  "VS3",
+  "VS",
+  "SI1",
+  "SI2",
+  "SI3",
+  "SI",
+  "I1",
+  "I2",
+  "I3",
+  "I",
+];
 
 function buildDiamondClarityGroups(
   rows: Array<Record<string, string | number | null>> = []
@@ -4695,76 +4703,232 @@ function parseDiamondTokens(value: string) {
   return normalized.split(/[^A-Z0-9]+/).filter(Boolean);
 }
 
-function resolveDiamondClarityTokens(
+function resolveDiamondClarityMatchPlan(
   value: string,
   weight: number,
   groups?: DiamondClarityGroups | null
 ) {
   const normalized = normalizeDiamondToken(value || "");
-  if (!normalized) return [];
-  const useComposite = Number.isFinite(weight) && weight > 0 && weight < SMALL_DIAMOND_WEIGHT_THRESHOLD;
+  if (!normalized) return { primary: [], secondary: [] };
+  const useComposite =
+    Number.isFinite(weight) && weight > 0 && weight < SMALL_DIAMOND_WEIGHT_THRESHOLD;
   const compositeToDetails = groups?.compositeToDetails;
   const detailToComposite = groups?.detailToComposite;
-  if (useComposite) {
-    if (compositeToDetails?.has(normalized)) {
-      return [normalized];
-    }
-    const composite = detailToComposite?.get(normalized);
-    if (composite) return [composite];
+  if (!useComposite) {
+    return { primary: [normalized], secondary: [] };
   }
   if (compositeToDetails?.has(normalized)) {
-    return compositeToDetails.get(normalized) || [];
+    return { primary: [normalized], secondary: compositeToDetails.get(normalized) || [] };
   }
-  return parseDiamondTokens(normalized);
+  const composite = detailToComposite?.get(normalized);
+  if (composite) return { primary: [normalized], secondary: [composite] };
+  return { primary: [normalized], secondary: [] };
 }
 
-function matchesDiamondToken(entryValue: string, tokens: string[], allowPrefix: boolean) {
+function resolveDiamondClarityTokens(
+  value: string,
+  weight: number,
+  groups?: DiamondClarityGroups | null
+) {
+  const plan = resolveDiamondClarityMatchPlan(value, weight, groups);
+  if (plan.primary.length) return plan.primary;
+  if (plan.secondary.length) return plan.secondary;
+  return parseDiamondTokens(normalizeDiamondToken(value || ""));
+}
+
+function matchesDiamondToken(entryValue: string, tokens: string[], allowRange: boolean) {
   if (isDiamondWildcard(entryValue) || !tokens.length) return true;
-  return tokens.some((token) => {
-    if (!token) return false;
-    if (entryValue === token) return true;
-    return allowPrefix ? entryValue.startsWith(token) : false;
-  });
+  if (!allowRange) return tokens.includes(entryValue);
+  const entryTokens = parseDiamondTokens(entryValue);
+  if (!entryTokens.length) return tokens.includes(entryValue);
+  return entryTokens.some((token) => tokens.includes(token));
 }
 
-function findDiamondPricePerCtAverage(
+function getDiamondClarityRank(value: string, groups?: DiamondClarityGroups | null) {
+  const normalized = normalizeDiamondToken(value || "");
+  if (!normalized || isDiamondWildcard(normalized)) return Number.POSITIVE_INFINITY;
+  const rankOf = (token: string) => {
+    const idx = DIAMOND_CLARITY_ORDER.indexOf(token);
+    return idx === -1 ? Number.POSITIVE_INFINITY : idx;
+  };
+  let best = Number.POSITIVE_INFINITY;
+  const compositeDetails = groups?.compositeToDetails?.get(normalized);
+  if (compositeDetails && compositeDetails.length) {
+    compositeDetails.forEach((detail) => {
+      const rank = rankOf(detail);
+      if (rank < best) best = rank;
+    });
+    return best;
+  }
+  const tokens = parseDiamondTokens(normalized);
+  if (tokens.length) {
+    tokens.forEach((token) => {
+      const rank = rankOf(token);
+      if (rank < best) best = rank;
+    });
+  }
+  if (!Number.isFinite(best)) {
+    best = rankOf(normalized);
+  }
+  return best;
+}
+
+function isCompositeClarity(value: string, groups?: DiamondClarityGroups | null) {
+  const normalized = normalizeDiamondToken(value || "");
+  if (!normalized) return false;
+  if (groups?.compositeToDetails?.has(normalized)) return true;
+  return normalized.includes("-");
+}
+
+function findBestDiamondEntry(
   entries: DiamondPriceEntry[],
   clarityTokens: string[],
   colorTokens: string[],
-  weight: number
+  weight: number,
+  groups?: DiamondClarityGroups | null
 ) {
-  let bestScore = -1;
-  let bestRange = Infinity;
-  let sum = 0;
-  let count = 0;
-  let nearest: { diff: number; price: number } | null = null;
+  let bestInRange: {
+    entry: DiamondPriceEntry;
+    specificity: number;
+    clarityRank: number;
+    range: number;
+  } | null = null;
+  let bestNearest: {
+    entry: DiamondPriceEntry;
+    specificity: number;
+    clarityRank: number;
+    range: number;
+    diff: number;
+  } | null = null;
+
+  const disallowComposite =
+    Number.isFinite(weight) && weight >= SMALL_DIAMOND_WEIGHT_THRESHOLD;
   for (const entry of entries) {
-    const clarityMatch = matchesDiamondToken(entry.clarity, clarityTokens, true);
-    const colorMatch = matchesDiamondToken(entry.color, colorTokens, false);
+    if (disallowComposite && isCompositeClarity(entry.clarity, groups)) {
+      continue;
+    }
+    const clarityMatch = matchesDiamondToken(entry.clarity, clarityTokens, false);
+    const colorMatch = matchesDiamondToken(entry.color, colorTokens, true);
     if (!clarityMatch || !colorMatch) continue;
-    const clarityScore = isDiamondWildcard(entry.clarity) ? 0 : 2;
-    const colorScore = isDiamondWildcard(entry.color) ? 0 : 1;
-    const score = clarityScore + colorScore;
+    const specificity =
+      (isDiamondWildcard(entry.clarity) ? 0 : 2) + (isDiamondWildcard(entry.color) ? 0 : 1);
+    const clarityRank = getDiamondClarityRank(entry.clarity, groups);
     const range = entry.weightMax - entry.weightMin;
-    if (weight >= entry.weightMin && weight <= entry.weightMax) {
-      if (score > bestScore || (score === bestScore && range < bestRange)) {
-        bestScore = score;
-        bestRange = range;
-        sum = entry.pricePerCt;
-        count = 1;
-      } else if (score === bestScore && range === bestRange) {
-        sum += entry.pricePerCt;
-        count += 1;
+    const inRange = weight >= entry.weightMin && weight <= entry.weightMax;
+    if (inRange) {
+      const candidate = { entry, specificity, clarityRank, range };
+      if (!bestInRange) {
+        bestInRange = candidate;
+        continue;
+      }
+      if (candidate.specificity > bestInRange.specificity) {
+        bestInRange = candidate;
+        continue;
+      }
+      if (candidate.specificity === bestInRange.specificity) {
+        if (candidate.clarityRank < bestInRange.clarityRank) {
+          bestInRange = candidate;
+          continue;
+        }
+        if (candidate.clarityRank === bestInRange.clarityRank) {
+          if (candidate.range < bestInRange.range) {
+            bestInRange = candidate;
+            continue;
+          }
+          if (candidate.range === bestInRange.range) {
+            if (candidate.entry.pricePerCt > bestInRange.entry.pricePerCt) {
+              bestInRange = candidate;
+            }
+          }
+        }
       }
       continue;
     }
+
     const diff = weight < entry.weightMin ? entry.weightMin - weight : weight - entry.weightMax;
-    if (!nearest || diff < nearest.diff || (diff === nearest.diff && score > bestScore)) {
-      nearest = { diff, price: entry.pricePerCt };
+    const candidate = { entry, specificity, clarityRank, range, diff };
+    if (!bestNearest) {
+      bestNearest = candidate;
+      continue;
+    }
+    if (candidate.diff < bestNearest.diff) {
+      bestNearest = candidate;
+      continue;
+    }
+    if (candidate.diff === bestNearest.diff) {
+      if (candidate.specificity > bestNearest.specificity) {
+        bestNearest = candidate;
+        continue;
+      }
+      if (candidate.specificity === bestNearest.specificity) {
+        if (candidate.clarityRank < bestNearest.clarityRank) {
+          bestNearest = candidate;
+          continue;
+        }
+        if (candidate.clarityRank === bestNearest.clarityRank) {
+          if (candidate.range < bestNearest.range) {
+            bestNearest = candidate;
+            continue;
+          }
+          if (candidate.range === bestNearest.range) {
+            if (candidate.entry.pricePerCt > bestNearest.entry.pricePerCt) {
+              bestNearest = candidate;
+            }
+          }
+        }
+      }
     }
   }
-  if (count) return sum / count;
-  return nearest ? nearest.price : null;
+
+  return bestInRange?.entry || bestNearest?.entry || null;
+}
+
+function findDiamondPricePerCtWithPriority(
+  entries: DiamondPriceEntry[],
+  clarity: string,
+  color: string,
+  weight: number,
+  groups?: DiamondClarityGroups | null
+) {
+  const colorTokens = parseDiamondTokens(color || "");
+  const plan = resolveDiamondClarityMatchPlan(clarity, weight, groups);
+  const clarityTokenSets: string[][] = [];
+  if (plan.primary.length) clarityTokenSets.push(plan.primary);
+  if (plan.secondary.length) clarityTokenSets.push(plan.secondary);
+  if (!clarityTokenSets.length) clarityTokenSets.push([]);
+
+  const tryMatch = (clarityTokens: string[], colorList: string[]) => {
+    const entry = findBestDiamondEntry(entries, clarityTokens, colorList, weight, groups);
+    if (!entry) return null;
+    return { entry, clarityTokens, colorTokens: colorList };
+  };
+
+  for (const clarityTokens of clarityTokenSets) {
+    if (colorTokens.length) {
+      const match = tryMatch(clarityTokens, colorTokens);
+      if (match) {
+        return {
+          pricePerCt: match.entry.pricePerCt,
+          clarityTokens: match.clarityTokens,
+          colorTokens: match.colorTokens,
+        };
+      }
+    }
+    const match = tryMatch(clarityTokens, []);
+    if (match) {
+      return {
+        pricePerCt: match.entry.pricePerCt,
+        clarityTokens: match.clarityTokens,
+        colorTokens: match.colorTokens,
+      };
+    }
+  }
+
+  return {
+    pricePerCt: null,
+    clarityTokens: plan.primary.length ? plan.primary : plan.secondary,
+    colorTokens,
+  };
 }
 
 function computeOptionPriceFromCosts(
@@ -4879,50 +5043,27 @@ function computeOptionPriceFromCosts(
     pricePerCt: number;
     pieceType: string;
   }> = [];
-  const colorTokens = parseDiamondTokens(color || "");
   const labRelativeCost = getCostPercent(costValues, ["lab_diamonds_relative_cost_pct"]);
   const labMultiplier = labRelativeCost > 0 ? labRelativeCost : 0.2;
   if (pieces.length) {
     for (const piece of pieces) {
-      const clarityTokens = resolveDiamondClarityTokens(
+      const priceLookup = findDiamondPricePerCtWithPriority(
+        diamondPrices,
         clarity || "",
+        color || "",
         piece.weight,
         clarityGroups
       );
-      let pricePerCt = findDiamondPricePerCtAverage(
-        diamondPrices,
-        clarityTokens,
-        colorTokens,
-        piece.weight
-      );
+      const clarityTokens = priceLookup.clarityTokens;
+      const colorTokensUsed = priceLookup.colorTokens;
+      const pricePerCt = priceLookup.pricePerCt;
 
-      if (!pricePerCt) {
-        const composite = clarityGroups?.detailToComposite?.get(clarity || "");
-        if (composite) {
-          pricePerCt = findDiamondPricePerCtAverage(
-            diamondPrices,
-            [composite],
-            colorTokens,
-            piece.weight
-          );
-        }
-      }
-
-      if (!pricePerCt) {
-        pricePerCt = findDiamondPricePerCtAverage(diamondPrices, [], colorTokens, piece.weight);
-      }
-      if (!pricePerCt) {
-        pricePerCt = findDiamondPricePerCtAverage(diamondPrices, clarityTokens, [], piece.weight);
-      }
-      if (!pricePerCt) {
-        pricePerCt = findDiamondPricePerCtAverage(diamondPrices, [], [], piece.weight);
-      }
       if (!pricePerCt) {
         logError("diamond_price_missing", {
           pieceWeight: piece.weight,
           pieceCount: piece.count,
           clarityTokens,
-          colorTokens,
+          colorTokens: colorTokensUsed,
           availableEntries: diamondPrices.length,
         });
         return { ok: false, error: "diamond_price_missing" } as const;
@@ -4933,7 +5074,7 @@ function computeOptionPriceFromCosts(
         weight: piece.weight,
         count: piece.count,
         clarityTokens,
-        colorTokens,
+        colorTokens: colorTokensUsed,
         pricePerCt,
         pieceType: pieceType || "",
       });
