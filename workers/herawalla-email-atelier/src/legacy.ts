@@ -292,27 +292,41 @@ const legacyWorker = {
             headers: buildCorsHeaders(allowedOrigin, true),
           });
         }
+        const normalizeField = (keys: string[]): string => {
+          for (const key of keys) {
+            if (payload[key] !== undefined && payload[key] !== null) {
+              const value = getString(payload[key]);
+              if (value) return value;
+            }
+          }
+          return "";
+        };
+        const record = {
+          metal: normalizeField(["metal"]),
+          metal_weight: normalizeField(["metal_weight", "metalWeight"]),
+          stone: normalizeField(["stone"]),
+          stone_weight: normalizeField(["stone_weight", "stoneWeight"]),
+          diamond_breakdown: normalizeField(["diamond_breakdown", "diamondBreakdown"]),
+          size: normalizeField(["size"]),
+          size_label: normalizeField(["size_label", "sizeLabel"]),
+          size_ring: normalizeField(["size_ring", "sizeRing"]),
+          size_bracelet: normalizeField(["size_bracelet", "sizeBracelet"]),
+          size_chain: normalizeField(["size_chain", "sizeChain"]),
+          size_neck: normalizeField(["size_neck", "sizeNeck"]),
+          size_wrist: normalizeField(["size_wrist", "sizeWrist"]),
+          quote_discount_type: normalizeField(["quote_discount_type", "quoteDiscountType"]),
+          quote_discount_percent: normalizeField([
+            "quote_discount_percent",
+            "quoteDiscountPercent",
+            "quote_discount_pct",
+            "quoteDiscountPct",
+          ]),
+        };
+        const clarity = normalizeField(["clarity"]);
+        const color = normalizeField(["color"]);
         const diamondComponents = parseDiamondBreakdownComponentsPayload(
           payload.diamond_breakdown_components || payload.diamondBreakdownComponents
         );
-        const record = {
-          metal: getString(payload.metal),
-          metal_weight: getString(payload.metal_weight || payload.metalWeight),
-          stone: getString(payload.stone),
-          stone_weight: getString(payload.stone_weight || payload.stoneWeight),
-          diamond_breakdown: getString(payload.diamond_breakdown || payload.diamondBreakdown),
-          size: getString(payload.size),
-          size_label: getString(payload.size_label || payload.sizeLabel),
-          size_ring: getString(payload.size_ring || payload.sizeRing),
-          size_bracelet: getString(payload.size_bracelet || payload.sizeBracelet),
-          size_chain: getString(payload.size_chain || payload.sizeChain),
-          size_neck: getString(payload.size_neck || payload.sizeNeck),
-          size_wrist: getString(payload.size_wrist || payload.sizeWrist),
-          quote_discount_type: getString(payload.quote_discount_type || payload.quoteDiscountType),
-          quote_discount_percent: getString(payload.quote_discount_percent || payload.quoteDiscountPercent),
-        };
-        const clarity = getString(payload.clarity);
-        const color = getString(payload.color);
         const costValues = await loadCostChartValues(env);
         const diamondPrices = await loadDiamondPriceChart(env);
         const clarityGroups = await loadDiamondClarityGroups(env);
@@ -342,6 +356,7 @@ const legacyWorker = {
             meta: {
               discountSummary: discountDetails.summary,
               discountPercent: discountDetails.appliedPercent,
+              input: record,
             },
             debug: result.debug || null,
           }),
@@ -1626,21 +1641,23 @@ const legacyWorker = {
   },
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     const ackMode = getAckMode(env);
-    const tasks: Array<Promise<void>> = [];
-    if (isEnabled(env.SEND_ACK, true) && ackMode === "cron") {
-      tasks.push(processAckQueues(env));
-    }
-    if (isEnabled(env.SEND_STATUS_UPDATES, true)) {
-      tasks.push(processOrderStatusEmails(env));
-    }
-    if (env.ORDER_DETAILS_SHEET_ID) {
-      tasks.push(processShippedOrderUpdates(env));
-    }
+  const tasks: Array<Promise<void>> = [];
+  if (isEnabled(env.SEND_ACK, true) && ackMode === "cron") {
+    tasks.push(processAckQueues(env));
+  }
+  if (isEnabled(env.SEND_STATUS_UPDATES, true)) {
+    tasks.push(processOrderStatusEmails(env));
+  }
+  if (env.ORDER_DETAILS_SHEET_ID) {
+    tasks.push(processShippedOrderUpdates(env));
+  }
+    // Daily gold price sync
+    tasks.push(updateGoldPrice(env));
       tasks.push(processContactsDirectory(env));
-    if (tasks.length) {
-      ctx.waitUntil(Promise.all(tasks));
-    }
-  },
+  if (tasks.length) {
+    ctx.waitUntil(Promise.all(tasks));
+  }
+},
 } satisfies ExportedHandler<Env>;
 
 export default legacyWorker;
@@ -1655,6 +1672,92 @@ export async function handleScheduledEvent(
   ctx: ExecutionContext
 ) {
   return legacyWorker.scheduled(event, env, ctx);
+}
+
+/**
+ * Fetch daily gold price (XAU/USD) from goldapi.io and store USD per gram
+ * into D1.cost_chart.gold_price_per_gram_usd. Requires GOLD_API_KEY secret.
+ */
+async function updateGoldPrice(env: Env) {
+  if (!env.GOLD_API_KEY || !env.DB) return;
+
+  try {
+    const headers = new Headers({
+      "x-access-token": env.GOLD_API_KEY,
+      "Content-Type": "application/json",
+    });
+    const res = await fetch("https://www.goldapi.io/api/XAU/USD", { method: "GET", headers });
+    if (!res.ok) {
+      logError("gold_price_fetch_failed", { status: res.status, statusText: res.statusText });
+      return;
+    }
+    const data = (await res.json()) as Record<string, unknown>;
+    const usdPerOz = Number(data.price);
+    const gram24 = Number(data.price_gram_24k);
+    const gram18 = Number(data.price_gram_18k);
+    const gram14 = Number(data.price_gram_14k);
+
+    if (!Number.isFinite(usdPerOz) || usdPerOz <= 0) {
+      logError("gold_price_invalid", { price: data.price });
+      return;
+    }
+
+    // troy ounce to grams
+    const GRAMS_PER_TROY_OUNCE = 31.1034768;
+    const usdPerGram = usdPerOz / GRAMS_PER_TROY_OUNCE;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const update = await env.DB.prepare(
+      `UPDATE cost_chart SET value = ?, unit = 'USD/g', notes = ? WHERE key = 'gold_price_per_gram_usd'`
+    ).bind(usdPerGram, today).run();
+
+    if (!update.meta?.changes) {
+      await env.DB.prepare(
+        `INSERT INTO cost_chart (key, value, unit, notes) VALUES ('gold_price_per_gram_usd', ?, 'USD/g', ?)`
+      ).bind(usdPerGram, today).run();
+    }
+
+    // Update price chart ratios if gram data present
+    if (Number.isFinite(gram24) && Number.isFinite(gram18) && gram24 > 0) {
+      const ratio18 = withMarkup(gram18 / gram24);
+      await upsertMetalAdjustment(env, "18K Yellow Gold", ratio18, today);
+      await upsertMetalAdjustment(env, "18K Rose Gold", ratio18, today);
+      await upsertMetalAdjustment(env, "18K White Gold", ratio18, today);
+    }
+    if (Number.isFinite(gram24) && Number.isFinite(gram14) && gram24 > 0) {
+      const ratio14 = withMarkup(gram14 / gram24);
+      await upsertMetalAdjustment(env, "14K Yellow Gold", ratio14, today);
+      await upsertMetalAdjustment(env, "14K Rose Gold", ratio14, today);
+      await upsertMetalAdjustment(env, "14K White Gold", ratio14, today);
+    }
+
+    logInfo("gold_price_updated", {
+      usdPerGram,
+      date: today,
+      price_gram_24k: gram24,
+      price_gram_18k: gram18,
+      price_gram_14k: gram14,
+    });
+  } catch (error) {
+    logError("gold_price_error", { message: String(error) });
+  }
+}
+
+async function upsertMetalAdjustment(env: Env, metal: string, value: number, notes: string) {
+  if (!env.DB || !Number.isFinite(value)) return;
+  const updated = await env.DB.prepare(
+    `UPDATE price_chart SET adjustment_value = ?, adjustment_type = 'Percent', notes = ? WHERE metal = ?`
+  ).bind(value, notes, metal).run();
+
+  if (!updated.meta?.changes) {
+    await env.DB.prepare(
+      `INSERT INTO price_chart (metal, adjustment_type, adjustment_value, notes) VALUES (?, 'Percent', ?, ?)`
+    ).bind(metal, value, notes).run();
+  }
+}
+
+function withMarkup(base: number, markup = 0.02) {
+  return Math.round(base * (1 + markup) * 100) / 100;
 }
 
 function extractEmail(fromHeader: string) {
@@ -2251,6 +2354,55 @@ async function handleAdminRequest(
       const result = await handleMediaUpload(env, request);
       return new Response(JSON.stringify(result), {
         status: result.ok ? 200 : 400,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/media/describe") {
+      if (!canEditCatalog(role)) {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const payload = await safeJson(request);
+      const mediaId = getString(payload.media_id || payload.mediaId);
+      if (!mediaId) {
+        return new Response(JSON.stringify({ ok: false, error: "media_id_required" }), {
+          status: 400,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      const result = await describeMedia(env, mediaId);
+      const status = result.ok || result.error === "ai_credentials_missing" ? 200 : 400;
+      return new Response(JSON.stringify(result), {
+        status,
+        headers: buildCorsHeaders(allowedOrigin, true),
+      });
+    }
+    if (path === "/cost-chart/gold-refresh") {
+      if (!canEditPricing(role)) {
+        return new Response(JSON.stringify({ ok: false, error: "admin_forbidden" }), {
+          status: 403,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
+      }
+      if (!env.GOLD_API_KEY) {
+        return new Response(
+          JSON.stringify({ ok: false, error: "gold_api_key_missing" }),
+          { status: 400, headers: buildCorsHeaders(allowedOrigin, true) },
+        );
+      }
+      await updateGoldPrice(env);
+      const rows = await d1All(
+        env,
+        "SELECT value, unit, notes FROM cost_chart WHERE key = 'gold_price_per_gram_usd' LIMIT 1",
+      );
+      const payload =
+        rows && rows.length
+          ? { value: rows[0].value, unit: rows[0].unit, notes: rows[0].notes }
+          : {};
+      return new Response(JSON.stringify({ ok: true, ...payload }), {
+        status: 200,
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
@@ -3391,9 +3543,15 @@ function mapD1RowToRecord(row: Record<string, unknown>) {
            catalog_media.media_id,
            catalog_media.position,
            catalog_media.is_primary,
-           catalog_media.sort_order
+           catalog_media.sort_order,
+           media_library.url,
+           media_library.media_type,
+           media_library.label,
+           media_library.alt,
+           media_library.description
          FROM catalog_media
          JOIN catalog_items ON catalog_items.id = catalog_media.catalog_id
+         LEFT JOIN media_library ON media_library.media_id = catalog_media.media_id
          WHERE catalog_items.type = 'product'`
       );
       headerFallback = PRODUCT_MEDIA_SHEET_HEADER;
@@ -3406,9 +3564,15 @@ function mapD1RowToRecord(row: Record<string, unknown>) {
            catalog_media.media_id,
            catalog_media.position,
            catalog_media.is_primary,
-           catalog_media.sort_order
+           catalog_media.sort_order,
+           media_library.url,
+           media_library.media_type,
+           media_library.label,
+           media_library.alt,
+           media_library.description
          FROM catalog_media
          JOIN catalog_items ON catalog_items.id = catalog_media.catalog_id
+         LEFT JOIN media_library ON media_library.media_id = catalog_media.media_id
          WHERE catalog_items.type = 'inspiration'`
       );
       headerFallback = INSPIRATION_MEDIA_SHEET_HEADER;
@@ -4736,6 +4900,19 @@ function resolveDiamondClarityMatchPlan(
 ) {
   const normalized = normalizeDiamondToken(value || "");
   if (!normalized) return { primary: [], secondary: [] };
+  // Handle generic group labels (e.g., "VVS", "VS") by expanding to specific grades
+  if (normalized === "VVS") {
+    return { primary: ["VVS1", "VVS2"], secondary: ["IF-VVS"] };
+  }
+  if (normalized === "VS") {
+    return { primary: ["VS1", "VS2"], secondary: [] };
+  }
+  if (normalized === "SI") {
+    return { primary: ["SI1", "SI2", "SI3"], secondary: [] };
+  }
+  if (normalized === "I") {
+    return { primary: ["I1", "I2", "I3"], secondary: [] };
+  }
   const useComposite =
     Number.isFinite(weight) && weight > 0 && weight < SMALL_DIAMOND_WEIGHT_THRESHOLD;
   const compositeToDetails = groups?.compositeToDetails;
@@ -13008,6 +13185,202 @@ function logWarn(message: string, details: Record<string, unknown> = {}) {
 
 function logError(message: string, details: Record<string, unknown> = {}) {
   console.error(JSON.stringify({ level: "error", message, ...details }));
+}
+
+async function describeMedia(env: Env, mediaId: string) {
+  const accountId =
+    env.CF_ACCOUNT_ID ||
+    env.CLOUDFLARE_ACCOUNT_ID ||
+    (env as any).CF_ACCOUNT ||
+    (env as any).CLOUDFLARE_ACCOUNT ||
+    "";
+  const apiToken =
+    env.CF_API_TOKEN ||
+    env.CLOUDFLARE_API_TOKEN ||
+    (env as any).CF_TOKEN ||
+    (env as any).CLOUDFLARE_TOKEN ||
+    "";
+  const modelChoices = (
+    [
+      env.CF_AI_MODEL,
+      env.AI_MODEL,
+      "@cf/openai/vision-mini",
+    ] as Array<string | undefined>
+  ).filter(Boolean) as string[];
+  const geminiKey = (env as any).GEMINI_API_KEY || env.GEMINI_API_KEY;
+  const geminiModel = (env as any).GEMINI_MODEL || env.GEMINI_MODEL || "gemini-2.0-flash";
+
+  if (!accountId || !apiToken) {
+    if (!geminiKey) {
+      return { ok: false, error: "ai_credentials_missing" };
+    }
+  }
+
+  const rows = await d1All(
+    env,
+    "SELECT media_id, url, media_type, label, alt, description FROM media_library WHERE media_id = ? LIMIT 1",
+    [mediaId]
+  );
+  if (!rows.length) return { ok: false, error: "media_not_found" };
+
+  const row = rows[0];
+  const imageUrl = getString(row.url || "");
+  if (!imageUrl) return { ok: false, error: "media_url_missing" };
+
+  // Pull a little more context (catalog slug / position / tags) to guide the model toward the correct item type.
+  const mappingHints = await d1All(
+    env,
+    `SELECT catalog_items.slug, catalog_items.categories, catalog_items.tags, catalog_media.position
+     FROM catalog_media
+     JOIN catalog_items ON catalog_items.id = catalog_media.catalog_id
+     WHERE catalog_media.media_id = ?
+     LIMIT 1`,
+    [mediaId]
+  );
+  const map = mappingHints[0] || {};
+  const catalogSlug = getString(map.slug || "");
+  const catalogCategories = getString(map.categories || "");
+  const catalogTags = getString(map.tags || "");
+  const catalogPosition = getString(map.position || "");
+
+  const prompt = `Write a customer-facing jewelry image description for Heerawalla in 90-110 words.
+- First word should be the item type you see (choose exactly one: Bracelet, Bangle, Ring, Pendant, Earrings, Necklace, Chain, or Set).
+- Then describe metal tone and the key diamond/gem arrangement and any visible silhouette details.
+- Keep it elegant, sensory, and specific to what is visible. Avoid prices, guarantees, carat numbers, or certifications.
+- Use natural prose (2-3 sentences), no bullet points, no marketing hype.
+- If unsure, prefer "Bracelet" when the piece is wrist-worn and has continuous links/band; prefer "Ring" only when finger-sized; prefer "Bangle" for rigid wrist pieces.
+- Media hints: label=${row.label || ""}, alt=${row.alt || ""}, position=${catalogPosition}, slug=${catalogSlug}, categories=${catalogCategories}, tags=${catalogTags}.`;
+
+  const body = {
+    messages: [
+      {
+        role: "system",
+        content: "You are a luxury jewelry copywriter. Write refined, specific, imagery-rich text.",
+      },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: `${prompt}\nMedia hints: id=${row.media_id || ""} label=${row.label || ""} alt=${row.alt || ""}` },
+          { type: "image_url", image_url: { url: imageUrl } },
+        ],
+      },
+    ],
+    max_tokens: 260,
+    temperature: 0.55,
+  };
+
+  let description = "";
+  let lastError = "";
+  for (const candidate of modelChoices) {
+    try {
+      const response = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${encodeURIComponent(candidate)}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      );
+      if (!response.ok) {
+        const text = await response.text();
+        if (text.includes("No route for that URI") || text.includes("\"code\":7000")) {
+          lastError = `ai_model_unavailable:${candidate}`;
+          continue;
+        }
+        lastError = `ai_failed:${candidate}:${response.status}:${text.slice(0, 200)}`;
+        continue;
+      }
+      const data = (await response.json()) as Record<string, unknown>;
+      const result = (data as any).result || {};
+      description =
+        result.response ||
+        result.output ||
+        result.output_text ||
+        result.generated_text ||
+        result.text ||
+        result?.choices?.[0]?.message?.content ||
+        "";
+      if (!description || typeof description !== "string") {
+        lastError = `ai_empty_response:${candidate}`;
+        continue;
+      }
+      description = description.trim();
+      break;
+    } catch (error) {
+      lastError = `ai_error:${candidate}:${String((error as Error).message || error)}`;
+    }
+  }
+  if (!description && geminiKey) {
+    const geminiResult = await describeWithGemini(geminiKey, geminiModel, imageUrl, prompt);
+    if (geminiResult.ok && geminiResult.description) {
+      description = geminiResult.description;
+    } else {
+      lastError = geminiResult.error || lastError || "ai_model_unavailable";
+    }
+  }
+  if (!description) {
+    return { ok: false, error: lastError || "ai_model_unavailable" };
+  }
+
+  // Do not auto-save; caller can decide to persist
+  return { ok: true, description };
+}
+
+async function describeWithGemini(
+  apiKey: string,
+  model: string,
+  imageUrl: string,
+  prompt: string
+): Promise<{ ok: boolean; description?: string; error?: string }> {
+  try {
+    const imageResp = await fetch(imageUrl);
+    if (!imageResp.ok) {
+      return { ok: false, error: `gemini_fetch_image:${imageResp.status}` };
+    }
+    const buf = await imageResp.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const base64 = btoa(binary);
+    const mime = imageResp.headers.get("content-type") || "image/jpeg";
+
+    const body = {
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mime, data: base64 } },
+          ],
+        },
+      ],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 200 },
+    };
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(
+        apiKey
+      )}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
+    if (!resp.ok) {
+      const text = await resp.text();
+      return { ok: false, error: `gemini_failed:${resp.status}:${text.slice(0, 200)}` };
+    }
+    const data = (await resp.json()) as any;
+    const description =
+      data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join(" ").trim() || "";
+    if (!description) return { ok: false, error: "gemini_empty_response" };
+    return { ok: true, description };
+  } catch (error) {
+    return { ok: false, error: `gemini_error:${String((error as Error).message || error)}` };
+  }
 }
 
 export {

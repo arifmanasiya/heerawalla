@@ -54,31 +54,105 @@
 
   const ACTIONS = {
     orders: [
-      { action: "acknowledge", label: "Acknowledge", confirm: "Mark as acknowledged?" },
-      { action: "send_invoice", label: "Send invoice", confirm: "Send invoice and mark invoiced?" },
-      { action: "mark_paid", label: "Mark paid", confirm: "Confirm payment received?" },
-      { action: "mark_invoice_expired", label: "Mark invoice expired", confirm: "Mark invoice as expired?" },
-      { action: "mark_processing", label: "Mark processing", confirm: "Move order into processing?" },
-      { action: "mark_shipped", label: "Mark shipped", confirm: "Mark as shipped?" },
-      { action: "mark_delivered", label: "Mark delivered", confirm: "Mark as delivered?" },
-      { action: "cancel", label: "Cancel order", confirm: "Cancel this order?" },
-      { action: "delete", label: "Delete", confirm: "Delete this order? This cannot be undone." },
+      {
+        action: "acknowledge",
+        label: "Acknowledge",
+        confirm: "Mark as acknowledged?",
+      },
+      {
+        action: "send_invoice",
+        label: "Send invoice",
+        confirm: "Send invoice and mark invoiced?",
+      },
+      {
+        action: "mark_paid",
+        label: "Mark paid",
+        confirm: "Confirm payment received?",
+      },
+      {
+        action: "mark_invoice_expired",
+        label: "Mark invoice expired",
+        confirm: "Mark invoice as expired?",
+      },
+      {
+        action: "mark_processing",
+        label: "Mark processing",
+        confirm: "Move order into processing?",
+      },
+      {
+        action: "mark_shipped",
+        label: "Mark shipped",
+        confirm: "Mark as shipped?",
+      },
+      {
+        action: "mark_delivered",
+        label: "Mark delivered",
+        confirm: "Mark as delivered?",
+      },
+      {
+        action: "cancel",
+        label: "Cancel order",
+        confirm: "Cancel this order?",
+      },
+      {
+        action: "delete",
+        label: "Delete",
+        confirm: "Delete this order? This cannot be undone.",
+      },
     ],
     quotes: [
-      { action: "acknowledge", label: "Acknowledge", confirm: "Mark as acknowledged?" },
-      { action: "submit_quote", label: "Send quote link", confirm: "Send quote link to customer?" },
-      { action: "refresh_quote", label: "Refresh quote link", confirm: "Send a refreshed quote link?" },
-      { action: "mark_actioned", label: "Mark quote actioned", confirm: "Mark quote as actioned?" },
+      {
+        action: "acknowledge",
+        label: "Acknowledge",
+        confirm: "Mark as acknowledged?",
+      },
+      {
+        action: "submit_quote",
+        label: "Send quote link",
+        confirm: "Send quote link to customer?",
+      },
+      {
+        action: "refresh_quote",
+        label: "Refresh quote link",
+        confirm: "Send a refreshed quote link?",
+      },
+      {
+        action: "mark_actioned",
+        label: "Mark quote actioned",
+        confirm: "Mark quote as actioned?",
+      },
       { action: "drop", label: "Drop", confirm: "Drop this quote?" },
-      { action: "delete", label: "Delete", confirm: "Delete this quote? This cannot be undone." },
+      {
+        action: "delete",
+        label: "Delete",
+        confirm: "Delete this quote? This cannot be undone.",
+      },
     ],
     tickets: [
-      { action: "mark_pending", label: "Mark pending", confirm: "Mark as pending?" },
-      { action: "mark_resolved", label: "Mark resolved", confirm: "Mark as resolved?" },
-      { action: "send_email", label: "Send email", confirm: "Send an email to this customer?" },
+      {
+        action: "mark_pending",
+        label: "Mark pending",
+        confirm: "Mark as pending?",
+      },
+      {
+        action: "mark_resolved",
+        label: "Mark resolved",
+        confirm: "Mark as resolved?",
+      },
+      {
+        action: "send_email",
+        label: "Send email",
+        confirm: "Send an email to this customer?",
+      },
     ],
     contacts: [],
-    products: [{ action: "delete", label: "Delete", confirm: "Delete this product? This cannot be undone." }],
+    products: [
+      {
+        action: "delete",
+        label: "Delete",
+        confirm: "Delete this product? This cannot be undone.",
+      },
+    ],
     inspirations: [],
     "media-library": [],
     "price-chart": [],
@@ -128,23 +202,65 @@
     "media-library": [],
     "price-chart": ["metal", "adjustment_type", "adjustment_value", "notes"],
     "cost-chart": ["key", "value", "unit", "notes"],
-    "diamond-price-chart": ["clarity", "color", "weight_min", "weight_max", "price_per_ct", "notes"],
+    "diamond-price-chart": [
+      "clarity",
+      "color",
+      "weight_min",
+      "weight_max",
+      "price_per_ct",
+      "notes",
+    ],
   };
 
   const CONFIRM_FIELDS = [
-    { key: "price", label: "Price", normalize: normalizePrice, format: formatPrice },
-    { key: "timeline", label: "Timeline", normalize: normalizeTimelineValue, format: formatTimelineValue },
-    { key: "timeline_adjustment_weeks", label: "Timeline delay", normalize: normalizeNumber, format: formatDelayWeeks },
-    { key: "metal", label: "Metal", normalize: normalizeText, format: formatPlain },
-    { key: "metal_weight", label: "Metal weight (g)", normalize: normalizeNumber, format: formatGrams },
+    {
+      key: "price",
+      label: "Price",
+      normalize: normalizePrice,
+      format: formatPrice,
+    },
+    {
+      key: "timeline",
+      label: "Timeline",
+      normalize: normalizeTimelineValue,
+      format: formatTimelineValue,
+    },
+    {
+      key: "timeline_adjustment_weeks",
+      label: "Timeline delay",
+      normalize: normalizeNumber,
+      format: formatDelayWeeks,
+    },
+    {
+      key: "metal",
+      label: "Metal",
+      normalize: normalizeText,
+      format: formatPlain,
+    },
+    {
+      key: "metal_weight",
+      label: "Metal weight (g)",
+      normalize: normalizeNumber,
+      format: formatGrams,
+    },
     {
       key: "metal_weight_adjustment",
       label: "Final Metal weight difference (g)",
       normalize: normalizeNumber,
       format: formatSignedGrams,
     },
-    { key: "stone", label: "Stone type", normalize: normalizeText, format: formatPlain },
-    { key: "stone_weight", label: "Stone weight", normalize: normalizeNumber, format: formatStoneWeight },
+    {
+      key: "stone",
+      label: "Stone type",
+      normalize: normalizeText,
+      format: formatPlain,
+    },
+    {
+      key: "stone_weight",
+      label: "Stone weight",
+      normalize: normalizeNumber,
+      format: formatStoneWeight,
+    },
   ];
 
   const ORDER_DETAILS_FIELDS = [
@@ -209,16 +325,34 @@
     "diamond-price-chart": "Diamond price chart",
   };
 
-  const PRICING_TABS = new Set(["price-chart", "cost-chart", "diamond-price-chart"]);
+  const PRICING_TABS = new Set([
+    "price-chart",
+    "cost-chart",
+    "diamond-price-chart",
+  ]);
   const CATALOG_TABS = new Set(["products", "inspirations", "media-library"]);
   const CATALOG_ITEM_TABS = new Set(["products", "inspirations"]);
   const CATALOG_DEFAULT_TAB = "basics";
   const QUOTE_OPTION_FIELDS = [
-    { clarity: "quote_option_1_clarity", color: "quote_option_1_color", price: "quote_option_1_price_18k" },
-    { clarity: "quote_option_2_clarity", color: "quote_option_2_color", price: "quote_option_2_price_18k" },
-    { clarity: "quote_option_3_clarity", color: "quote_option_3_color", price: "quote_option_3_price_18k" },
+    {
+      clarity: "quote_option_1_clarity",
+      color: "quote_option_1_color",
+      price: "quote_option_1_price_18k",
+    },
+    {
+      clarity: "quote_option_2_clarity",
+      color: "quote_option_2_color",
+      price: "quote_option_2_price_18k",
+    },
+    {
+      clarity: "quote_option_3_clarity",
+      color: "quote_option_3_color",
+      price: "quote_option_3_price_18k",
+    },
   ];
-  const QUOTE_PRICE_FIELDS = new Set(QUOTE_OPTION_FIELDS.map((option) => option.price));
+  const QUOTE_PRICE_FIELDS = new Set(
+    QUOTE_OPTION_FIELDS.map((option) => option.price),
+  );
   const QUOTE_BASE_PRICING_FIELDS = new Set([
     "metal",
     "metal_weight",
@@ -294,6 +428,27 @@
     { value: "side", label: "Side" },
     { value: "halo", label: "Halo" },
   ];
+  const DEFAULT_STONE_SIZE_TYPES = [
+    { value: "xsmall", label: "X-Small" },
+    { value: "small", label: "Small" },
+    { value: "medium", label: "Medium" },
+    { value: "large", label: "Large" },
+    { value: "xlarge", label: "X-Large" },
+    { value: "xxlarge", label: "XX-Large" },
+  ];
+  const DEFAULT_STONE_SHAPES = [
+    { value: "round", label: "Round" },
+    { value: "pear", label: "Pear" },
+    { value: "oval", label: "Oval" },
+    { value: "marquise", label: "Marquise" },
+    { value: "princess", label: "Princess" },
+    { value: "emerald", label: "Emerald" },
+    { value: "radiant", label: "Radiant" },
+    { value: "cushion", label: "Cushion" },
+    { value: "heart", label: "Heart" },
+    { value: "asscher", label: "Asscher" },
+    { value: "baguette", label: "Baguette" },
+  ];
   const NOTE_KINDS_SINGLE = ["description", "long_desc"];
   const NOTE_KINDS_LIST = ["takeaway", "translation_note"];
   const NOTE_CHECKLIST = [
@@ -308,8 +463,12 @@
   const activityEvents = [];
 
   const normalizeStatus = (value) => {
-    const normalized = String(value || "NEW").trim().toUpperCase();
-    return normalized === "INVOICE_NOT_PAID" ? "INVOICE_EXPIRED" : normalized || "NEW";
+    const normalized = String(value || "NEW")
+      .trim()
+      .toUpperCase();
+    return normalized === "INVOICE_NOT_PAID"
+      ? "INVOICE_EXPIRED"
+      : normalized || "NEW";
   };
 
   const getOrderStatusOptions = () => {
@@ -354,11 +513,17 @@
     catalogSection: document.querySelector("[data-catalog-section]"),
     catalogTitle: document.querySelector("[data-catalog-title]"),
     catalogTabs: Array.from(document.querySelectorAll("[data-catalog-tab]")),
-    catalogPanels: Array.from(document.querySelectorAll("[data-catalog-panel]")),
+    catalogPanels: Array.from(
+      document.querySelectorAll("[data-catalog-panel]"),
+    ),
     catalogFields: document.querySelector("[data-catalog-fields]"),
     catalogFieldsBasic: document.querySelector("[data-catalog-fields-basic]"),
-    catalogFieldsTaxonomy: document.querySelector("[data-catalog-fields-taxonomy]"),
-    catalogFieldsMaterials: document.querySelector("[data-catalog-fields-materials]"),
+    catalogFieldsTaxonomy: document.querySelector(
+      "[data-catalog-fields-taxonomy]",
+    ),
+    catalogFieldsMaterials: document.querySelector(
+      "[data-catalog-fields-materials]",
+    ),
     catalogFieldsAudit: document.querySelector("[data-catalog-fields-audit]"),
     catalogMediaSection: document.querySelector("[data-catalog-media-section]"),
     catalogMediaList: document.querySelector("[data-catalog-media-list]"),
@@ -372,9 +537,13 @@
     mediaUpload: document.querySelector("[data-media-upload]"),
     mediaId: document.querySelector("[data-media-id]"),
     mediaPreview: document.querySelector("[data-media-preview]"),
-    mediaPositionExisting: document.querySelector("[data-media-position-existing]"),
+    mediaPositionExisting: document.querySelector(
+      "[data-media-position-existing]",
+    ),
     mediaOrderExisting: document.querySelector("[data-media-order-existing]"),
-    mediaPrimaryExisting: document.querySelector("[data-media-primary-existing]"),
+    mediaPrimaryExisting: document.querySelector(
+      "[data-media-primary-existing]",
+    ),
     mediaLink: document.querySelector("[data-media-link]"),
     catalogNotesSection: document.querySelector("[data-catalog-notes-section]"),
     noteEditors: Array.from(document.querySelectorAll("[data-note-editor]")),
@@ -402,21 +571,37 @@
     actionRun: document.querySelector("[data-action-run]"),
     editSection: document.querySelector("[data-edit-section]"),
     quoteSection: document.querySelector("[data-quote-section]"),
-    quoteMetals: Array.from(document.querySelectorAll("[data-quote-metals] input[type=\"checkbox\"]")),
-    quoteMetalInput: document.querySelector("[data-field=\"quote_metal_options\"]"),
-    quoteOptionCards: Array.from(document.querySelectorAll("[data-quote-option-card]")),
-    quoteOptionStatuses: Array.from(document.querySelectorAll("[data-quote-option-status]")),
+    quoteMetals: Array.from(
+      document.querySelectorAll('[data-quote-metals] input[type="checkbox"]'),
+    ),
+    quoteMetalInput: document.querySelector(
+      '[data-field="quote_metal_options"]',
+    ),
+    quoteOptionCards: Array.from(
+      document.querySelectorAll("[data-quote-option-card]"),
+    ),
+    quoteOptionStatuses: Array.from(
+      document.querySelectorAll("[data-quote-option-status]"),
+    ),
     quoteExtras: document.querySelector("[data-quote-extras]"),
     metalWeightLabel: document.querySelector("[data-metal-weight-label]"),
-    metalWeightAdjustmentLabel: document.querySelector("[data-metal-weight-adjustment-label]"),
+    metalWeightAdjustmentLabel: document.querySelector(
+      "[data-metal-weight-adjustment-label]",
+    ),
     metalWeightFinal: document.querySelector("[data-metal-weight-final]"),
     metalWeightError: document.querySelector("[data-metal-weight-error]"),
-    metalWeightAdjustmentError: document.querySelector("[data-metal-weight-adjustment-error]"),
+    metalWeightAdjustmentError: document.querySelector(
+      "[data-metal-weight-adjustment-error]",
+    ),
     editFields: Array.from(document.querySelectorAll("[data-field]")),
     orderDetailsSection: document.querySelector("[data-order-details-section]"),
-    orderDetailsFields: Array.from(document.querySelectorAll("[data-order-details-field]")),
+    orderDetailsFields: Array.from(
+      document.querySelectorAll("[data-order-details-field]"),
+    ),
     diamondBreakdown: document.querySelector("[data-diamond-breakdown]"),
-    diamondBreakdownRows: document.querySelector("[data-diamond-breakdown-rows]"),
+    diamondBreakdownRows: document.querySelector(
+      "[data-diamond-breakdown-rows]",
+    ),
     diamondBreakdownAdd: document.querySelector("[data-diamond-breakdown-add]"),
     diamondPieceCount: document.querySelector("[data-diamond-piece-count]"),
     diamondCaratTotal: document.querySelector("[data-diamond-carat-total]"),
@@ -427,6 +612,7 @@
     detailsSave: document.querySelector("[data-details-save]"),
     primaryAction: document.querySelector("[data-primary-action]"),
     notesSave: document.querySelector("[data-notes-save]"),
+    goldRefresh: document.querySelector("[data-gold-refresh]"),
     confirmModal: document.querySelector("[data-confirm-modal]"),
     confirmClose: document.querySelector("[data-confirm-close]"),
     confirmTo: document.querySelector("[data-confirm-to]"),
@@ -444,23 +630,37 @@
     summaryCreated: document.querySelector("[data-summary-created]"),
     summaryPrice: document.querySelector("[data-summary-price]"),
     summaryTimeline: document.querySelector("[data-summary-timeline]"),
-    summaryTimelineDelay: document.querySelector("[data-summary-timeline-delay]"),
+    summaryTimelineDelay: document.querySelector(
+      "[data-summary-timeline-delay]",
+    ),
     summaryMetal: document.querySelector("[data-summary-metal]"),
     summaryStone: document.querySelector("[data-summary-stone]"),
     summaryStoneWeight: document.querySelector("[data-summary-stone-weight]"),
     summaryMetalWeight: document.querySelector("[data-summary-metal-weight]"),
-    summaryMetalAdjustment: document.querySelector("[data-summary-metal-adjustment]"),
-    summaryDiamondBreakdown: document.querySelector("[data-summary-diamond-breakdown]"),
+    summaryMetalAdjustment: document.querySelector(
+      "[data-summary-metal-adjustment]",
+    ),
+    summaryDiamondBreakdown: document.querySelector(
+      "[data-summary-diamond-breakdown]",
+    ),
     summaryDiscount: document.querySelector("[data-summary-discount]"),
-    summaryPricingStatus: document.querySelector("[data-summary-pricing-status]"),
+    summaryPricingStatus: document.querySelector(
+      "[data-summary-pricing-status]",
+    ),
     summaryInterests: document.querySelector("[data-summary-interests]"),
-    summaryContactPreference: document.querySelector("[data-summary-contact-preference]"),
+    summaryContactPreference: document.querySelector(
+      "[data-summary-contact-preference]",
+    ),
     summarySubscription: document.querySelector("[data-summary-subscription]"),
-    summaryCustomerNotes: document.querySelector("[data-summary-customer-notes]"),
+    summaryCustomerNotes: document.querySelector(
+      "[data-summary-customer-notes]",
+    ),
     summaryOption1: document.querySelector("[data-summary-option-1]"),
     summaryOption2: document.querySelector("[data-summary-option-2]"),
     summaryOption3: document.querySelector("[data-summary-option-3]"),
-    summaryOptionRecommended: document.querySelector("[data-summary-option-recommended]"),
+    summaryOptionRecommended: document.querySelector(
+      "[data-summary-option-recommended]",
+    ),
     summaryLastPriced: document.querySelector("[data-summary-last-priced]"),
     summarySizeRing: document.querySelector("[data-summary-size-ring]"),
     summarySizeBracelet: document.querySelector("[data-summary-size-bracelet]"),
@@ -471,7 +671,9 @@
     summaryAddress: document.querySelector("[data-summary-address]"),
     summaryCard: document.querySelector("[data-summary-card]"),
     summaryQuoteBlock: document.querySelector("[data-summary-quote-block]"),
-    summaryPreferencesBlock: document.querySelector("[data-summary-preferences-block]"),
+    summaryPreferencesBlock: document.querySelector(
+      "[data-summary-preferences-block]",
+    ),
     summaryOptionsBlock: document.querySelector("[data-summary-options-block]"),
     summaryNotesBlock: document.querySelector("[data-summary-notes-block]"),
     summarySizesBlock: document.querySelector("[data-summary-sizes-block]"),
@@ -491,10 +693,18 @@
     breakdownRaw: document.querySelector("[data-breakdown-raw]"),
     breakdownRawToggle: document.querySelector("[data-breakdown-raw-toggle]"),
     optionFinals: Array.from(document.querySelectorAll("[data-option-final]")),
-    optionActiveToggles: Array.from(document.querySelectorAll("[data-option-active]")),
-    optionRecommendRadios: Array.from(document.querySelectorAll("[data-option-recommend]")),
-    optionCopyButtons: Array.from(document.querySelectorAll("[data-option-copy]")),
-    optionAutoButtons: Array.from(document.querySelectorAll("[data-option-auto]")),
+    optionActiveToggles: Array.from(
+      document.querySelectorAll("[data-option-active]"),
+    ),
+    optionRecommendRadios: Array.from(
+      document.querySelectorAll("[data-option-recommend]"),
+    ),
+    optionCopyButtons: Array.from(
+      document.querySelectorAll("[data-option-copy]"),
+    ),
+    optionAutoButtons: Array.from(
+      document.querySelectorAll("[data-option-auto]"),
+    ),
     activitySection: document.querySelector("[data-activity-section]"),
     activitySlot: document.querySelector("[data-activity-slot]"),
     diamondPresets: document.querySelector("[data-diamond-presets]"),
@@ -509,10 +719,28 @@
   function getApiBase() {
     if (typeof window === "undefined") return "";
     const stored = localStorage.getItem("adminApiBase") || "";
-    return stored || document.body.dataset.apiBase || "";
+    if (stored) return stored;
+
+    const datasetBase = document.body?.dataset?.apiBase;
+    if (datasetBase) return datasetBase;
+
+    const host = window.location.hostname;
+    const isLocalHost =
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.startsWith("127.") ||
+      host === "::1";
+
+    if (isLocalHost) {
+      return `${window.location.origin}/admin`;
+    }
+
+    return "https://admin-api.heerawalla.com/admin";
   }
   const apiBase = getApiBase();
-  const siteBase = (document.body.dataset.siteBase || "https://www.heerawalla.com").replace(/\/$/, "");
+  const siteBase = (
+    document.body.dataset.siteBase || "https://www.heerawalla.com"
+  ).replace(/\/$/, "");
   let isSyncingBreakdown = false;
   let quotePricingTimer = null;
   const quotePricingQueue = new Set();
@@ -549,7 +777,9 @@
   }
 
   function isLocalApi(base) {
-    return base.startsWith("http://localhost") || base.startsWith("http://127.0.0.1");
+    return (
+      base.startsWith("http://localhost") || base.startsWith("http://127.0.0.1")
+    );
   }
 
   function addLocalAdminQuery(url, base, email) {
@@ -626,7 +856,8 @@
         const parsed = new URL(raw);
         if (
           siteBase &&
-          (parsed.hostname === "business.heerawalla.com" || parsed.hostname === "admin-api.heerawalla.com")
+          (parsed.hostname === "business.heerawalla.com" ||
+            parsed.hostname === "admin-api.heerawalla.com")
         ) {
           return `${siteBase}${parsed.pathname}${parsed.search || ""}`;
         }
@@ -642,7 +873,9 @@
   }
 
   function normalizeText(value) {
-    return String(value || "").trim().toLowerCase();
+    return String(value || "")
+      .trim()
+      .toLowerCase();
   }
 
   function normalizeNumber(value) {
@@ -765,8 +998,12 @@
     return {
       ring: matchValue(/\bring(?:\s*size)?\s*:\s*([^|\n,;]+)/i),
       wrist: matchValue(/\b(?:wrist|bracelet)(?:\s*size)?\s*:\s*([^|\n,;]+)/i),
-      neck: matchValue(/\b(?:neck|necklace|chain)(?:\s*(?:size|length))?\s*:\s*([^|\n,;]+)/i),
-      earring: matchValue(/\bearrings?(?:\s*(?:style|type|size|preference))?\s*:\s*([^|\n,;]+)/i),
+      neck: matchValue(
+        /\b(?:neck|necklace|chain)(?:\s*(?:size|length))?\s*:\s*([^|\n,;]+)/i,
+      ),
+      earring: matchValue(
+        /\bearrings?(?:\s*(?:style|type|size|preference))?\s*:\s*([^|\n,;]+)/i,
+      ),
     };
   }
 
@@ -774,7 +1011,11 @@
     const sizing = getSizingBlob(item);
     const rows = [];
     const textSizing = parseSizingFromText(getSizingText(item));
-    const ringSize = getSizingValue(item, sizing, textSizing, ["ring_size", "ring", "ringSize"]);
+    const ringSize = getSizingValue(item, sizing, textSizing, [
+      "ring_size",
+      "ring",
+      "ringSize",
+    ]);
     const wristSize = getSizingValue(item, sizing, textSizing, [
       "wrist_size",
       "wrist",
@@ -807,14 +1048,33 @@
 
   function buildSizingSpec(entry) {
     const rawTags = entry?.tags;
-    const tags = (Array.isArray(rawTags) ? rawTags : String(rawTags || "").split(/[|,;\n]/))
-      .map((tag) => String(tag || "").trim().toLowerCase())
+    const tags = (
+      Array.isArray(rawTags) ? rawTags : String(rawTags || "").split(/[|,;\n]/)
+    )
+      .map((tag) =>
+        String(tag || "")
+          .trim()
+          .toLowerCase(),
+      )
       .filter(Boolean);
     const hasTag = (values) => values.some((value) => tags.includes(value));
     const isSet = hasTag(["set", "sets"]);
     const wantsRing = hasTag(["ring", "rings", "band", "bands"]);
-    const wantsBracelet = hasTag(["bracelet", "bracelets", "bangle", "bangles", "wrist"]);
-    const wantsChain = hasTag(["pendant", "pendants", "necklace", "necklaces", "chain", "chains"]);
+    const wantsBracelet = hasTag([
+      "bracelet",
+      "bracelets",
+      "bangle",
+      "bangles",
+      "wrist",
+    ]);
+    const wantsChain = hasTag([
+      "pendant",
+      "pendants",
+      "necklace",
+      "necklaces",
+      "chain",
+      "chains",
+    ]);
     if (tags.length) {
       const fallback = isSet && !wantsRing && !wantsBracelet && !wantsChain;
       return {
@@ -832,7 +1092,10 @@
     return {
       ring: category.includes("ring") || category.includes("band"),
       bracelet: category.includes("bracelet") || category.includes("bangle"),
-      chain: category.includes("pendant") || category.includes("necklace") || category.includes("chain"),
+      chain:
+        category.includes("pendant") ||
+        category.includes("necklace") ||
+        category.includes("chain"),
     };
   }
 
@@ -841,7 +1104,8 @@
   function deriveSizeString(values) {
     const parts = [];
     if (isFilled(values.ring)) parts.push(`Ring size: ${values.ring}`);
-    if (isFilled(values.bracelet)) parts.push(`Bracelet size: ${values.bracelet}`);
+    if (isFilled(values.bracelet))
+      parts.push(`Bracelet size: ${values.bracelet}`);
     if (isFilled(values.chain)) parts.push(`Chain size: ${values.chain}`);
     return parts.join(" | ");
   }
@@ -863,7 +1127,10 @@
   function applySizingVisibility(spec) {
     if (!ui.sizeBlock) return;
     const showBlock = spec && (spec.ring || spec.bracelet || spec.chain);
-    ui.sizeBlock.classList.toggle("is-hidden", !showBlock || state.tab !== "quotes");
+    ui.sizeBlock.classList.toggle(
+      "is-hidden",
+      !showBlock || state.tab !== "quotes",
+    );
     const toggle = (node, show) => {
       if (!node) return;
       const wrapper = node.closest(".field");
@@ -881,7 +1148,11 @@
     const sizing = getSizingBlob(item);
     const textSizing = parseSizingFromText(getSizingText(item));
     isSyncingSizing = true;
-    const ringValue = getSizingValue(item, sizing, textSizing, ["ring_size", "ring", "ringSize"]);
+    const ringValue = getSizingValue(item, sizing, textSizing, [
+      "ring_size",
+      "ring",
+      "ringSize",
+    ]);
     const braceletValue = getSizingValue(item, sizing, textSizing, [
       "wrist_size",
       "wrist",
@@ -932,7 +1203,8 @@
       ui.metalWeightLabel.textContent = buildMetalWeightLabel(metalValue);
     }
     if (ui.metalWeightAdjustmentLabel) {
-      ui.metalWeightAdjustmentLabel.textContent = buildMetalWeightAdjustmentLabel(metalValue);
+      ui.metalWeightAdjustmentLabel.textContent =
+        buildMetalWeightAdjustmentLabel(metalValue);
     }
   }
 
@@ -971,7 +1243,9 @@
   }
 
   function getDiamondBreakdownField() {
-    return ui.editFields.find((field) => field.dataset.field === "diamond_breakdown");
+    return ui.editFields.find(
+      (field) => field.dataset.field === "diamond_breakdown",
+    );
   }
 
   function normalizeStoneTypeLabel(value) {
@@ -998,7 +1272,7 @@
       .filter(Boolean)
       .map((entry) => {
         const match = entry.match(
-          /([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[x×]\s*([0-9]*\.?[0-9]+)/i
+          /([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[x×]\s*([0-9]*\.?[0-9]+)/i,
         );
         if (match) {
           return { weight: match[1], count: match[2] };
@@ -1036,13 +1310,15 @@
       .map((entry) => {
         let stoneType = "";
         let payload = entry;
-        const typeMatch = entry.match(/^(lab(?:\s+grown)?|natural)(?:\s+diamond)?\s*[:=-]\s*(.+)$/i);
+        const typeMatch = entry.match(
+          /^(lab(?:\s+grown)?|natural)(?:\s+diamond)?\s*[:=-]\s*(.+)$/i,
+        );
         if (typeMatch) {
           stoneType = normalizeStoneTypeLabel(typeMatch[1]);
           payload = typeMatch[2];
         }
         const match = payload.match(
-          /([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[xA-]\s*([0-9]*\.?[0-9]+)/i
+          /([0-9]*\.?[0-9]+)\s*(?:ct)?\s*[xA-]\s*([0-9]*\.?[0-9]+)/i,
         );
         if (match) {
           return { weight: match[1], count: match[2], stoneType };
@@ -1069,8 +1345,8 @@
           row.stoneType === "lab"
             ? "Lab"
             : row.stoneType === "natural"
-            ? "Natural"
-            : "";
+              ? "Natural"
+              : "";
         const prefix = typeLabel ? `${typeLabel}: ` : "";
         return `${prefix}${weight} x ${count}`;
       })
@@ -1080,17 +1356,17 @@
 
   function getDiamondRowsFromDomTyped() {
     if (!ui.diamondBreakdownRows) return [];
-    return Array.from(ui.diamondBreakdownRows.querySelectorAll("[data-diamond-row]")).map(
-      (row) => {
-        const weight =
-          row.querySelector("[data-diamond-weight]")?.value?.trim() || "";
-        const count =
-          row.querySelector("[data-diamond-count]")?.value?.trim() || "";
-        const stoneType =
-          row.querySelector("[data-diamond-type]")?.value?.trim() || "";
-        return { weight, count, stoneType };
-      }
-    );
+    return Array.from(
+      ui.diamondBreakdownRows.querySelectorAll("[data-diamond-row]"),
+    ).map((row) => {
+      const weight =
+        row.querySelector("[data-diamond-weight]")?.value?.trim() || "";
+      const count =
+        row.querySelector("[data-diamond-count]")?.value?.trim() || "";
+      const stoneType =
+        row.querySelector("[data-diamond-type]")?.value?.trim() || "";
+      return { weight, count, stoneType };
+    });
   }
 
   function syncDiamondBreakdownField() {
@@ -1128,13 +1404,13 @@
             <label>
               <span>ct</span>
               <input type="text" data-diamond-weight placeholder="0.10" value="${escapeAttribute(
-                weight
+                weight,
               )}" />
             </label>
             <label>
               <span>count</span>
               <input type="text" data-diamond-count placeholder="1" value="${escapeAttribute(
-                count
+                count,
               )}" />
             </label>
             <label>
@@ -1158,7 +1434,10 @@
 
   function formatDiamondCarat(value) {
     if (!Number.isFinite(value)) return "--";
-    const trimmed = value % 1 === 0 ? value.toFixed(0) : value.toFixed(2).replace(/\.?0+$/, "");
+    const trimmed =
+      value % 1 === 0
+        ? value.toFixed(0)
+        : value.toFixed(2).replace(/\.?0+$/, "");
     return `${trimmed} ct`;
   }
 
@@ -1187,10 +1466,14 @@
 
   function updateDiamondStats(rows) {
     if (!ui.diamondPieceCount || !ui.diamondCaratTotal) return;
-    const pieces = rows.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+    const pieces = rows.reduce(
+      (sum, item) => sum + (Number(item.count) || 0),
+      0,
+    );
     const carats = rows.reduce(
-      (sum, item) => sum + (Number(item.weight) || 0) * (Number(item.count) || 0),
-      0
+      (sum, item) =>
+        sum + (Number(item.weight) || 0) * (Number(item.count) || 0),
+      0,
     );
     ui.diamondPieceCount.textContent = pieces;
     ui.diamondCaratTotal.textContent = formatDiamondCarat(carats);
@@ -1201,7 +1484,9 @@
       if (stoneWeightField) {
         const normalized =
           carats && Number.isFinite(carats)
-            ? (carats % 1 === 0 ? carats.toFixed(0) : carats.toFixed(2).replace(/\.?0+$/, ""))
+            ? carats % 1 === 0
+              ? carats.toFixed(0)
+              : carats.toFixed(2).replace(/\.?0+$/, "")
             : "";
         stoneWeightField.value = normalized;
         stoneWeightField.dataset.activityValue = normalized;
@@ -1215,10 +1500,16 @@
 
   function updateDiamondRowTotals() {
     if (!ui.diamondBreakdownRows) return;
-    const rows = Array.from(ui.diamondBreakdownRows.querySelectorAll("[data-diamond-row]"));
+    const rows = Array.from(
+      ui.diamondBreakdownRows.querySelectorAll("[data-diamond-row]"),
+    );
     rows.forEach((row) => {
-      const weight = Number(row.querySelector("[data-diamond-weight]")?.value || 0);
-      const count = Number(row.querySelector("[data-diamond-count]")?.value || 0);
+      const weight = Number(
+        row.querySelector("[data-diamond-weight]")?.value || 0,
+      );
+      const count = Number(
+        row.querySelector("[data-diamond-count]")?.value || 0,
+      );
       const totalValue = weight * count;
       const totalEl = row.querySelector("[data-diamond-row-total]");
       if (totalEl) {
@@ -1306,7 +1597,9 @@
       setOptionActive(index, isActive);
     });
     if (state.recommendedOptionIndex === null) {
-      const firstActive = QUOTE_OPTION_FIELDS.findIndex((_, index) => isOptionActive(index));
+      const firstActive = QUOTE_OPTION_FIELDS.findIndex((_, index) =>
+        isOptionActive(index),
+      );
       state.recommendedOptionIndex = firstActive >= 0 ? firstActive : null;
       syncRecommendedOptionUi();
     }
@@ -1333,7 +1626,8 @@
       diamond_breakdown: getEditValue("diamond_breakdown") || "",
       diamond_breakdown_components: diamondComponents,
       timeline: getEditValue("timeline") || "",
-      timeline_adjustment_weeks: getEditValue("timeline_adjustment_weeks") || "",
+      timeline_adjustment_weeks:
+        getEditValue("timeline_adjustment_weeks") || "",
       quote_discount_type: getEditValue("quote_discount_type") || "",
       quote_discount_percent: getEditValue("quote_discount_percent") || "",
       size: getEditValue("size") || "",
@@ -1379,14 +1673,14 @@
         status === "pricing"
           ? "Pricing..."
           : status === "stale"
-          ? "Stale"
-          : status === "error"
-          ? "Error"
-          : status === "manual"
-          ? "Manual"
-          : status === "priced"
-          ? "Priced"
-          : "Idle";
+            ? "Stale"
+            : status === "error"
+              ? "Error"
+              : status === "manual"
+                ? "Manual"
+                : status === "priced"
+                  ? "Priced"
+                  : "Idle";
       statusNode.textContent = message ? `${label} · ${message}` : label;
     }
     updatePricingSummaryStatus();
@@ -1460,7 +1754,9 @@
     const type = normalizeText(getEditValue("quote_discount_type"));
     const percent = Number(getEditValue("quote_discount_percent")) || 0;
     const applyDiscount = type === "custom" && percent > 0;
-    const finalValue = applyDiscount ? Math.max(0, priceValue * (1 - percent / 100)) : priceValue;
+    const finalValue = applyDiscount
+      ? Math.max(0, priceValue * (1 - percent / 100))
+      : priceValue;
     finalNode.textContent = `Final: ${formatPrice(finalValue) || "--"}`;
   }
 
@@ -1488,7 +1784,10 @@
     if (!option) return false;
     if (!isOptionActive(optionIndex)) return false;
     const priceField = getOptionPriceField(optionIndex);
-    const isManual = priceField && priceField.dataset.manual === "true" && priceField.value.trim();
+    const isManual =
+      priceField &&
+      priceField.dataset.manual === "true" &&
+      priceField.value.trim();
     if (isManual) return false;
     const clarity = getEditValue(option.clarity);
     const color = getEditValue(option.color);
@@ -1503,10 +1802,14 @@
       chips.push(buildMissingChip("Metal missing", '[data-field="metal"]'));
     }
     if (!basePayload.metal_weight) {
-      chips.push(buildMissingChip("Metal weight missing", '[data-field="metal_weight"]'));
+      chips.push(
+        buildMissingChip("Metal weight missing", '[data-field="metal_weight"]'),
+      );
     }
     if (!basePayload.timeline) {
-      chips.push(buildMissingChip("Timeline missing", '[data-field="timeline"]'));
+      chips.push(
+        buildMissingChip("Timeline missing", '[data-field="timeline"]'),
+      );
     }
     const stoneValue = String(basePayload.stone || "").toLowerCase();
     const isDiamond = DIAMOND_TERMS.some((term) => stoneValue.includes(term));
@@ -1514,22 +1817,42 @@
       ? basePayload.diamond_breakdown_components
       : [];
     if (stoneValue) {
-      if (isDiamond && !basePayload.diamond_breakdown && components.length === 0) {
-        chips.push(buildMissingChip("Diamond breakdown missing", '[data-field="diamond_breakdown"]'));
+      if (
+        isDiamond &&
+        !basePayload.diamond_breakdown &&
+        components.length === 0
+      ) {
+        chips.push(
+          buildMissingChip(
+            "Diamond breakdown missing",
+            '[data-field="diamond_breakdown"]',
+          ),
+        );
       }
       if (!isDiamond && !basePayload.stone_weight) {
-        chips.push(buildMissingChip("Stone weight missing", '[data-field="stone_weight"]'));
+        chips.push(
+          buildMissingChip(
+            "Stone weight missing",
+            '[data-field="stone_weight"]',
+          ),
+        );
       }
     }
     const spec = state.sizingSpec || {};
     if (spec.ring && !basePayload.size_ring) {
-      chips.push(buildMissingChip("Ring size missing", "[data-size-ring] input"));
+      chips.push(
+        buildMissingChip("Ring size missing", "[data-size-ring] input"),
+      );
     }
     if (spec.bracelet && !basePayload.size_bracelet) {
-      chips.push(buildMissingChip("Bracelet size missing", "[data-size-bracelet] input"));
+      chips.push(
+        buildMissingChip("Bracelet size missing", "[data-size-bracelet] input"),
+      );
     }
     if (spec.chain && !basePayload.size_chain) {
-      chips.push(buildMissingChip("Chain size missing", "[data-size-chain] input"));
+      chips.push(
+        buildMissingChip("Chain size missing", "[data-size-chain] input"),
+      );
     }
     const goldOnly = isGoldOnlyQuote();
     if (!goldOnly) {
@@ -1539,12 +1862,18 @@
         const color = getEditValue(option.color);
         if (!clarity) {
           chips.push(
-            buildMissingChip(`Option ${index + 1} clarity missing`, `[data-field="${option.clarity}"]`)
+            buildMissingChip(
+              `Option ${index + 1} clarity missing`,
+              `[data-field="${option.clarity}"]`,
+            ),
           );
         }
         if (!color) {
           chips.push(
-            buildMissingChip(`Option ${index + 1} color missing`, `[data-field="${option.color}"]`)
+            buildMissingChip(
+              `Option ${index + 1} color missing`,
+              `[data-field="${option.color}"]`,
+            ),
           );
         }
       });
@@ -1563,7 +1892,8 @@
       return;
     }
     const inflight = quotePricingState.inflight.get(optionIndex);
-    if (inflight && inflight.signature === payloadSignature) return inflight.promise;
+    if (inflight && inflight.signature === payloadSignature)
+      return inflight.promise;
     setOptionStatus(optionIndex, "pricing");
     const pricingBase = getCatalogBase();
     const promise = fetch(`${pricingBase}/pricing/estimate`, {
@@ -1575,7 +1905,7 @@
         response
           .json()
           .catch(() => ({}))
-          .then((data) => ({ response, data }))
+          .then((data) => ({ response, data })),
       )
       .then(({ response, data }) => {
         if (!response.ok || !data?.ok) {
@@ -1595,7 +1925,10 @@
         updatePrimaryActionState();
         updateActionButtonState();
       });
-    quotePricingState.inflight.set(optionIndex, { promise, signature: payloadSignature });
+    quotePricingState.inflight.set(optionIndex, {
+      promise,
+      signature: payloadSignature,
+    });
     return promise;
   }
 
@@ -1606,7 +1939,10 @@
     QUOTE_OPTION_FIELDS.forEach((_, index) => {
       if (shouldPriceOption(index, basePayload)) return;
       const priceField = getOptionPriceField(index);
-      const isManual = priceField && priceField.dataset.manual === "true" && priceField.value.trim();
+      const isManual =
+        priceField &&
+        priceField.dataset.manual === "true" &&
+        priceField.value.trim();
       if (isManual) {
         setOptionStatus(index, "manual");
       } else if (priceField && priceField.value.trim()) {
@@ -1622,7 +1958,9 @@
       return;
     }
     const targets = optionIndexes && optionIndexes.length ? optionIndexes : [];
-    const shouldPrice = targets.filter((index) => shouldPriceOption(index, basePayload));
+    const shouldPrice = targets.filter((index) =>
+      shouldPriceOption(index, basePayload),
+    );
     if (!shouldPrice.length) {
       updatePrimaryActionState();
       updateActionButtonState();
@@ -1632,11 +1970,14 @@
       shouldPrice.map((index) => {
         const payload = collectOptionPayload(index, basePayload);
         return priceOption(index, payload);
-      })
+      }),
     );
   }
 
-  function scheduleQuotePricingUpdate({ baseChanged = false, optionIndex = null } = {}) {
+  function scheduleQuotePricingUpdate({
+    baseChanged = false,
+    optionIndex = null,
+  } = {}) {
     if (state.tab !== "quotes") return;
     if (baseChanged) {
       QUOTE_OPTION_FIELDS.forEach((_, index) => {
@@ -1647,7 +1988,10 @@
     }
     quotePricingQueue.forEach((index) => {
       const priceField = getOptionPriceField(index);
-      const isManual = priceField && priceField.dataset.manual === "true" && priceField.value.trim();
+      const isManual =
+        priceField &&
+        priceField.dataset.manual === "true" &&
+        priceField.value.trim();
       if (!isOptionActive(index)) {
         setOptionStatus(index, "idle");
         return;
@@ -1692,7 +2036,8 @@
       const parsed = new URL(url, "https://www.heerawalla.com");
       const parts = parsed.pathname.split("/").filter(Boolean);
       if (parts.includes("inspirations")) return "inspirations";
-      if (parts.includes("product") || parts.includes("products")) return "products";
+      if (parts.includes("product") || parts.includes("products"))
+        return "products";
       return "";
     } catch {
       return "";
@@ -1722,7 +2067,13 @@
   function slugifyCategory(value) {
     return String(value || "uncategorized")
       .split("/")
-      .map((part) => part.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "uncategorized")
+      .map(
+        (part) =>
+          part
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "") || "uncategorized",
+      )
       .filter(Boolean)
       .join("/");
   }
@@ -1750,7 +2101,9 @@
 
   function collectImageUrls(entry) {
     if (!entry) {
-      return [normalizeImageUrl("/images/products/placeholder.svg")].filter(Boolean);
+      return [normalizeImageUrl("/images/products/placeholder.svg")].filter(
+        Boolean,
+      );
     }
     let candidates = [];
     if (entry.hero_image) candidates.push(entry.hero_image);
@@ -1764,7 +2117,9 @@
     if (!candidates.length) {
       candidates = ["/images/products/placeholder.svg"];
     }
-    return Array.from(new Set(candidates.map(normalizeImageUrl).filter(Boolean)));
+    return Array.from(
+      new Set(candidates.map(normalizeImageUrl).filter(Boolean)),
+    );
   }
 
   function resolveCatalogEntry(item, catalog) {
@@ -1774,19 +2129,35 @@
     const type = extractCatalogType(url);
     const designCode = item.design_code || "";
     const name = item.product_name || "";
-    const inspirations = Array.isArray(catalog.inspirations) ? catalog.inspirations : [];
+    const inspirations = Array.isArray(catalog.inspirations)
+      ? catalog.inspirations
+      : [];
     const products = Array.isArray(catalog.products) ? catalog.products : [];
     const byDesignCode = (entry) =>
       designCode &&
-      (entry.design_code || entry.designCode || "").toLowerCase() === designCode.toLowerCase();
+      (entry.design_code || entry.designCode || "").toLowerCase() ===
+        designCode.toLowerCase();
     const byName = (entry) =>
-      name && String(entry.name || entry.title || "").toLowerCase() === name.toLowerCase();
-    const bySlug = (entry) => slug && String(entry.slug || "").toLowerCase() === slug.toLowerCase();
+      name &&
+      String(entry.name || entry.title || "").toLowerCase() ===
+        name.toLowerCase();
+    const bySlug = (entry) =>
+      slug && String(entry.slug || "").toLowerCase() === slug.toLowerCase();
     if (type === "inspirations") {
-      return inspirations.find(bySlug) || inspirations.find(byDesignCode) || inspirations.find(byName) || null;
+      return (
+        inspirations.find(bySlug) ||
+        inspirations.find(byDesignCode) ||
+        inspirations.find(byName) ||
+        null
+      );
     }
     if (type === "products") {
-      return products.find(bySlug) || products.find(byDesignCode) || products.find(byName) || null;
+      return (
+        products.find(bySlug) ||
+        products.find(byDesignCode) ||
+        products.find(byName) ||
+        null
+      );
     }
     return (
       inspirations.find(bySlug) ||
@@ -1803,7 +2174,9 @@
     if (!images.length) {
       return '<div class="media-empty muted">No images available.</div>';
     }
-    const fallback = escapeAttribute(normalizeImageUrl("/images/products/placeholder.svg"));
+    const fallback = escapeAttribute(
+      normalizeImageUrl("/images/products/placeholder.svg"),
+    );
     if (images.length === 1) {
       const src = escapeAttribute(images[0]);
       return `<div class="media-frame"><img src="${src}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${fallback}';"></div>`;
@@ -1811,7 +2184,7 @@
     const slides = images
       .map(
         (src) =>
-          `<div class="media-slide"><img src="${escapeAttribute(src)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${fallback}';"></div>`
+          `<div class="media-slide"><img src="${escapeAttribute(src)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${fallback}';"></div>`,
       )
       .join("");
     return `
@@ -1831,7 +2204,8 @@
     if (!ui.detailGrid) return;
     const slot = ui.detailGrid.querySelector("[data-media-slot]");
     if (!slot) return;
-    const cacheKey = item.design_code || item.product_url || item.product_name || "";
+    const cacheKey =
+      item.design_code || item.product_url || item.product_name || "";
     if (cacheKey && mediaCache.has(cacheKey)) {
       slot.innerHTML = buildMediaCarousel(mediaCache.get(cacheKey));
       return;
@@ -1871,7 +2245,11 @@
     if (value === undefined || value === null || value === "") return "";
     const num = Number(String(value).replace(/[^0-9.]/g, ""));
     if (Number.isNaN(num)) return String(value);
-    return num.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    return num.toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    });
   }
 
   function formatPhone(value) {
@@ -1935,7 +2313,8 @@
     if (state.tab === "media-library") return "/media-library/action";
     if (state.tab === "price-chart") return "/price-chart/action";
     if (state.tab === "cost-chart") return "/cost-chart/action";
-    if (state.tab === "diamond-price-chart") return "/diamond-price-chart/action";
+    if (state.tab === "diamond-price-chart")
+      return "/diamond-price-chart/action";
     return "";
   }
 
@@ -1972,21 +2351,28 @@
 
   function applyCatalogVisibility() {
     const showCatalog = CATALOG_TABS.has(state.tab);
-    if (ui.catalogSection) ui.catalogSection.classList.toggle("is-hidden", !showCatalog);
+    if (ui.catalogSection)
+      ui.catalogSection.classList.toggle("is-hidden", !showCatalog);
     if (showCatalog) {
       const active =
-        ui.catalogTabs.find((tab) => tab.classList.contains("is-active"))?.dataset.catalogTab ||
-        CATALOG_DEFAULT_TAB;
+        ui.catalogTabs.find((tab) => tab.classList.contains("is-active"))
+          ?.dataset.catalogTab || CATALOG_DEFAULT_TAB;
       setCatalogTab(active);
     } else {
       ui.catalogPanels.forEach((panel) => panel.classList.add("is-hidden"));
     }
     if (ui.missingPanel) ui.missingPanel.classList.toggle("is-hidden", false);
-    if (ui.activityFeed) ui.activityFeed.closest(".drawer-section")?.classList.toggle("is-hidden", showCatalog);
-    if (ui.orderDetailsSection) ui.orderDetailsSection.classList.toggle("is-hidden", showCatalog);
+    if (ui.activityFeed)
+      ui.activityFeed
+        .closest(".drawer-section")
+        ?.classList.toggle("is-hidden", showCatalog);
+    if (ui.orderDetailsSection)
+      ui.orderDetailsSection.classList.toggle("is-hidden", showCatalog);
     if (ui.sizeBlock) ui.sizeBlock.classList.toggle("is-hidden", showCatalog);
-    if (ui.summaryCard) ui.summaryCard.classList.toggle("is-hidden", showCatalog);
-    if (ui.nextActionPanel) ui.nextActionPanel.classList.toggle("is-hidden", showCatalog);
+    if (ui.summaryCard)
+      ui.summaryCard.classList.toggle("is-hidden", showCatalog);
+    if (ui.nextActionPanel)
+      ui.nextActionPanel.classList.toggle("is-hidden", showCatalog);
   }
 
   function setCatalogTab(next) {
@@ -2004,9 +2390,10 @@
   function renderCatalogFields(item, enums) {
     if (!ui.catalogFields && !ui.catalogFieldsBasic) return;
     if (state.tab === "media-library") {
-      const headers = Array.isArray(state.catalogHeaders) && state.catalogHeaders.length
-        ? state.catalogHeaders
-        : Object.keys(item || {});
+      const headers =
+        Array.isArray(state.catalogHeaders) && state.catalogHeaders.length
+          ? state.catalogHeaders
+          : Object.keys(item || {});
       const keys = headers
         .map((key) => String(key || "").trim())
         .filter((key) => key && key !== "row_number");
@@ -2022,7 +2409,7 @@
               <label class="field full-span">
                 <span>${escapeHtml(label)}</span>
                 <textarea rows="2" data-field="${escapeAttribute(key)}" ${isReadOnly ? 'data-readonly="true" disabled' : ""}>${escapeHtml(
-                  String(value || "")
+                  String(value || ""),
                 )}</textarea>
               </label>
             `;
@@ -2031,7 +2418,7 @@
             <label class="field">
               <span>${escapeHtml(label)}</span>
               <input type="text" data-field="${escapeAttribute(key)}" value="${escapeAttribute(
-                String(value || "")
+                String(value || ""),
               )}" ${isReadOnly ? 'data-readonly="true" disabled' : ""} />
             </label>
           `;
@@ -2057,7 +2444,11 @@
         value: value.id || "",
         readOnly: !state.isNewRow,
       }),
-      form.renderTextInput({ label: "Name", field: "name", value: value.name || "" }),
+      form.renderTextInput({
+        label: "Name",
+        field: "name",
+        value: value.name || "",
+      }),
       form.renderTextInput({
         label: "Slug",
         field: "slug",
@@ -2072,8 +2463,16 @@
         includeEmpty: true,
         placeholder: "Select",
       }),
-      form.renderToggle({ label: "Active", field: "is_active", value: activeValue }),
-      form.renderToggle({ label: "Featured", field: "is_featured", value: featuredValue }),
+      form.renderToggle({
+        label: "Active",
+        field: "is_active",
+        value: activeValue,
+      }),
+      form.renderToggle({
+        label: "Featured",
+        field: "is_featured",
+        value: featuredValue,
+      }),
     ];
 
     const taxonomy = [
@@ -2192,12 +2591,20 @@
       }),
     ];
 
-    if (ui.catalogFieldsBasic) ui.catalogFieldsBasic.innerHTML = basics.join("");
-    if (ui.catalogFieldsTaxonomy) ui.catalogFieldsTaxonomy.innerHTML = taxonomy.join("");
-    if (ui.catalogFieldsMaterials) ui.catalogFieldsMaterials.innerHTML = materials.join("");
+    if (ui.catalogFieldsBasic)
+      ui.catalogFieldsBasic.innerHTML = basics.join("");
+    if (ui.catalogFieldsTaxonomy)
+      ui.catalogFieldsTaxonomy.innerHTML = taxonomy.join("");
+    if (ui.catalogFieldsMaterials)
+      ui.catalogFieldsMaterials.innerHTML = materials.join("");
     if (ui.catalogFieldsAudit) ui.catalogFieldsAudit.innerHTML = audit.join("");
     if (ui.catalogFields && !ui.catalogFieldsBasic) {
-      ui.catalogFields.innerHTML = [...basics, ...taxonomy, ...materials, ...audit].join("");
+      ui.catalogFields.innerHTML = [
+        ...basics,
+        ...taxonomy,
+        ...materials,
+        ...audit,
+      ].join("");
     }
 
     const handleCatalogChange = () => {
@@ -2205,7 +2612,13 @@
       updatePrimaryActionState();
       updateActionButtonState();
     };
-    [ui.catalogFieldsBasic, ui.catalogFieldsTaxonomy, ui.catalogFieldsMaterials, ui.catalogFieldsAudit, ui.catalogFields]
+    [
+      ui.catalogFieldsBasic,
+      ui.catalogFieldsTaxonomy,
+      ui.catalogFieldsMaterials,
+      ui.catalogFieldsAudit,
+      ui.catalogFields,
+    ]
       .filter(Boolean)
       .forEach((container) => {
         form.init(container, safeEnums, handleCatalogChange);
@@ -2219,14 +2632,18 @@
         const nameInput = slugContainer.querySelector('[data-field="name"]');
         const slugInput = slugContainer.querySelector('[data-field="slug"]');
         if (!nameInput || !slugInput || !window.CatalogUtils) return;
-        slugInput.value = window.CatalogUtils.normalizeSlug(nameInput.value || "");
+        slugInput.value = window.CatalogUtils.normalizeSlug(
+          nameInput.value || "",
+        );
         slugInput.dispatchEvent(new Event("input", { bubbles: true }));
       });
     }
 
     const counterFields = document.querySelectorAll("[data-char-count]");
     counterFields.forEach((input) => {
-      const counter = input.closest(".field")?.querySelector("[data-char-counter]");
+      const counter = input
+        .closest(".field")
+        ?.querySelector("[data-char-counter]");
       if (!counter) return;
       const updateCounter = () => {
         counter.textContent = String(input.value.length || 0);
@@ -2250,18 +2667,24 @@
       ui.catalogMediaList.innerHTML = `<div class="muted">Save this record before linking media.</div>`;
       return;
     }
-    const mappingPath = state.tab === "products" ? "/product-media" : "/inspiration-media";
-    const mappingParam = state.tab === "products" ? "product_slug" : "inspiration_slug";
+    const mappingPath =
+      state.tab === "products" ? "/product-media" : "/inspiration-media";
+    const mappingParam =
+      state.tab === "products" ? "product_slug" : "inspiration_slug";
     try {
       const [mediaLibrary, mappings] = await Promise.all([
         apiFetch("/media-library?limit=500&offset=0"),
-        apiFetch(`${mappingPath}?${mappingParam}=${encodeURIComponent(slug)}&limit=500&offset=0`),
+        apiFetch(
+          `${mappingPath}?${mappingParam}=${encodeURIComponent(slug)}&limit=500&offset=0`,
+        ),
       ]);
       state.catalogMediaState = { items: mappings.items || [] };
-      state.mediaLibraryItems = Array.isArray(mediaLibrary.items) ? mediaLibrary.items : [];
+      state.mediaLibraryItems = Array.isArray(mediaLibrary.items)
+        ? mediaLibrary.items
+        : [];
       updateExistingMediaOptions(state.mediaLibraryItems);
       const libraryMap = new Map(
-        (mediaLibrary.items || []).map((entry) => [entry.media_id, entry])
+        (mediaLibrary.items || []).map((entry) => [entry.media_id, entry]),
       );
       const sortedMappings = (mappings.items || []).slice().sort((a, b) => {
         const orderA = Number(a.sort_order || a.order || 0);
@@ -2274,7 +2697,9 @@
       const cards = sortedMappings.map((mapping) => {
         const media = libraryMap.get(mapping.media_id) || {};
         const url = normalizeImageUrl(media.url || "");
-        const isVideo = String(media.media_type || "").toLowerCase().startsWith("video");
+        const isVideo = String(media.media_type || "")
+          .toLowerCase()
+          .startsWith("video");
         const mediaNode = isVideo
           ? `<video src="${escapeAttribute(url)}" controls></video>`
           : `<img src="${escapeAttribute(url)}" alt="">`;
@@ -2283,18 +2708,20 @@
         const orderDisplay = orderValue || "--";
         const primary = String(mapping.is_primary || "") === "1" ? "Yes" : "No";
         const isHero = String(mapping.position || "").toLowerCase() === "hero";
-        const heroBadge = isHero ? `<span class="media-hero-badge">Hero</span>` : "";
+        const heroBadge = isHero
+          ? `<span class="media-hero-badge">Hero</span>`
+          : "";
         const labelValue = String(media.label || "");
         const positionOptions = buildSelectOptions(
           (state.catalogEnums || {}).media_positions || [],
           position,
           true,
-          "Select"
+          "Select",
         );
         return `
           <div class="catalog-media-item" data-position="${escapeAttribute(position)}" data-media-id="${escapeAttribute(
-          mapping.media_id || ""
-        )}">
+            mapping.media_id || "",
+          )}">
             ${mediaNode}
             <div class="catalog-media-header">
               <div class="catalog-media-meta">${escapeHtml(mapping.media_id || "--")}</div>
@@ -2303,8 +2730,8 @@
                 <div class="catalog-media-info-content">
                   <div class="catalog-media-meta">${escapeHtml(media.label || media.description || "")}</div>
                   <div class="catalog-media-meta">Position: ${escapeHtml(position || "--")} · Order: ${escapeHtml(
-          orderDisplay
-        )} · Primary: ${escapeHtml(primary)} ${heroBadge}</div>
+                    orderDisplay,
+                  )} · Primary: ${escapeHtml(primary)} ${heroBadge}</div>
                 </div>
               </details>
             </div>
@@ -2328,20 +2755,29 @@
                   <span>Label</span>
                   <input type="text" data-media-label value="${escapeAttribute(labelValue)}" />
                 </label>
+                <label class="field field-inline media-description-field">
+                  <span>Description</span>
+                  <textarea rows="2" data-media-description>${escapeAttribute(mapping.description || "")}</textarea>
+                </label>
               </div>
               <div class="media-control-row media-control-actions">
                 <button class="btn btn-ghost btn-small" type="button" data-media-save data-mapping-id="${escapeAttribute(
-                  mapping.id || mapping.row_number || ""
+                  mapping.id || mapping.row_number || "",
                 )}">Save</button>
                 <button class="btn btn-ghost btn-small" type="button" data-media-delete data-mapping-id="${escapeAttribute(
-                  mapping.id || mapping.row_number || ""
+                  mapping.id || mapping.row_number || "",
                 )}">Delete</button>
+                <button class="btn btn-ghost btn-small" type="button" data-media-describe data-media-id="${escapeAttribute(
+                  mapping.media_id || ""
+                )}">Generate description</button>
               </div>
             </div>
           </div>
         `;
       });
-      ui.catalogMediaList.innerHTML = cards.length ? cards.join("") : `<div class="muted">No media linked yet.</div>`;
+      ui.catalogMediaList.innerHTML = cards.length
+        ? cards.join("")
+        : `<div class="muted">No media linked yet.</div>`;
     } catch (error) {
       state.catalogMediaState = { items: [] };
       state.mediaLibraryItems = [];
@@ -2356,11 +2792,15 @@
     const options = ['<option value="">Select</option>'];
     (items || [])
       .slice()
-      .sort((a, b) => String(a.media_id || "").localeCompare(String(b.media_id || "")))
+      .sort((a, b) =>
+        String(a.media_id || "").localeCompare(String(b.media_id || "")),
+      )
       .forEach((entry) => {
         const mediaId = String(entry.media_id || "").trim();
         if (!mediaId) return;
-        options.push(`<option value="${escapeAttribute(mediaId)}">${escapeHtml(mediaId)}</option>`);
+        options.push(
+          `<option value="${escapeAttribute(mediaId)}">${escapeHtml(mediaId)}</option>`,
+        );
       });
     ui.mediaId.innerHTML = options.join("");
     if (current) ui.mediaId.value = current;
@@ -2369,8 +2809,12 @@
 
   function renderMediaPreview(mediaId) {
     if (!ui.mediaPreview) return;
-    const items = Array.isArray(state.mediaLibraryItems) ? state.mediaLibraryItems : [];
-    const match = items.find((entry) => String(entry.media_id || "") === String(mediaId || ""));
+    const items = Array.isArray(state.mediaLibraryItems)
+      ? state.mediaLibraryItems
+      : [];
+    const match = items.find(
+      (entry) => String(entry.media_id || "") === String(mediaId || ""),
+    );
     if (!match || !mediaId) {
       ui.mediaPreview.innerHTML = `<span class="muted">Select a media item to preview.</span>`;
       return;
@@ -2380,7 +2824,9 @@
       ui.mediaPreview.innerHTML = `<span class="muted">No URL available for this media.</span>`;
       return;
     }
-    const isVideo = String(match.media_type || "").toLowerCase().startsWith("video");
+    const isVideo = String(match.media_type || "")
+      .toLowerCase()
+      .startsWith("video");
     ui.mediaPreview.innerHTML = isVideo
       ? `<video src="${escapeAttribute(url)}" controls></video>`
       : `<img src="${escapeAttribute(url)}" alt="${escapeAttribute(match.alt || match.label || "")}">`;
@@ -2391,18 +2837,35 @@
     return Array.isArray(roles) && roles.length ? roles : DEFAULT_STONE_ROLES;
   }
 
+  function getStoneSizeTypeOptions(enums) {
+    const sizes = enums?.stone_size_types;
+    return Array.isArray(sizes) && sizes.length
+      ? sizes
+      : DEFAULT_STONE_SIZE_TYPES;
+  }
+
+  function getStoneShapeOptions(enums) {
+    const shapes = enums?.stone_shapes;
+    return Array.isArray(shapes) && shapes.length
+      ? shapes
+      : DEFAULT_STONE_SHAPES;
+  }
+
   function buildSelectOptions(options, selected, includeEmpty, placeholder) {
     const safeSelected = String(selected || "");
     const items = [];
     if (includeEmpty) {
-      items.push(`<option value="">${escapeHtml(placeholder || "Select")}</option>`);
+      items.push(
+        `<option value="">${escapeHtml(placeholder || "Select")}</option>`,
+      );
     }
     (options || []).forEach((option) => {
       const value = String(option.value || "");
       const label = String(option.label || option.value || "");
-      const isSelected = safeSelected && value.toLowerCase() === safeSelected.toLowerCase();
+      const isSelected =
+        safeSelected && value.toLowerCase() === safeSelected.toLowerCase();
       items.push(
-        `<option value="${escapeAttribute(value)}"${isSelected ? " selected" : ""}>${escapeHtml(label)}</option>`
+        `<option value="${escapeAttribute(value)}"${isSelected ? " selected" : ""}>${escapeHtml(label)}</option>`,
       );
     });
     return items.join("");
@@ -2410,7 +2873,11 @@
 
   function renderStoneOptionRow(entry, enums) {
     const roleOptions = getStoneRoleOptions(enums);
-    const isPrimary = String(entry.is_primary || entry.isPrimary || "") === "1" || entry.is_primary === true;
+    const sizeOptions = getStoneSizeTypeOptions(enums);
+    const shapeOptions = getStoneShapeOptions(enums);
+    const isPrimary =
+      String(entry.is_primary || entry.isPrimary || "") === "1" ||
+      entry.is_primary === true;
     return `
       <div class="catalog-stone-row" data-stone-option-id="${escapeAttribute(entry.id || "")}">
         <div class="catalog-stone-grid">
@@ -2423,18 +2890,26 @@
           <label class="field">
             <span>Carat</span>
             <input type="number" step="0.01" min="0" data-stone-field="carat" value="${escapeAttribute(
-              entry.carat ?? ""
+              entry.carat ?? "",
             )}">
           </label>
           <label class="field">
             <span>Count</span>
             <input type="number" step="1" min="0" data-stone-field="count" value="${escapeAttribute(
-              entry.count ?? ""
+              entry.count ?? "",
             )}">
           </label>
           <label class="field">
             <span>Size type</span>
-            <input type="text" data-stone-field="size_type" value="${escapeAttribute(entry.size_type || "")}">
+            <select data-stone-field="size_type">
+              ${buildSelectOptions(sizeOptions, entry.size_type, true, "Select")}
+            </select>
+          </label>
+          <label class="field">
+            <span>Shape</span>
+            <select data-stone-field="shape">
+              ${buildSelectOptions(shapeOptions, entry.shape, true, "Select")}
+            </select>
           </label>
           <label class="field">
             <span>Primary</span>
@@ -2462,6 +2937,7 @@
       carat: read("carat"),
       count: read("count"),
       size_type: read("size_type"),
+      shape: read("shape"),
       is_primary: read("is_primary"),
     };
   }
@@ -2481,12 +2957,16 @@
     const params = new URLSearchParams();
     params.set("catalog_id", catalogId);
     try {
-      const data = await apiFetch(`/catalog-stone-options?${params.toString()}`);
+      const data = await apiFetch(
+        `/catalog-stone-options?${params.toString()}`,
+      );
       const items = Array.isArray(data.items) ? data.items : [];
       state.catalogStoneOptions = { items };
       const enums = state.catalogEnums || {};
       const rows = items.map((entry) => renderStoneOptionRow(entry, enums));
-      ui.catalogStoneList.innerHTML = rows.length ? rows.join("") : `<div class="muted">No stone options yet.</div>`;
+      ui.catalogStoneList.innerHTML = rows.length
+        ? rows.join("")
+        : `<div class="muted">No stone options yet.</div>`;
     } catch (error) {
       state.catalogStoneOptions = { items: [] };
       ui.catalogStoneList.innerHTML = `<div class="muted">Unable to load stone options.</div>`;
@@ -2499,6 +2979,7 @@
       carat: ui.stoneAddCarat?.value.trim() || "",
       count: ui.stoneAddCount?.value.trim() || "",
       size_type: ui.stoneAddSizeType?.value.trim() || "",
+      shape: ui.stoneAddShape?.value.trim() || "",
       is_primary: ui.stoneAddPrimary?.value || "",
     };
   }
@@ -2508,6 +2989,7 @@
     if (ui.stoneAddCarat) ui.stoneAddCarat.value = "";
     if (ui.stoneAddCount) ui.stoneAddCount.value = "";
     if (ui.stoneAddSizeType) ui.stoneAddSizeType.value = "";
+    if (ui.stoneAddShape) ui.stoneAddShape.value = "";
     if (ui.stoneAddPrimary) ui.stoneAddPrimary.value = "";
   }
 
@@ -2583,14 +3065,16 @@
   }
 
   function renderMetalOptionRow(entry) {
-    const isPrimary = String(entry.is_primary || entry.isPrimary || "") === "1" || entry.is_primary === true;
+    const isPrimary =
+      String(entry.is_primary || entry.isPrimary || "") === "1" ||
+      entry.is_primary === true;
     return `
       <div class="catalog-stone-row" data-metal-option-id="${escapeAttribute(entry.id || "")}">
         <div class="catalog-stone-grid">
           <label class="field">
             <span>Metal weight</span>
             <input type="number" step="0.01" min="0" data-metal-field="metal_weight" value="${escapeAttribute(
-              entry.metal_weight ?? ""
+              entry.metal_weight ?? "",
             )}">
           </label>
           <label class="field">
@@ -2639,11 +3123,15 @@
     }
     const params = new URLSearchParams({ catalog_id: catalogId });
     try {
-      const data = await apiFetch(`/catalog-metal-options?${params.toString()}`);
+      const data = await apiFetch(
+        `/catalog-metal-options?${params.toString()}`,
+      );
       const items = Array.isArray(data.items) ? data.items : [];
       state.catalogMetalOptions = { items };
       const rows = items.map((entry) => renderMetalOptionRow(entry));
-      ui.catalogMetalList.innerHTML = rows.length ? rows.join("") : `<div class="muted">No metal options yet.</div>`;
+      ui.catalogMetalList.innerHTML = rows.length
+        ? rows.join("")
+        : `<div class="muted">No metal options yet.</div>`;
     } catch (error) {
       state.catalogMetalOptions = { items: [] };
       ui.catalogMetalList.innerHTML = `<div class="muted">Unable to load metal options.</div>`;
@@ -2736,19 +3224,29 @@
   }
 
   function getNoteEditor(kind) {
-    return ui.noteEditors.find((editor) => editor.dataset.noteEditor === kind) || null;
+    return (
+      ui.noteEditors.find((editor) => editor.dataset.noteEditor === kind) ||
+      null
+    );
   }
 
   function getNoteRowsContainer(kind) {
-    return ui.noteRows.find((container) => container.dataset.noteRows === kind) || null;
+    return (
+      ui.noteRows.find((container) => container.dataset.noteRows === kind) ||
+      null
+    );
   }
 
   function getNoteInput(kind) {
-    return ui.noteInputs.find((input) => input.dataset.noteInput === kind) || null;
+    return (
+      ui.noteInputs.find((input) => input.dataset.noteInput === kind) || null
+    );
   }
 
   function getNoteOrderInput(kind) {
-    return ui.noteOrders.find((input) => input.dataset.noteOrder === kind) || null;
+    return (
+      ui.noteOrders.find((input) => input.dataset.noteOrder === kind) || null
+    );
   }
 
   function setNoteEditor(kind, note) {
@@ -2771,14 +3269,14 @@
         <div class="note-row" data-note-id="${escapeAttribute(note.id || "")}">
           <input type="text" data-note-field="note" value="${escapeAttribute(note.note || "")}" />
           <input type="number" data-note-field="sort_order" value="${escapeAttribute(
-            note.sort_order || "0"
+            note.sort_order || "0",
           )}" />
           <div class="note-actions">
             <button class="btn btn-ghost btn-small" type="button" data-note-row-save>Save</button>
             <button class="btn btn-ghost btn-small" type="button" data-note-row-delete>Delete</button>
           </div>
         </div>
-      `
+      `,
       )
       .join("");
   }
@@ -2987,7 +3485,9 @@
   }
 
   function getCatalogMappingEndpoint() {
-    return state.tab === "products" ? "/product-media/action" : "/inspiration-media/action";
+    return state.tab === "products"
+      ? "/product-media/action"
+      : "/inspiration-media/action";
   }
 
   function getCatalogMappingPayload(mediaId, position, order, isPrimary) {
@@ -3029,7 +3529,12 @@
       showToast("Order must be a number.", "error");
       return;
     }
-    const payload = getCatalogMappingPayload(mediaId, position, order, isPrimary);
+    const payload = getCatalogMappingPayload(
+      mediaId,
+      position,
+      order,
+      isPrimary,
+    );
     if (!payload) {
       showToast("Save the record before linking media.", "error");
       return;
@@ -3068,7 +3573,9 @@
     }
     try {
       const resolvedBase = getApiBase();
-      const base = resolvedBase.endsWith("/") ? resolvedBase : `${resolvedBase}/`;
+      const base = resolvedBase.endsWith("/")
+        ? resolvedBase
+        : `${resolvedBase}/`;
       const localEmail = isLocalApi(base) ? getStoredAdminEmail() : "";
       const formData = new FormData();
       formData.append("file", file);
@@ -3103,7 +3610,7 @@
         media.media_id,
         position,
         order,
-        isPrimary
+        isPrimary,
       );
       if (mappingPayload) {
         await apiFetch(getCatalogMappingEndpoint(), {
@@ -3147,6 +3654,7 @@
     const positionSelect = row.querySelector("[data-media-position]");
     const heroToggle = row.querySelector("[data-media-hero-toggle]");
     const labelInput = row.querySelector("[data-media-label]");
+    const descriptionInput = row.querySelector("[data-media-description]");
     const orderValue = orderInput ? orderInput.value.trim() : "";
     if (orderValue && Number.isNaN(Number(orderValue))) {
       showToast("Order must be a number.", "error");
@@ -3158,19 +3666,23 @@
     const forceHero = String(positionValue || "").toLowerCase() === "hero";
     const heroSelected = heroChecked || forceHero;
     let position = heroSelected ? "hero" : positionValue || originalPosition;
-    if (!heroSelected && String(originalPosition || "").toLowerCase() === "hero") {
+    if (
+      !heroSelected &&
+      String(originalPosition || "").toLowerCase() === "hero"
+    ) {
       position = "";
     }
     try {
       const mediaId = row.dataset.mediaId || "";
-      if (mediaId && labelInput) {
+      if (mediaId && (labelInput || descriptionInput)) {
         await apiFetch("/media-library/action", {
           method: "POST",
           body: JSON.stringify({
             action: "edit",
             rowNumber: mediaId,
             fields: {
-              label: labelInput.value.trim(),
+              label: labelInput ? labelInput.value.trim() : undefined,
+              description: descriptionInput ? descriptionInput.value.trim() : undefined,
             },
           }),
         });
@@ -3191,6 +3703,37 @@
       renderCatalogMedia(state.selectedItem);
     } catch (error) {
       showToast("Unable to update media.", "error");
+    }
+  }
+
+  async function describeMedia(mediaId, row) {
+    const button = row?.querySelector("[data-media-describe]");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Generating...";
+    }
+    try {
+      const result = await apiFetch("/media/describe", {
+        method: "POST",
+        body: JSON.stringify({ media_id: mediaId }),
+      });
+      if (!result?.ok) {
+        showToast(result?.error || "Failed to generate description.", "error");
+        return;
+      }
+      const descriptionInput = row?.querySelector("[data-media-description]");
+      if (descriptionInput) {
+        descriptionInput.value = result.description || "";
+      }
+      showToast("Description generated. Review and click Save to store.", "success");
+    } catch (error) {
+      console.error(error);
+      showToast("Failed to generate description.", "error");
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Generate description";
+      }
     }
   }
 
@@ -3237,7 +3780,9 @@
   function applyGoldOnlyQuoteState() {
     if (state.tab !== "quotes") return;
     const goldOnly = isGoldOnlyQuote();
-    const optionCards = Array.from(document.querySelectorAll(".quote-option-card"));
+    const optionCards = Array.from(
+      document.querySelectorAll(".quote-option-card"),
+    );
     optionCards.forEach((card, index) => {
       if (index === 0) {
         card.classList.toggle("is-hidden", false);
@@ -3343,12 +3888,16 @@
   }
 
   function getOrderDetailsValue(key) {
-    const field = ui.orderDetailsFields.find((input) => input.dataset.orderDetailsField === key);
+    const field = ui.orderDetailsFields.find(
+      (input) => input.dataset.orderDetailsField === key,
+    );
     return field ? field.value.trim() : "";
   }
 
   function getOrderDetailsField(key) {
-    return ui.orderDetailsFields.find((input) => input.dataset.orderDetailsField === key);
+    return ui.orderDetailsFields.find(
+      (input) => input.dataset.orderDetailsField === key,
+    );
   }
 
   function collectOrderDetailsUpdates() {
@@ -3443,12 +3992,19 @@
       ui.summaryStatus.textContent = status;
       ui.summaryStatus.dataset.status = status;
     }
-    if (ui.summaryProduct) ui.summaryProduct.textContent = item.product_name || "--";
-    if (ui.summaryDesignCode) ui.summaryDesignCode.textContent = item.design_code || "--";
-    if (ui.summaryRequest) ui.summaryRequest.textContent = item.request_id || "--";
-    if (ui.summaryCreated) ui.summaryCreated.textContent = formatDate(item.created_at) || "--";
-    if (ui.summaryPrice) ui.summaryPrice.textContent = formatPrice(item.price) || "--";
-    if (ui.summaryTimeline) ui.summaryTimeline.textContent = formatTimelineValue(item.timeline) || "--";
+    if (ui.summaryProduct)
+      ui.summaryProduct.textContent = item.product_name || "--";
+    if (ui.summaryDesignCode)
+      ui.summaryDesignCode.textContent = item.design_code || "--";
+    if (ui.summaryRequest)
+      ui.summaryRequest.textContent = item.request_id || "--";
+    if (ui.summaryCreated)
+      ui.summaryCreated.textContent = formatDate(item.created_at) || "--";
+    if (ui.summaryPrice)
+      ui.summaryPrice.textContent = formatPrice(item.price) || "--";
+    if (ui.summaryTimeline)
+      ui.summaryTimeline.textContent =
+        formatTimelineValue(item.timeline) || "--";
     if (ui.summaryTimelineDelay) {
       const delayText = formatDelayWeeks(item.timeline_adjustment_weeks);
       ui.summaryTimelineDelay.textContent = delayText || "--";
@@ -3456,13 +4012,16 @@
     if (ui.summaryMetal) ui.summaryMetal.textContent = item.metal || "--";
     if (ui.summaryStone) ui.summaryStone.textContent = item.stone || "--";
     if (ui.summaryStoneWeight) {
-      ui.summaryStoneWeight.textContent = formatStoneWeight(item.stone_weight) || "--";
+      ui.summaryStoneWeight.textContent =
+        formatStoneWeight(item.stone_weight) || "--";
     }
     if (ui.summaryMetalWeight) {
-      ui.summaryMetalWeight.textContent = formatGrams(item.metal_weight) || "--";
+      ui.summaryMetalWeight.textContent =
+        formatGrams(item.metal_weight) || "--";
     }
     if (ui.summaryMetalAdjustment) {
-      ui.summaryMetalAdjustment.textContent = formatSignedGrams(item.metal_weight_adjustment) || "--";
+      ui.summaryMetalAdjustment.textContent =
+        formatSignedGrams(item.metal_weight_adjustment) || "--";
     }
     if (ui.summaryDiamondBreakdown) {
       ui.summaryDiamondBreakdown.textContent = item.diamond_breakdown || "--";
@@ -3490,23 +4049,32 @@
       ui.summarySubscription.textContent = item.subscription_status || "--";
     }
     if (ui.summaryCustomerNotes) {
-      ui.summaryCustomerNotes.textContent = item.customer_notes || item.request_notes || "--";
+      ui.summaryCustomerNotes.textContent =
+        item.customer_notes || item.request_notes || "--";
     }
     if (ui.summaryOption1) {
-      ui.summaryOption1.textContent = formatPrice(item.quote_option_1_price_18k) || "--";
+      ui.summaryOption1.textContent =
+        formatPrice(item.quote_option_1_price_18k) || "--";
     }
     if (ui.summaryOption2) {
-      ui.summaryOption2.textContent = formatPrice(item.quote_option_2_price_18k) || "--";
+      ui.summaryOption2.textContent =
+        formatPrice(item.quote_option_2_price_18k) || "--";
     }
     if (ui.summaryOption3) {
-      ui.summaryOption3.textContent = formatPrice(item.quote_option_3_price_18k) || "--";
+      ui.summaryOption3.textContent =
+        formatPrice(item.quote_option_3_price_18k) || "--";
     }
-    [ui.summaryOption1, ui.summaryOption2, ui.summaryOption3].forEach((node, index) => {
-      if (!node) return;
-      const row = node.closest(".summary-line");
-      if (!row) return;
-      row.classList.toggle("is-recommended", state.recommendedOptionIndex === index);
-    });
+    [ui.summaryOption1, ui.summaryOption2, ui.summaryOption3].forEach(
+      (node, index) => {
+        if (!node) return;
+        const row = node.closest(".summary-line");
+        if (!row) return;
+        row.classList.toggle(
+          "is-recommended",
+          state.recommendedOptionIndex === index,
+        );
+      },
+    );
     if (ui.summaryOptionRecommended) {
       const recLabel =
         state.recommendedOptionIndex === null
@@ -3521,7 +4089,8 @@
       ui.summarySizeRing.textContent = ui.sizeRing?.value?.trim() || "--";
     }
     if (ui.summarySizeBracelet) {
-      ui.summarySizeBracelet.textContent = ui.sizeBracelet?.value?.trim() || "--";
+      ui.summarySizeBracelet.textContent =
+        ui.sizeBracelet?.value?.trim() || "--";
     }
     if (ui.summarySizeChain) {
       ui.summarySizeChain.textContent = ui.sizeChain?.value?.trim() || "--";
@@ -3529,7 +4098,8 @@
     if (ui.summaryCustomer) ui.summaryCustomer.textContent = item.name || "--";
     if (ui.summaryEmail) ui.summaryEmail.textContent = item.email || "--";
     if (ui.summaryPhone) ui.summaryPhone.textContent = formatPhone(item.phone);
-    if (ui.summaryAddress) ui.summaryAddress.textContent = buildSummaryAddress(item);
+    if (ui.summaryAddress)
+      ui.summaryAddress.textContent = buildSummaryAddress(item);
   }
 
   function buildMissingChip(label, selector) {
@@ -3544,7 +4114,8 @@
     if (!ui.missingList) return;
     let chips = [];
     if (state.tab === "media-library") {
-      ui.missingList.innerHTML = '<span class="muted">No missing details.</span>';
+      ui.missingList.innerHTML =
+        '<span class="muted">No missing details.</span>';
       updateNextActionText();
       return;
     }
@@ -3552,18 +4123,25 @@
       const formState = collectCatalogFormState();
       if (window.CatalogUtils) {
         const enums = state.catalogEnums || {};
-        const normalized = window.CatalogUtils.normalizeCatalogItem(formState, enums);
+        const normalized = window.CatalogUtils.normalizeCatalogItem(
+          formState,
+          enums,
+        );
         state.catalogFormState = normalized.normalized;
         state.catalogValidation = window.CatalogUtils.validateCatalogItem(
           normalized.normalized,
           enums,
-          state.catalogMediaState
+          state.catalogMediaState,
         );
         const missing = state.catalogValidation.missingCritical || [];
         const warnings = state.catalogValidation.warnings || [];
         chips = [
-          ...missing.map((entry) => buildMissingChip(entry.message, entry.selector || "")),
-          ...warnings.map((entry) => buildWarningChip(entry.message, `[data-field="${entry.field}"]`)),
+          ...missing.map((entry) =>
+            buildMissingChip(entry.message, entry.selector || ""),
+          ),
+          ...warnings.map((entry) =>
+            buildWarningChip(entry.message, `[data-field="${entry.field}"]`),
+          ),
         ];
       }
       ui.missingList.innerHTML = chips.length
@@ -3578,33 +4156,57 @@
     } else {
       const metalWeight = getEditValue("metal_weight");
       if (!metalWeight) {
-        chips.push(buildMissingChip("Metal weight missing", '[data-field="metal_weight"]'));
+        chips.push(
+          buildMissingChip(
+            "Metal weight missing",
+            '[data-field="metal_weight"]',
+          ),
+        );
       }
       const stoneWeight = getEditValue("stone_weight");
       if (!stoneWeight) {
-        chips.push(buildMissingChip("Stone weight missing", '[data-field="stone_weight"]'));
+        chips.push(
+          buildMissingChip(
+            "Stone weight missing",
+            '[data-field="stone_weight"]',
+          ),
+        );
       }
       const stoneValue = getEditValue("stone").toLowerCase();
       const breakdownValue = getEditValue("diamond_breakdown");
       const isDiamond = DIAMOND_TERMS.some((term) => stoneValue.includes(term));
       if (isDiamond && !breakdownValue) {
-        chips.push(buildMissingChip("Diamond breakdown empty", '[data-field="diamond_breakdown"]'));
+        chips.push(
+          buildMissingChip(
+            "Diamond breakdown empty",
+            '[data-field="diamond_breakdown"]',
+          ),
+        );
       }
-      const shippingStatus = getOrderDetailsValue("shipping_status").toLowerCase();
+      const shippingStatus =
+        getOrderDetailsValue("shipping_status").toLowerCase();
       const trackingNumber = getOrderDetailsValue("tracking_number");
       if (TRACKING_REQUIRED_STATUSES.has(shippingStatus) && !trackingNumber) {
         chips.push(
-          buildMissingChip("Tracking # required for shipping", '[data-order-details-field="tracking_number"]')
+          buildMissingChip(
+            "Tracking # required for shipping",
+            '[data-order-details-field="tracking_number"]',
+          ),
         );
       }
       const etaValue = getOrderDetailsValue("delivery_eta");
       if (etaValue && !/^\d{4}-\d{2}-\d{2}$/.test(etaValue)) {
         chips.push(
-          buildMissingChip("Delivery ETA needs YYYY-MM-DD", '[data-order-details-field="delivery_eta"]')
+          buildMissingChip(
+            "Delivery ETA needs YYYY-MM-DD",
+            '[data-order-details-field="delivery_eta"]',
+          ),
         );
       }
     }
-    ui.missingList.innerHTML = chips.length ? chips.join("") : '<span class="muted">No missing details.</span>';
+    ui.missingList.innerHTML = chips.length
+      ? chips.join("")
+      : '<span class="muted">No missing details.</span>';
     updateNextActionText();
   }
 
@@ -3633,7 +4235,8 @@
 
   function updateDiscountPreview() {
     if (!ui.discountFinal) return;
-    const baseValue = getEditValue("price") || getEditValue("quote_option_1_price_18k");
+    const baseValue =
+      getEditValue("price") || getEditValue("quote_option_1_price_18k");
     const base = Number(baseValue);
     const percent = Number(ui.discountPercent?.value) || 0;
     if (ui.discountType && ui.discountPercent) {
@@ -3659,7 +4262,7 @@
       `Status: ${normalizeStatus(item.status)}`,
       `Product: ${item.product_name || "--"} (${item.design_code || "--"})`,
       `Specs: ${item.metal || "--"} / ${item.stone || "--"} ${formatStoneWeight(
-        item.stone_weight
+        item.stone_weight,
       )}`,
       `Price: ${formatPrice(item.price) || "--"}`,
       `Timeline: ${formatTimelineValue(item.timeline) || "--"} ${
@@ -3681,7 +4284,8 @@
       ui.metalWeightFinal.textContent = "--";
       return;
     }
-    const finalValue = (hasWeight ? weight : 0) + (hasAdjustment ? adjustment : 0);
+    const finalValue =
+      (hasWeight ? weight : 0) + (hasAdjustment ? adjustment : 0);
     ui.metalWeightFinal.textContent = `${finalValue.toFixed(2).replace(/\.?0+$/, "")} g`;
   }
 
@@ -3695,7 +4299,9 @@
     const adjustmentValue = adjustmentField ? adjustmentField.value.trim() : "";
     if (weightError) {
       weightError.textContent =
-        weightValue && !numberPattern.test(weightValue) ? "Enter a valid weight" : "";
+        weightValue && !numberPattern.test(weightValue)
+          ? "Enter a valid weight"
+          : "";
     }
     if (adjustmentError) {
       adjustmentError.textContent =
@@ -3708,7 +4314,10 @@
   function updateFulfillmentDirty() {
     if (!ui.detailsSave) return;
     const dirty = ORDER_DETAILS_FIELDS.some((key) => {
-      return String(getOrderDetailsValue(key)) !== String(state.orderDetails[key] || "");
+      return (
+        String(getOrderDetailsValue(key)) !==
+        String(state.orderDetails[key] || "")
+      );
     });
     state.dirtySections.fulfillment = dirty;
     setButtonEnabled(ui.detailsSave, dirty && canEditCurrentTab());
@@ -3752,11 +4361,13 @@
       }
     }
     if (state.criticalDirty) {
-      ui.nextActionText.textContent = "Critical edits pending. Save before actions.";
+      ui.nextActionText.textContent =
+        "Critical edits pending. Save before actions.";
       return;
     }
     if (state.dirtySections.fulfillment) {
-      ui.nextActionText.textContent = "Save fulfillment details to keep tracking current.";
+      ui.nextActionText.textContent =
+        "Save fulfillment details to keep tracking current.";
       return;
     }
     if (state.dirtySections.edits) {
@@ -3785,7 +4396,7 @@
     const now = new Date();
     const pad = (value) => String(value).padStart(2, "0");
     const timestamp = `[${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(
-      now.getHours()
+      now.getHours(),
     )}:${pad(now.getMinutes())} CT] `;
     insertIntoNotes(timestamp);
   }
@@ -3817,7 +4428,8 @@
     if (CATALOG_ITEM_TABS.has(state.tab)) {
       const missing = state.catalogValidation?.missingCritical?.length || 0;
       const isDelete = ui.actionSelect.value === "delete";
-      ui.actionRun.disabled = disabled || (isDelete && (missing > 0 || state.dirtySections.edits));
+      ui.actionRun.disabled =
+        disabled || (isDelete && (missing > 0 || state.dirtySections.edits));
       return;
     }
     ui.actionRun.disabled = disabled;
@@ -3853,15 +4465,21 @@
     if (state.tab !== "quotes") return { blocked: false, reason: "" };
     const basePayload = collectBasePricingPayload();
     const missing = computeMissingCriticalInfo(basePayload);
-    const activeOptions = QUOTE_OPTION_FIELDS.map((_, index) => index).filter((index) =>
-      isOptionActive(index)
+    const activeOptions = QUOTE_OPTION_FIELDS.map((_, index) => index).filter(
+      (index) => isOptionActive(index),
     );
-    const statuses = activeOptions.map((index) => quotePricingState.options[index]?.status || "idle");
+    const statuses = activeOptions.map(
+      (index) => quotePricingState.options[index]?.status || "idle",
+    );
     const anyPricing = statuses.some((status) => status === "pricing");
     const allPriced =
       activeOptions.length > 0 &&
       statuses.every((status) => status === "priced" || status === "manual");
-    const blocked = missing.length > 0 || anyPricing || !allPriced || activeOptions.length === 0;
+    const blocked =
+      missing.length > 0 ||
+      anyPricing ||
+      !allPriced ||
+      activeOptions.length === 0;
     let reason = "";
     if (missing.length) {
       reason = "Missing pricing inputs";
@@ -3881,17 +4499,26 @@
       state.tab === "orders" && state.selectedItem
         ? ACTIONS.orders.filter((action) => {
             if (action.action === "delete") return true;
-            return (ORDER_ACTION_FLOW[normalizeStatus(state.selectedItem.status)] || []).includes(action.action);
+            return (
+              ORDER_ACTION_FLOW[normalizeStatus(state.selectedItem.status)] ||
+              []
+            ).includes(action.action);
           })
         : ACTIONS[state.tab];
     if (ui.actionSelect) {
       ui.actionSelect.innerHTML =
         '<option value="">Select an action</option>' +
-        actions.map((action) => `<option value="${action.action}">${action.label}</option>`).join("");
+        actions
+          .map(
+            (action) =>
+              `<option value="${action.action}">${action.label}</option>`,
+          )
+          .join("");
       ui.actionSelect.disabled = !canEdit || actions.length === 0;
     }
     if (ui.actionRun) {
-      ui.actionRun.disabled = !canEdit || !ui.actionSelect || !ui.actionSelect.value;
+      ui.actionRun.disabled =
+        !canEdit || !ui.actionSelect || !ui.actionSelect.value;
     }
     if (ui.actionRow) {
       ui.actionRow.style.display = "";
@@ -3901,6 +4528,15 @@
     }
     if (ui.notesSave) {
       ui.notesSave.disabled = !canEdit;
+    }
+    if (ui.goldRefresh) {
+      const isGold =
+        state.tab === "cost-chart" &&
+        state.selectedItem &&
+        (state.selectedItem.key === "gold_price_per_gram_usd" ||
+          state.selectedItem.key === "gold-price-per-gram-usd");
+      ui.goldRefresh.classList.toggle("is-hidden", !isGold);
+      ui.goldRefresh.disabled = !canEdit || !isGold;
     }
     ui.editFields.forEach((field) => {
       field.disabled = !canEdit;
@@ -3912,9 +4548,11 @@
       field.disabled = !canEdit;
     });
     if (ui.catalogFields) {
-      ui.catalogFields.querySelectorAll("input,textarea,select").forEach((field) => {
-        field.disabled = !canEdit || field.hasAttribute("data-readonly");
-      });
+      ui.catalogFields
+        .querySelectorAll("input,textarea,select")
+        .forEach((field) => {
+          field.disabled = !canEdit || field.hasAttribute("data-readonly");
+        });
     }
   }
 
@@ -3955,13 +4593,17 @@
   function formatActivityTime(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "--";
-    return date.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+    return date.toLocaleString(undefined, {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
   }
 
   function renderActivityFeed() {
     if (!ui.activityFeed) return;
     if (!activityEvents.length) {
-      ui.activityFeed.innerHTML = '<div class="activity-item muted">No activity yet.</div>';
+      ui.activityFeed.innerHTML =
+        '<div class="activity-item muted">No activity yet.</div>';
       return;
     }
     const sorted = [...activityEvents]
@@ -3987,7 +4629,9 @@
     const timestamp = event.time ? new Date(event.time) : new Date();
     const normalized = {
       ...event,
-      time: Number.isNaN(timestamp.getTime()) ? new Date().toISOString() : timestamp.toISOString(),
+      time: Number.isNaN(timestamp.getTime())
+        ? new Date().toISOString()
+        : timestamp.toISOString(),
     };
     activityEvents.unshift(normalized);
     if (activityEvents.length > ACTIVITY_LIMIT) {
@@ -4079,7 +4723,9 @@
       if (state.tab === "media-library") {
         const fields = {};
         if (!ui.catalogFields) return fields;
-        const inputs = ui.catalogFields.querySelectorAll("input,textarea,select");
+        const inputs = ui.catalogFields.querySelectorAll(
+          "input,textarea,select",
+        );
         inputs.forEach((field) => {
           const key = field.dataset.field;
           if (!key) return;
@@ -4090,9 +4736,13 @@
         return fields;
       }
       const rawState = collectCatalogFormState();
-      if (!window.CatalogUtils || !window.CatalogUtils.normalizeCatalogItem) return rawState;
+      if (!window.CatalogUtils || !window.CatalogUtils.normalizeCatalogItem)
+        return rawState;
       const enums = state.catalogEnums || {};
-      const normalized = window.CatalogUtils.normalizeCatalogItem(rawState, enums);
+      const normalized = window.CatalogUtils.normalizeCatalogItem(
+        rawState,
+        enums,
+      );
       state.catalogFormState = normalized.normalized;
       const original = state.catalogOriginalFields || {};
       const updates = {};
@@ -4118,7 +4768,9 @@
   }
 
   function getNotesValue() {
-    const notesField = ui.editFields.find((field) => field.dataset.field === "notes");
+    const notesField = ui.editFields.find(
+      (field) => field.dataset.field === "notes",
+    );
     return notesField ? notesField.value.trim() : "";
   }
 
@@ -4126,7 +4778,11 @@
     const canEdit = canEditCurrentTab();
     const notesChanged = getNotesValue() !== state.originalNotes.trim();
     if (ui.notesSave) {
-      if (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab) || state.tab === "quotes") {
+      if (
+        PRICING_TABS.has(state.tab) ||
+        CATALOG_TABS.has(state.tab) ||
+        state.tab === "quotes"
+      ) {
         ui.notesSave.style.display = "none";
       } else {
         ui.notesSave.style.display = "";
@@ -4142,9 +4798,11 @@
         fields.notes = getNotesValue();
       }
       const hasChanges =
-        Object.keys(fields).length > 0 || (state.tab === "quotes" && notesChanged);
+        Object.keys(fields).length > 0 ||
+        (state.tab === "quotes" && notesChanged);
       ui.primaryAction.textContent =
-        state.isNewRow && (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab))
+        state.isNewRow &&
+        (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab))
           ? "Add row"
           : "Save updates";
       ui.primaryAction.disabled = !canEdit || !hasChanges;
@@ -4172,7 +4830,7 @@
               <span class="confirm-arrow">-></span>
               <span class="confirm-new">${escapeHtml(change.to || "--")}</span>
             </div>
-          </div>`
+          </div>`,
       )
       .join("");
   }
@@ -4192,7 +4850,7 @@
                 <span style="font-weight:600;color:#0f172a;">${escapeHtml(change.to || "--")}</span>
               </div>
             </td>
-          </tr>`
+          </tr>`,
       )
       .join("");
   }
@@ -4203,13 +4861,18 @@
     const product = item.product_name || "your order";
     const timelineValue = getEditValue("timeline") || item.timeline || "";
     const adjustmentValue =
-      getEditValue("timeline_adjustment_weeks") || item.timeline_adjustment_weeks || "";
+      getEditValue("timeline_adjustment_weeks") ||
+      item.timeline_adjustment_weeks ||
+      "";
     const etaLine = buildEtaLine(timelineValue, adjustmentValue);
     const subject = requestId
       ? `Heerawalla - Confirm order update (${requestId})`
       : "Heerawalla - Confirm order update";
 
-    const textLines = changes.map((change) => `${change.label}: ${change.from || "--"} -> ${change.to || "--"}`);
+    const textLines = changes.map(
+      (change) =>
+        `${change.label}: ${change.from || "--"} -> ${change.to || "--"}`,
+    );
     const textBody = [
       `Hello ${name},`,
       "",
@@ -4330,7 +4993,7 @@
     const target =
       ui.confirmClose ||
       ui.confirmModal.querySelector(
-        "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"
+        "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
       );
     if (target && typeof target.focus === "function") {
       target.focus();
@@ -4352,7 +5015,10 @@
   function closeConfirmModal() {
     if (!ui.confirmModal) return;
     if (ui.confirmModal.contains(document.activeElement)) {
-      if (lastFocusedConfirm && typeof lastFocusedConfirm.focus === "function") {
+      if (
+        lastFocusedConfirm &&
+        typeof lastFocusedConfirm.focus === "function"
+      ) {
         lastFocusedConfirm.focus();
       } else {
         document.body.focus?.();
@@ -4367,7 +5033,12 @@
     const isCatalog = CATALOG_TABS.has(state.tab);
     const requestId = state.isNewRow
       ? "New row"
-      : item.request_id || item.email || item.slug || item.id || item.media_id || "Record";
+      : item.request_id ||
+        item.email ||
+        item.slug ||
+        item.id ||
+        item.media_id ||
+        "Record";
     const status = item.status || "NEW";
     state.selectedId = requestId;
     state.selectedItem = item;
@@ -4380,7 +5051,12 @@
     const detailLabel = TAB_LABELS[state.tab] || state.tab;
     ui.detailType.textContent = `${detailLabel} details`;
     ui.detailTitle.textContent =
-      item.product_name || item.name || item.key || item.metal || item.clarity || requestId;
+      item.product_name ||
+      item.name ||
+      item.key ||
+      item.metal ||
+      item.clarity ||
+      requestId;
     ui.detailSub.textContent = requestId;
     if (ui.detailStatusCorner) {
       const statusValue =
@@ -4417,51 +5093,49 @@
             ["Page URL", item.page_url],
             ["Updated", formatDate(item.updated_at)],
           ]
-      : state.tab === "tickets"
-      ? [
-          ["Request ID", item.request_id],
-          ["Created", formatDate(item.created_at)],
-          ["Status", status],
-          ["Name", item.name],
-          ["Email", item.email],
-          ["Phone", formatPhone(item.phone)],
-          ["Subject", item.subject],
-          ["Summary", item.summary],
-          ["Page URL", item.page_url],
-          ["Updated", formatDate(item.updated_at)],
-        ]
-        : state.tab === "price-chart"
-        ? [
-            ["Row", item.row_number],
-            ["Metal", item.metal],
-            ["Adjustment type", item.adjustment_type],
-            ["Adjustment value", item.adjustment_value],
-            ["Notes", item.notes],
-          ]
-        : state.tab === "cost-chart"
-        ? [
-            ["Row", item.row_number],
-            ["Key", item.key],
-            ["Value", item.value],
-            ["Unit", item.unit],
-            ["Notes", item.notes],
-          ]
-        : state.tab === "diamond-price-chart"
-        ? [
-            ["Row", item.row_number],
-            ["Clarity", item.clarity],
-            ["Color", item.color],
-            ["Weight min", item.weight_min],
-            ["Weight max", item.weight_max],
-            ["Price per ct", item.price_per_ct],
-            ["Notes", item.notes],
-          ]
-        : [];
+        : state.tab === "tickets"
+          ? [
+              ["Request ID", item.request_id],
+              ["Created", formatDate(item.created_at)],
+              ["Status", status],
+              ["Name", item.name],
+              ["Email", item.email],
+              ["Phone", formatPhone(item.phone)],
+              ["Subject", item.subject],
+              ["Summary", item.summary],
+              ["Page URL", item.page_url],
+              ["Updated", formatDate(item.updated_at)],
+            ]
+          : state.tab === "price-chart"
+            ? [
+                ["Row", item.row_number],
+                ["Metal", item.metal],
+                ["Adjustment type", item.adjustment_type],
+                ["Adjustment value", item.adjustment_value],
+                ["Notes", item.notes],
+              ]
+            : state.tab === "cost-chart"
+              ? [
+                  ["Row", item.row_number],
+                  ["Key", item.key],
+                  ["Value", item.value],
+                  ["Unit", item.unit],
+                  ["Notes", item.notes],
+                ]
+              : state.tab === "diamond-price-chart"
+                ? [
+                    ["Row", item.row_number],
+                    ["Clarity", item.clarity],
+                    ["Color", item.color],
+                    ["Weight min", item.weight_min],
+                    ["Weight max", item.weight_max],
+                    ["Price per ct", item.price_per_ct],
+                    ["Notes", item.notes],
+                  ]
+                : [];
 
     const detailSections =
-      state.tab === "quotes" || state.tab === "orders"
-        ? []
-        : [];
+      state.tab === "quotes" || state.tab === "orders" ? [] : [];
 
     if (detailSections.length) {
       ui.detailGrid.classList.add("detail-sections");
@@ -4534,7 +5208,9 @@
       refreshMissingInfo();
       return;
     }
-    const parsed = window.CatalogUtils ? window.CatalogUtils.parseLegacyFields(item, enums) : item || {};
+    const parsed = window.CatalogUtils
+      ? window.CatalogUtils.parseLegacyFields(item, enums)
+      : item || {};
     if (state.isNewRow && parsed.is_active === undefined) {
       parsed.is_active = true;
     }
@@ -4547,21 +5223,45 @@
     state.catalogValidation = null;
     state.selectedItem = parsed;
     renderCatalogFields(parsed, enums);
-      if (window.CatalogForm) {
-        window.CatalogForm.setSelectOptions(ui.mediaPosition, enums.media_positions, true, "Select");
-        window.CatalogForm.setSelectOptions(
-          ui.mediaPositionExisting,
-          enums.media_positions,
-          true,
-          "Select"
-        );
-        const roleOptions = getStoneRoleOptions(enums);
-        window.CatalogForm.setSelectOptions(ui.stoneAddRole, roleOptions, true, "Select");
-      }
-      await renderCatalogMedia(parsed);
-      await renderCatalogStoneOptions(parsed);
-      await renderCatalogMetalOptions(parsed);
-      await renderCatalogNotes(parsed);
+    if (window.CatalogForm) {
+      window.CatalogForm.setSelectOptions(
+        ui.mediaPosition,
+        enums.media_positions,
+        true,
+        "Select",
+      );
+      window.CatalogForm.setSelectOptions(
+        ui.mediaPositionExisting,
+        enums.media_positions,
+        true,
+        "Select",
+      );
+      const roleOptions = getStoneRoleOptions(enums);
+      window.CatalogForm.setSelectOptions(
+        ui.stoneAddRole,
+        roleOptions,
+        true,
+        "Select",
+      );
+      const sizeTypeOptions = getStoneSizeTypeOptions(enums);
+      window.CatalogForm.setSelectOptions(
+        ui.stoneAddSizeType,
+        sizeTypeOptions,
+        true,
+        "Select",
+      );
+      const shapeOptions = getStoneShapeOptions(enums);
+      window.CatalogForm.setSelectOptions(
+        ui.stoneAddShape,
+        shapeOptions,
+        true,
+        "Select",
+      );
+    }
+    await renderCatalogMedia(parsed);
+    await renderCatalogStoneOptions(parsed);
+    await renderCatalogMetalOptions(parsed);
+    await renderCatalogNotes(parsed);
     applyEditVisibility();
     renderActions();
     updateActionButtonState();
@@ -4575,7 +5275,8 @@
       state.role = data.role || "";
       state.email = data.email || "";
       if (ui.userRole) ui.userRole.textContent = state.role || "Unknown";
-      if (ui.userEmail) ui.userEmail.textContent = state.email || "Not authorized";
+      if (ui.userEmail)
+        ui.userEmail.textContent = state.email || "Not authorized";
     } catch (error) {
       showToast("Access denied. Check Access policy.", "error");
     }
@@ -4588,35 +5289,37 @@
       return;
     }
     setSyncStatus("Loading");
-      try {
-        const params = new URLSearchParams({ limit: "1", offset: "0" });
-        if (state.tab === "contacts") {
-          params.set("email", requestId);
-        } else if (
-          state.tab === "price-chart" ||
-          state.tab === "cost-chart" ||
-          state.tab === "diamond-price-chart"
-        ) {
-          params.set("row_number", requestId);
-        } else if (CATALOG_TABS.has(state.tab)) {
-          if (state.tab === "media-library") {
-            params.set("media_id", requestId);
-          } else {
-            params.set("slug", requestId);
-            params.set("id", requestId);
-          }
+    try {
+      const params = new URLSearchParams({ limit: "1", offset: "0" });
+      if (state.tab === "contacts") {
+        params.set("email", requestId);
+      } else if (
+        state.tab === "price-chart" ||
+        state.tab === "cost-chart" ||
+        state.tab === "diamond-price-chart"
+      ) {
+        params.set("row_number", requestId);
+      } else if (CATALOG_TABS.has(state.tab)) {
+        if (state.tab === "media-library") {
+          params.set("media_id", requestId);
         } else {
-          params.set("request_id", requestId);
+          params.set("slug", requestId);
+          params.set("id", requestId);
         }
-      const data = await apiFetch(`${getTabEndpoint(state.tab)}?${params.toString()}`);
+      } else {
+        params.set("request_id", requestId);
+      }
+      const data = await apiFetch(
+        `${getTabEndpoint(state.tab)}?${params.toString()}`,
+      );
       state.catalogHeaders = Array.isArray(data.headers) ? data.headers : [];
-        const item = (data.items || [])[0];
-        if (!item) {
-          setSyncStatus("Not found");
-          if (ui.detailError) ui.detailError.textContent = "Record not found.";
-          return;
-        }
-        await populateDetail(item);
+      const item = (data.items || [])[0];
+      if (!item) {
+        setSyncStatus("Not found");
+        if (ui.detailError) ui.detailError.textContent = "Record not found.";
+        return;
+      }
+      await populateDetail(item);
       if (state.tab === "orders") {
         await loadOrderDetails(item.request_id);
       } else if (state.tab === "tickets") {
@@ -4624,7 +5327,7 @@
       } else {
         populateOrderDetails({});
       }
-        setSyncStatus("Loaded");
+      setSyncStatus("Loaded");
     } catch (error) {
       setSyncStatus("Error");
       if (ui.detailError) ui.detailError.textContent = "Failed to load record.";
@@ -4634,7 +5337,9 @@
 
   async function loadCatalogHeaders() {
     try {
-      const data = await apiFetch(`${getTabEndpoint(state.tab)}?limit=1&offset=0`);
+      const data = await apiFetch(
+        `${getTabEndpoint(state.tab)}?limit=1&offset=0`,
+      );
       state.catalogHeaders = Array.isArray(data.headers) ? data.headers : [];
     } catch {
       state.catalogHeaders = [];
@@ -4663,7 +5368,9 @@
       return;
     }
     try {
-      const data = await apiFetch(`/orders/details?request_id=${encodeURIComponent(requestId)}`);
+      const data = await apiFetch(
+        `/orders/details?request_id=${encodeURIComponent(requestId)}`,
+      );
       populateOrderDetails(data.details || {});
     } catch (error) {
       populateOrderDetails({});
@@ -4673,7 +5380,9 @@
   async function loadTicketDetails(requestId) {
     if (!requestId || state.tab !== "tickets") return;
     try {
-      const data = await apiFetch(`/tickets/details?request_id=${encodeURIComponent(requestId)}`);
+      const data = await apiFetch(
+        `/tickets/details?request_id=${encodeURIComponent(requestId)}`,
+      );
       const details = Array.isArray(data.details) ? data.details : [];
       details.forEach((entry) => {
         const kind = String(entry.kind || "note").toLowerCase();
@@ -4681,8 +5390,8 @@
           kind === "email"
             ? "Email sent"
             : kind === "status"
-            ? "Status update"
-            : "Comment";
+              ? "Status update"
+              : "Comment";
         addActivityEvent({
           time: entry.created_at || new Date().toISOString(),
           type: kind,
@@ -4707,7 +5416,12 @@
     }
     const result = await apiFetch(endpoint, {
       method: "POST",
-      body: JSON.stringify({ action: "edit", requestId: recordId, fields, notes }),
+      body: JSON.stringify({
+        action: "edit",
+        requestId: recordId,
+        fields,
+        notes,
+      }),
     });
     if (!result.ok) {
       showToast("Save failed", "error");
@@ -4727,30 +5441,37 @@
       if (!saved) return;
     }
     const details = state.tab === "orders" ? collectOrderDetailsUpdates() : {};
-      if (state.tab === "orders" && action === "mark_shipped") {
-        const missing = REQUIRED_SHIPPING_DETAILS_FIELDS.filter((field) => !details[field]);
-        if (missing.length) {
-          showToast("Add required fulfillment details before shipping.", "error");
-          return;
-        }
-      }
-      if (state.tab === "tickets" && action === "send_email") {
-        const subject = window.prompt("Email subject");
-        if (!subject) return;
-        const body = window.prompt("Email message");
-        if (!body) return;
-        const result = await apiFetch("/tickets/action", {
-          method: "POST",
-          body: JSON.stringify({ action: "send_email", requestId: recordId, subject, body }),
-        });
-        if (result.ok) {
-          showToast("Email sent");
-          await loadTicketDetails(recordId);
-        } else {
-          showToast("Email failed", "error");
-        }
+    if (state.tab === "orders" && action === "mark_shipped") {
+      const missing = REQUIRED_SHIPPING_DETAILS_FIELDS.filter(
+        (field) => !details[field],
+      );
+      if (missing.length) {
+        showToast("Add required fulfillment details before shipping.", "error");
         return;
       }
+    }
+    if (state.tab === "tickets" && action === "send_email") {
+      const subject = window.prompt("Email subject");
+      if (!subject) return;
+      const body = window.prompt("Email message");
+      if (!body) return;
+      const result = await apiFetch("/tickets/action", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "send_email",
+          requestId: recordId,
+          subject,
+          body,
+        }),
+      });
+      if (result.ok) {
+        showToast("Email sent");
+        await loadTicketDetails(recordId);
+      } else {
+        showToast("Email failed", "error");
+      }
+      return;
+    }
     const payload = { action };
     if (
       state.tab === "price-chart" ||
@@ -4975,7 +5696,7 @@
       const emailPayload = buildConfirmationEmail(
         state.selectedItem,
         changes,
-        confirmationUrl
+        confirmationUrl,
       );
       state.pendingChanges = changes;
       state.confirmation = {
@@ -5075,7 +5796,11 @@
         }
         const config = getActionConfig(action);
         if (config && config.confirm && !window.confirm(config.confirm)) return;
-        if (state.criticalDirty && !window.confirm("Proceed without saving critical edits?")) return;
+        if (
+          state.criticalDirty &&
+          !window.confirm("Proceed without saving critical edits?")
+        )
+          return;
         runAction(action);
       });
     }
@@ -5100,7 +5825,10 @@
         const key = field.dataset.field || "";
         if (key === "metal") {
           updateMetalWeightLabels(field.value);
-          setQuoteMetalSelection(ui.quoteMetalInput ? ui.quoteMetalInput.value : "", field.value);
+          setQuoteMetalSelection(
+            ui.quoteMetalInput ? ui.quoteMetalInput.value : "",
+            field.value,
+          );
         }
         if (key === "quote_discount_type" || key === "quote_discount_percent") {
           applyDiscountControlState();
@@ -5126,14 +5854,20 @@
           } else if (QUOTE_BASE_PRICING_FIELDS.has(key)) {
             scheduleQuotePricingUpdate({ baseChanged: true });
           } else if (QUOTE_OPTION_FIELD_INDEX.has(key)) {
-            scheduleQuotePricingUpdate({ optionIndex: QUOTE_OPTION_FIELD_INDEX.get(key) });
+            scheduleQuotePricingUpdate({
+              optionIndex: QUOTE_OPTION_FIELD_INDEX.get(key),
+            });
           }
         }
         if (key === "metal_weight" || key === "metal_weight_adjustment") {
           updateMetalWeightFinal();
           validateMetalWeightInputs();
         }
-        if (["price", "quote_discount_type", "quote_discount_percent"].includes(key)) {
+        if (
+          ["price", "quote_discount_type", "quote_discount_percent"].includes(
+            key,
+          )
+        ) {
           updateDiscountPreview();
         }
         if (state.selectedItem && key) {
@@ -5147,7 +5881,8 @@
             const labelText =
               field
                 .closest(".field")
-                ?.querySelector("span")?.textContent?.trim() || key;
+                ?.querySelector("span")
+                ?.textContent?.trim() || key;
             addActivityEvent({
               type: "edit",
               title: `${labelText} updated`,
@@ -5165,7 +5900,13 @@
       field.addEventListener("change", handler);
     });
 
-    [ui.catalogFieldsBasic, ui.catalogFieldsTaxonomy, ui.catalogFieldsMaterials, ui.catalogFieldsAudit, ui.catalogFields]
+    [
+      ui.catalogFieldsBasic,
+      ui.catalogFieldsTaxonomy,
+      ui.catalogFieldsMaterials,
+      ui.catalogFieldsAudit,
+      ui.catalogFields,
+    ]
       .filter(Boolean)
       .forEach((container) => {
         ["input", "change"].forEach((eventName) => {
@@ -5227,6 +5968,14 @@
           } else {
             showToast("Missing media mapping id.", "error");
           }
+        }
+        if (target.hasAttribute("data-media-describe")) {
+          const mediaId = target.dataset.mediaId || "";
+          if (!mediaId) {
+            showToast("Missing media id.", "error");
+            return;
+          }
+          describeMedia(mediaId, row);
         }
       });
     }
@@ -5442,7 +6191,8 @@
               const labelText =
                 field
                   .closest(".field")
-                  ?.querySelector("span")?.textContent?.trim() ||
+                  ?.querySelector("span")
+                  ?.textContent?.trim() ||
                 field.dataset.orderDetailsField ||
                 "Fulfillment update";
               addActivityEvent({
@@ -5499,7 +6249,11 @@
           if (window.confirm("Save updates to this record?")) saveDetails();
           return;
         }
-        if (state.criticalDirty && !window.confirm("Proceed without saving critical edits?")) return;
+        if (
+          state.criticalDirty &&
+          !window.confirm("Proceed without saving critical edits?")
+        )
+          return;
         prepareConfirmation();
       });
     }
@@ -5530,28 +6284,63 @@
     });
     if (ui.copyCustomer) {
       ui.copyCustomer.addEventListener("click", () =>
-        handleCopyText("Customer name", ui.summaryCustomer?.textContent?.trim())
+        handleCopyText(
+          "Customer name",
+          ui.summaryCustomer?.textContent?.trim(),
+        ),
       );
     }
     if (ui.copyEmail) {
       ui.copyEmail.addEventListener("click", () =>
-        handleCopyText("Email", ui.summaryEmail?.textContent?.trim())
+        handleCopyText("Email", ui.summaryEmail?.textContent?.trim()),
       );
     }
     if (ui.copyPhone) {
       ui.copyPhone.addEventListener("click", () =>
-        handleCopyText("Phone", ui.summaryPhone?.textContent?.trim())
+        handleCopyText("Phone", ui.summaryPhone?.textContent?.trim()),
       );
     }
     if (ui.copyAddress) {
       ui.copyAddress.addEventListener("click", () =>
-        handleCopyText("Address", ui.summaryAddress?.textContent?.trim())
+        handleCopyText("Address", ui.summaryAddress?.textContent?.trim()),
       );
     }
     if (ui.copySummary) {
       ui.copySummary.addEventListener("click", () => {
         const summary = buildSummaryText(state.selectedItem);
         handleCopyText("Order summary", summary);
+      });
+    }
+
+    if (ui.goldRefresh) {
+      ui.goldRefresh.addEventListener("click", async () => {
+        ui.goldRefresh.disabled = true;
+        ui.goldRefresh.textContent = "Refreshing…";
+        try {
+          const result = await apiFetch("/cost-chart/gold-refresh", {
+            method: "POST",
+          });
+          if (result.ok) {
+            const valueInput = document.querySelector('[data-field="value"]');
+            const notesInput = document.querySelector('[data-field="notes"]');
+            if (valueInput && result.value !== undefined) {
+              valueInput.value = result.value;
+              markDirty();
+            }
+            if (notesInput && result.notes !== undefined) {
+              notesInput.value = result.notes || "";
+              markDirty();
+            }
+            showToast("Gold price refreshed. Review and click Save.");
+          } else {
+            showToast(result.error || "Failed to refresh gold price", "error");
+          }
+        } catch (error) {
+          showToast("Failed to refresh gold price", "error");
+        } finally {
+          ui.goldRefresh.textContent = "Refresh gold price";
+          ui.goldRefresh.disabled = false;
+        }
       });
     }
 
@@ -5587,8 +6376,13 @@
 
     if (ui.confirmSend) {
       ui.confirmSend.addEventListener("click", () => {
-        if (state.criticalDirty && !window.confirm("Proceed without saving critical edits?")) return;
-        if (window.confirm("Send confirmation to customer?")) sendConfirmation();
+        if (
+          state.criticalDirty &&
+          !window.confirm("Proceed without saving critical edits?")
+        )
+          return;
+        if (window.confirm("Send confirmation to customer?"))
+          sendConfirmation();
       });
     }
   }
@@ -5625,7 +6419,10 @@
     }
     bindEvents();
     await loadMe();
-    if (id === "new" && (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab))) {
+    if (
+      id === "new" &&
+      (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab))
+    ) {
       state.isNewRow = true;
       if (CATALOG_TABS.has(state.tab)) {
         await loadCatalogHeaders();
@@ -5642,4 +6439,3 @@
 
   init();
 })();
-

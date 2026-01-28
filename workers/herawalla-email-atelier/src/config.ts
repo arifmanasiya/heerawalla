@@ -69,6 +69,15 @@ export interface Env {
   DIAMOND_PRICE_CHART_SHEET_ID?: string;
   DIAMOND_PRICE_CHART_SHEET_NAME?: string;
   DIAMOND_PRICE_CHART_SHEET_RANGE?: string;
+  CF_ACCOUNT_ID?: string;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CF_API_TOKEN?: string;
+  CLOUDFLARE_API_TOKEN?: string;
+  CF_AI_MODEL?: string;
+  AI_MODEL?: string;
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
+  GOLD_API_KEY?: string;
   MEDIA_LIBRARY_SHEET_ID?: string;
   MEDIA_LIBRARY_SHEET_NAME?: string;
   MEDIA_LIBRARY_SHEET_RANGE?: string;
