@@ -2281,6 +2281,14 @@ void jsonLdString;
               currency: 'USD',
               maximumFractionDigits: 0
             });
+            if (bespokeLink && bespokeBase) {
+              const params = new URLSearchParams(new URL(bespokeLink.href).search);
+              const priceRaw = priceEl.dataset.priceRaw || '';
+              if (priceRaw && Number(priceRaw) > 0) {
+                params.set('price', priceRaw);
+                bespokeLink.href = `${bespokeBase}?${params.toString()}`;
+              }
+            }
             return;
           }
         } catch {
@@ -2359,14 +2367,15 @@ void jsonLdString;
           selectedStone.textContent = getSelectLabel(stoneSelect);
         }
         if (bespokeLink && bespokeBase) {
-          const params = new URLSearchParams();
+        const params = new URLSearchParams();
           if (metalSelect?.value) params.set('metal', metalSelect.value);
           if (hasStoneOptions && stoneSelect?.value) params.set('stone', stoneSelect.value);
+          const metalWeightValue = (metalWeightSelect && metalWeightSelect.value) || selectedMetalWeightValue || '';
+          if (metalWeightValue) {
+            params.set('metalWeight', metalWeightValue);
+          }
           if (stoneWeightSelect && stoneWeightSelect.value) {
             params.set('stoneWeight', stoneWeightSelect.value);
-          }
-          if (metalWeightSelect && metalWeightSelect.value) {
-            params.set('metalWeight', metalWeightSelect.value);
           }
           if (claritySelect && claritySelect.value) {
             params.set('clarity', claritySelect.value);
