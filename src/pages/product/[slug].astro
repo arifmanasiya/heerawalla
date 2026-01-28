@@ -633,7 +633,7 @@ const bespokeHref = withBase(`/bespoke/${product.slug}`);
 const sizeSpecs = (() => {
   const tags = (() => {
     const base = parseList(product.tags).map((tag) => tag.toLowerCase());
-    const categories = parseList(product.categories || product.category).map((entry) =>
+    const categories = parseList((product as any).categories || product.category).map((entry) =>
       String(entry).toLowerCase()
     );
     const categoryTags = categories

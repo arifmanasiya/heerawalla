@@ -56,7 +56,7 @@ function toOptionalNumberFromUnknown(value: unknown): number | undefined {
 async function loadProductsFromApi(slug?: string): Promise<Product[]> {
   const apiBase = (getEnv('PUBLIC_CATALOG_API_URL') || '').trim();
   if (!apiBase) {
-    throw new Error('PUBLIC_CATALOG_API_URL is required to load products from D1.');
+    return [];
   }
   const joiner = apiBase.includes('?') ? '&' : '?';
   const isLocal = /localhost|127\.0\.0\.1/i.test(apiBase);
@@ -96,6 +96,7 @@ async function loadProductsFromApi(slug?: string): Promise<Product[]> {
           slug: String(row.slug || ''),
           description: String(row.description || row.long_desc || ''),
           category: toOptionalFirstListItem(categoryValue) || categoryValue,
+          categories: categoryValue,
           gender: genderValue,
           design_code: String(row.design_code || 'Signature'),
           metal: toOptionalFirstListItem(metalOptions) || String(row.metal || ''),
@@ -124,7 +125,8 @@ async function loadProductsFromApi(slug?: string): Promise<Product[]> {
   }
   catch (error) {
     console.error('Original D1 API Error:', error);
-    throw new Error('Failed to load products from D1 catalog API.');
+    // Return empty so static builds don’t fail when API is unreachable.
+    return [];
   }
 }
 

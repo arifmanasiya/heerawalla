@@ -55,17 +55,26 @@ const parseStoneTypes = (value?: unknown) =>
 
 export async function loadInspirations(): Promise<Inspiration[]> {
   const apiBase = (getEnv('PUBLIC_CATALOG_API_URL') || '').trim();
-  if (!apiBase) {
-    throw new Error('PUBLIC_CATALOG_API_URL is required to load inspirations from D1.');
-  }
+  // Graceful fallback: during static builds or local dev the API may be unavailable.
+  if (!apiBase) return [];
+
   const joiner = apiBase.includes('?') ? '&' : '?';
   const url = `${apiBase}${joiner}include=inspirations`;
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!response.ok) {
-    throw new Error(`Catalog inspiration API failed (${response.status} ${response.statusText}).`);
+
+  let records: Record<string, unknown>[] = [];
+  try {
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) {
+      console.warn(`Catalog inspiration API failed (${response.status} ${response.statusText}); returning empty list.`);
+      return [];
+    }
+    const data = (await response.json()) as { inspirations?: Record<string, unknown>[] };
+    records = Array.isArray(data.inspirations) ? data.inspirations : [];
+  } catch (error) {
+    console.warn('Catalog inspiration API fetch failed; returning empty list.', error);
+    return [];
   }
-  const data = (await response.json()) as { inspirations?: Record<string, unknown>[] };
-  const records = Array.isArray(data.inspirations) ? data.inspirations : [];
+
   if (!records.length) return [];
 
   const mediaById = await getMediaLibraryMap();

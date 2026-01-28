@@ -5,6 +5,7 @@ export const productSchema = z.object({
   slug: z.string().min(1),
   description: z.string().optional().default(''),
   category: z.string().optional().default(''),
+  categories: z.string().optional().default(''),
   gender: z.string().optional().default(''),
   design_code: z.string().min(1),
   metal: z.string().optional().default(''),
