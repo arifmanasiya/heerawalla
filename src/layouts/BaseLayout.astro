@@ -1,7 +1,7 @@
 ---
 import "../styles/global.css";
 import { withBase } from '../lib/paths';
-import { HERO_IMAGE_URL, LOGO_MARK_URL } from '../lib/placeholders';
+import { HERO_IMAGE_URL } from '../lib/placeholders';
 
 type Crumb = { label: string; href?: string };
 const {
@@ -19,7 +19,7 @@ const {
 };
 const siteOrigin = Astro.site?.origin || 'https://heerawalla.com';
 const ogImage = image && image.startsWith('http') ? image : new URL(image || HERO_IMAGE_URL, siteOrigin).toString();
-const logoImage = LOGO_MARK_URL;
+const logoImage = new URL(withBase('/favicon.svg'), siteOrigin).toString();
 const url = new URL(Astro.url.pathname, siteOrigin).toString();
 const gaMeasurementId = import.meta.env.PUBLIC_GA_MEASUREMENT_ID ?? '';
 const isDev = import.meta.env.DEV;

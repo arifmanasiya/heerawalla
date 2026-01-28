@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Heerawalla">
+  <rect width="64" height="64" fill="#0b1928"/>
+  <rect x="8" y="8" width="48" height="48" fill="#0b1928" stroke="#ffffff" stroke-width="2"/>
+  <path d="M18 46V18h6v9h16v-9h6v28h-6v-12H24v12h-6z" fill="#ffffff"/>
+</svg>

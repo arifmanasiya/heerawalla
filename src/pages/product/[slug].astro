@@ -2258,11 +2258,13 @@ void jsonLdString;
         const base = resolvePricingBase();
         if (!base) {
           priceEl.textContent = priceLabel;
+          delete priceEl.dataset.priceRaw;
           return;
         }
         const payload = buildPayload();
         const requestId = ++pricingRequest;
         priceEl.textContent = 'Calculating...';
+        delete priceEl.dataset.priceRaw;
         try {
           const response = await fetch(`${base}/pricing/estimate`, {
             method: 'POST',
@@ -2273,6 +2275,7 @@ void jsonLdString;
           if (!response.ok) throw new Error('pricing_failed');
           const data = await response.json();
           if (data && data.ok && typeof data.price === 'number') {
+            priceEl.dataset.priceRaw = String(data.price);
             priceEl.textContent = data.price.toLocaleString('en-US', {
               style: 'currency',
               currency: 'USD',
@@ -2285,6 +2288,7 @@ void jsonLdString;
         }
         if (requestId === pricingRequest) {
           priceEl.textContent = priceLabel;
+          delete priceEl.dataset.priceRaw;
         }
       };
         const applySizeTypeSelection = () => {
@@ -2389,6 +2393,10 @@ void jsonLdString;
           }
           if (chainEntry && chainEntry.select.value) {
             params.set('sizeChain', chainEntry.select.value);
+          }
+          const priceRaw = priceEl.dataset.priceRaw || '';
+          if (priceRaw && Number(priceRaw) > 0) {
+            params.set('price', priceRaw);
           }
           params.set('source', 'product');
           bespokeLink.setAttribute('href', `${bespokeBase}?${params.toString()}`);

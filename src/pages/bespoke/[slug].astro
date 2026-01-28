@@ -168,15 +168,23 @@ const productUrl = Astro.site
     const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
     const params = new URLSearchParams(window.location.search);
-    const metalMode = params.get('metal') || '14k';
+    const metalParam = params.get('metal') || '14k';
     const stoneMode = params.get('stone') || 'natural';
     const rawSize = params.get('size') || '';
     const stoneWeight = params.get('stoneWeight') || '';
+    const metalWeight = params.get('metalWeight') || '';
     const priceParam = params.get('price') || '';
     const priceValue = Number(priceParam);
     const priceDisplay =
       Number.isFinite(priceValue) && priceValue > 0 ? formatter.format(priceValue) : '';
-    const metalLabel = metalMode === 'platinum' ? metalPlatinum : metalMode === '14k' ? metal14 : metal18;
+    const metalLabel = (() => {
+      const normalized = metalParam.toLowerCase();
+      if (normalized.includes('plat')) return metalPlatinum;
+      if (normalized.includes('14')) return metal14;
+      if (normalized.includes('18')) return metal18;
+      return metalParam || metal18;
+    })();
+    const metalValue = metalParam || metalLabel;
     const stoneLabel = stoneMode === 'lab' ? stoneLab : stoneNatural;
 
     const normalizeCategory = (value) => (value || '').toLowerCase().trim();
@@ -216,6 +224,7 @@ const productUrl = Astro.site
       if (stoneWeight) parts.push(`Stone weight: ${stoneWeight}`);
       if (sizeValue) parts.push(`Size: ${sizeValue}`);
       if (priceDisplay) parts.push(`Price: ${priceDisplay}`);
+      if (metalWeight) parts.push(`Metal weight: ${metalWeight} g`);
       selectionSummary.textContent = parts.length ? parts.join(' | ') : 'Selections will appear here.';
     }
     const backLink = form.querySelector('[data-back-link]');
@@ -302,9 +311,10 @@ const productUrl = Astro.site
           `Email: ${email}`,
           phone ? `Phone: ${phone}` : '',
           designCode ? `Design code: ${designCode}` : '',
-          metalLabel ? `Metal: ${metalLabel}` : '',
+          metalValue ? `Metal: ${metalValue}` : '',
           stoneLabel ? `Stone: ${stoneLabel}` : '',
           stoneWeight ? `Stone weight: ${stoneWeight}` : '',
+          metalWeight ? `Metal weight: ${metalWeight} g` : '',
           sizeValue ? `${sizeLabel}: ${sizeValue}` : '',
           priceDisplay ? `Estimated price: ${priceDisplay}` : '',
           `Timeline: ${timeline}`,
@@ -343,9 +353,10 @@ const productUrl = Astro.site
             productName,
             productUrl,
             designCode,
-            metal: metalLabel,
+            metal: metalValue,
             stone: stoneLabel,
             stoneWeight,
+            metalWeight,
             size: sizeValue,
             price: Number.isFinite(priceValue) && priceValue > 0 ? String(priceValue) : '',
             timeline,
