@@ -1678,17 +1678,18 @@ export async function handleScheduledEvent(
  * Fetch daily gold price (XAU/USD) from goldapi.io and store USD per gram
  * into D1.cost_chart.gold_price_per_gram_usd. Requires GOLD_API_KEY secret.
  */
-async function updateGoldPrice(env: Env) {
+async function updateGoldPrice(env: Env, options?: { force?: boolean }) {
   if (!env.GOLD_API_KEY || !env.DB) return;
 
   try {
+    const force = Boolean(options?.force);
     const now = Date.now();
     const lastRunRaw = env.HEERAWALLA_ACKS
       ? await env.HEERAWALLA_ACKS.get("gold_price_last_run", "text")
       : null;
     const lastRun = lastRunRaw ? Number(lastRunRaw) : 0;
     const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-    if (lastRun && now - lastRun < TWENTY_FOUR_HOURS) {
+    if (!force && lastRun && now - lastRun < TWENTY_FOUR_HOURS) {
       return;
     }
 
@@ -2420,7 +2421,7 @@ async function handleAdminRequest(
           { status: 400, headers: buildCorsHeaders(allowedOrigin, true) },
         );
       }
-      await updateGoldPrice(env);
+      await updateGoldPrice(env, { force: true });
       const rows = await d1All(
         env,
         "SELECT value, unit, notes FROM cost_chart WHERE key = 'gold_price_per_gram_usd' LIMIT 1",
