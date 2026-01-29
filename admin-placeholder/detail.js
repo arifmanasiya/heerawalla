@@ -4352,6 +4352,15 @@
     updateNextActionText();
   }
 
+  // Mark current form as dirty and refresh related controls.
+  function markDirty(section = "edits") {
+    if (section === "fulfillment") {
+      updateFulfillmentDirty();
+      return;
+    }
+    updatePrimaryActionState();
+  }
+
   function updateNextActionText() {
     if (!ui.nextActionText) return;
     const missingCount = ui.missingList
@@ -6323,7 +6332,7 @@
     if (ui.goldRefresh) {
       ui.goldRefresh.addEventListener("click", async () => {
         ui.goldRefresh.disabled = true;
-        ui.goldRefresh.textContent = "Refreshing…";
+        ui.goldRefresh.textContent = "Refreshing...";
         try {
           const result = await apiFetch("/cost-chart/gold-refresh", {
             method: "POST",

@@ -1704,8 +1704,13 @@ async function updateGoldPrice(env: Env) {
     const data = (await res.json()) as Record<string, unknown>;
     const usdPerOz = Number(data.price);
     const gram24 = Number(data.price_gram_24k);
+    const gram22 = Number(data.price_gram_22k);
+    const gram21 = Number(data.price_gram_21k);
+    const gram20 = Number(data.price_gram_20k);
     const gram18 = Number(data.price_gram_18k);
+    const gram16 = Number(data.price_gram_16k);
     const gram14 = Number(data.price_gram_14k);
+    const gram10 = Number(data.price_gram_10k);
 
     if (!Number.isFinite(usdPerOz) || usdPerOz <= 0) {
       logError("gold_price_invalid", { price: data.price });
@@ -1713,32 +1718,35 @@ async function updateGoldPrice(env: Env) {
     }
 
     // troy ounce to grams
+    const round2 = (val: number) => Math.round(val * 100) / 100;
     const GRAMS_PER_TROY_OUNCE = 31.1034768;
-    const usdPerGram = usdPerOz / GRAMS_PER_TROY_OUNCE;
+    const usdPerGram = gram24 && Number.isFinite(gram24) ? gram24 : usdPerOz / GRAMS_PER_TROY_OUNCE;
     const today = new Date().toISOString().slice(0, 10);
 
-    const update = await env.DB.prepare(
-      `UPDATE cost_chart SET value = ?, unit = 'USD/g', notes = ? WHERE key = 'gold_price_per_gram_usd'`
-    ).bind(usdPerGram, today).run();
+    const costEntries: Array<{ key: string; value: number; unit: string }> = [
+      { key: "gold_price_per_gram_usd", value: usdPerGram, unit: "USD/g" },
+      { key: "price_gram_24k", value: gram24, unit: "USD/g" },
+      { key: "price_gram_22k", value: gram22, unit: "USD/g" },
+      { key: "price_gram_21k", value: gram21, unit: "USD/g" },
+      { key: "price_gram_20k", value: gram20, unit: "USD/g" },
+      { key: "price_gram_18k", value: gram18, unit: "USD/g" },
+      { key: "price_gram_16k", value: gram16, unit: "USD/g" },
+      { key: "price_gram_14k", value: gram14, unit: "USD/g" },
+      { key: "price_gram_10k", value: gram10, unit: "USD/g" },
+    ];
 
-    if (!update.meta?.changes) {
-      await env.DB.prepare(
-        `INSERT INTO cost_chart (key, value, unit, notes) VALUES ('gold_price_per_gram_usd', ?, 'USD/g', ?)`
-      ).bind(usdPerGram, today).run();
-    }
+    for (const entry of costEntries) {
+      if (!Number.isFinite(entry.value) || entry.value <= 0) continue;
+      const rounded = round2(entry.value);
+      const updated = await env.DB.prepare(
+        `UPDATE cost_chart SET value = ?, unit = ?, notes = ? WHERE key = ?`
+      ).bind(rounded, entry.unit, today, entry.key).run();
 
-    // Update price chart ratios if gram data present
-    if (Number.isFinite(gram24) && Number.isFinite(gram18) && gram24 > 0) {
-      const ratio18 = withMarkup(gram18 / gram24);
-      await upsertMetalAdjustment(env, "18K Yellow Gold", ratio18, today);
-      await upsertMetalAdjustment(env, "18K Rose Gold", ratio18, today);
-      await upsertMetalAdjustment(env, "18K White Gold", ratio18, today);
-    }
-    if (Number.isFinite(gram24) && Number.isFinite(gram14) && gram24 > 0) {
-      const ratio14 = withMarkup(gram14 / gram24);
-      await upsertMetalAdjustment(env, "14K Yellow Gold", ratio14, today);
-      await upsertMetalAdjustment(env, "14K Rose Gold", ratio14, today);
-      await upsertMetalAdjustment(env, "14K White Gold", ratio14, today);
+      if (!updated.meta?.changes) {
+        await env.DB.prepare(
+          `INSERT INTO cost_chart (key, value, unit, notes) VALUES (?, ?, ?, ?)`
+        ).bind(entry.key, rounded, entry.unit, today).run();
+      }
     }
 
     logInfo("gold_price_updated", {
@@ -1747,6 +1755,11 @@ async function updateGoldPrice(env: Env) {
       price_gram_24k: gram24,
       price_gram_18k: gram18,
       price_gram_14k: gram14,
+      price_gram_22k: gram22,
+      price_gram_21k: gram21,
+      price_gram_20k: gram20,
+      price_gram_16k: gram16,
+      price_gram_10k: gram10,
     });
     if (env.HEERAWALLA_ACKS) {
       await env.HEERAWALLA_ACKS.put("gold_price_last_run", String(Date.now()), {
@@ -4145,6 +4158,12 @@ function normalizeMetalOption(value: string) {
   const color = getMetalColorSuffix(trimmed);
   if (normalized.startsWith("14")) return color ? `14K ${color}` : "14K";
   if (normalized.startsWith("18")) return color ? `18K ${color}` : "18K";
+  if (normalized.startsWith("24")) return "24K";
+  if (normalized.startsWith("22")) return "22K";
+  if (normalized.startsWith("21")) return "21K";
+  if (normalized.startsWith("20")) return "20K";
+  if (normalized.startsWith("16")) return "16K";
+  if (normalized.startsWith("10")) return "10K";
   return trimmed;
 }
 
@@ -4245,6 +4264,33 @@ function resolveMetalPricingKey(metal: string, requestedMetal: string) {
   return normalized;
 }
 
+function metalPriceKeysFor(metal: string): string[] {
+  const normalized = normalizeMetalOption(metal);
+  if (normalized.startsWith("24K")) return ["price_gram_24k", "gold_price_per_gram_usd"];
+  if (normalized.startsWith("22K")) return ["price_gram_22k", "price_gram_24k", "gold_price_per_gram_usd"];
+  if (normalized.startsWith("21K")) return ["price_gram_21k", "price_gram_24k", "gold_price_per_gram_usd"];
+  if (normalized.startsWith("20K")) return ["price_gram_20k", "price_gram_24k", "gold_price_per_gram_usd"];
+  if (normalized.startsWith("18K")) {
+    return [
+      "price_gram_18k",
+      "metal_cost_18k_per_gram",
+      "metal_cost_per_gram_18k",
+      "gold_price_per_gram_usd",
+    ];
+  }
+  if (normalized.startsWith("16K")) return ["price_gram_16k", "price_gram_18k", "gold_price_per_gram_usd"];
+  if (normalized.startsWith("14K")) {
+    return [
+      "price_gram_14k",
+      "price_gram_18k",
+      "metal_cost_14k_per_gram",
+      "gold_price_per_gram_usd",
+    ];
+  }
+  if (normalized.startsWith("10K")) return ["price_gram_10k", "price_gram_14k", "gold_price_per_gram_usd"];
+  return ["gold_price_per_gram_usd", "price_gram_24k"];
+}
+
 function findAdjustmentMultiplier(adjustments: Record<string, PriceAdjustment>, keys: string[]) {
   for (const key of keys) {
     if (!key) continue;
@@ -4255,105 +4301,8 @@ function findAdjustmentMultiplier(adjustments: Record<string, PriceAdjustment>, 
 }
 
 async function loadPriceChartAdjustments(env: Env): Promise<Record<string, PriceAdjustment>> {
-  if (hasD1(env)) {
-    const rows = await d1All(
-      env,
-      "SELECT metal, adjustment_type, adjustment_value FROM price_chart"
-    );
-    const adjustments: Record<string, PriceAdjustment> = {};
-    rows.forEach((row) => {
-      const metal = normalizeMetalOption(String(row.metal || ""));
-      if (!metal) return;
-      const adjustmentType = normalizeAdjustmentType(String(row.adjustment_type || ""));
-      const rawValue = String(row.adjustment_value ?? "");
-      const value = parseAdjustmentValue(rawValue || "", adjustmentType);
-      let mode: "delta" | "multiplier" | undefined;
-      if (adjustmentType === "percent") {
-        const numeric = parseNumberValue(rawValue || "");
-        const hasPercent = rawValue.includes("%");
-        if (Number.isFinite(numeric)) {
-          if (numeric < 0) {
-            mode = "delta";
-          } else if (hasPercent || numeric >= 2) {
-            mode = "delta";
-          } else {
-            mode = "multiplier";
-          }
-        }
-      }
-      adjustments[metal] = { type: adjustmentType, value, mode };
-    });
-    return adjustments;
-  }
-  const config = getPriceChartSheetConfig(env);
-  if (!config) return {};
-  try {
-    const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
-    await ensureSheetHeader(env, config, PRICE_CHART_HEADER, cacheKey);
-    const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-    const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
-    const headerConfig = resolveHeaderConfig(headerRow, PRICE_CHART_HEADER, "metal");
-    const rows = await fetchSheetValues(
-      env,
-      config.sheetId,
-      `${config.sheetName}!A${headerConfig.rowStart}:AZ`
-    );
-    const adjustments: Record<string, PriceAdjustment> = {};
-    rows.forEach((row) => {
-      const record = mapSheetRowToRecord(headerConfig.header, row);
-      const metal = normalizeMetalOption(record.metal || "");
-      if (!metal) return;
-      const adjustmentType = normalizeAdjustmentType(record.adjustment_type || "");
-      const rawValue = getString(record.adjustment_value);
-      const value = parseAdjustmentValue(rawValue || "", adjustmentType);
-      let mode: "delta" | "multiplier" | undefined;
-      if (adjustmentType === "percent") {
-        const numeric = parseNumberValue(rawValue || "");
-        const hasPercent = rawValue.includes("%");
-        if (Number.isFinite(numeric)) {
-          if (numeric < 0) {
-            mode = "delta";
-          } else if (hasPercent || numeric >= 2) {
-            mode = "delta";
-          } else {
-            mode = "multiplier";
-          }
-        }
-      }
-      adjustments[metal] = { type: adjustmentType, value, mode };
-    });
-    return adjustments;
-  } catch {
-    try {
-      const records = await fetchPublicSheetRecords(config, ["metal", "adjustment_type", "adjustment_value"]);
-      const adjustments: Record<string, PriceAdjustment> = {};
-      records.forEach((record) => {
-        const metal = normalizeMetalOption(record.metal || "");
-        if (!metal) return;
-        const adjustmentType = normalizeAdjustmentType(record.adjustment_type || "");
-        const rawValue = getString(record.adjustment_value);
-        const value = parseAdjustmentValue(rawValue || "", adjustmentType);
-        let mode: "delta" | "multiplier" | undefined;
-        if (adjustmentType === "percent") {
-          const numeric = parseNumberValue(rawValue || "");
-          const hasPercent = rawValue.includes("%");
-          if (Number.isFinite(numeric)) {
-            if (numeric < 0) {
-              mode = "delta";
-            } else if (hasPercent || numeric >= 2) {
-              mode = "delta";
-            } else {
-              mode = "multiplier";
-            }
-          }
-        }
-        adjustments[metal] = { type: adjustmentType, value, mode };
-      });
-      return adjustments;
-    } catch {
-      return {};
-    }
-  }
+  // Price chart adjustments are deprecated; rely solely on cost chart per-gram values.
+  return {};
 }
 
 type CostChartValues = Record<string, string>;
@@ -5191,6 +5140,7 @@ function computeOptionPriceFromCosts(
   }
 
   const goldPricePerGram = getCostNumber(costValues, [
+    "price_gram_24k",
     "gold_price_per_gram_usd",
     "gold_price_per_gram",
     "gold_price_gram",
@@ -5198,28 +5148,14 @@ function computeOptionPriceFromCosts(
   ]);
   const requestedMetal = normalizeMetalOption(record.metal || "");
   const baseMetalKey = requestedMetal || "18K";
-  let metalCostPerGram = getCostNumber(costValues, [
-    "metal_cost_18k_per_gram",
-    "metal_cost_18k_usd_per_gram",
-    "metal_cost_per_gram_18k",
-    "metal_cost_per_gram",
-    "metal_cost_per_gram_usd",
-  ]);
+  const metalPriceKeys = metalPriceKeysFor(baseMetalKey);
+  let metalCostPerGram = getCostNumber(costValues, metalPriceKeys);
   if ((!Number.isFinite(metalCostPerGram) || metalCostPerGram <= 0) && goldPricePerGram > 0) {
     metalCostPerGram = goldPricePerGram;
   }
   const metalCostPerGramBase = metalCostPerGram;
-  const adjustmentMap = adjustments || {};
-  const metalAdjustmentKey = resolveMetalPricingKey(baseMetalKey, requestedMetal);
-  const metalAdjustment =
-    adjustmentMap[metalAdjustmentKey] ||
-    adjustmentMap[baseMetalKey] ||
-    adjustmentMap["18K"] ||
-    adjustmentMap["18K Yellow Gold"] ||
-    adjustmentMap["18K White Gold"];
-  if (metalAdjustment && Number.isFinite(metalCostPerGram) && metalCostPerGram > 0) {
-    metalCostPerGram = applyPriceAdjustment(metalCostPerGram, metalAdjustment);
-  }
+  const metalAdjustmentKey = "";
+  const metalAdjustment = undefined;
   if (!Number.isFinite(metalCostPerGram) || metalCostPerGram <= 0) {
     logError("missing_metal_cost", {
       keys: Object.keys(costValues),
@@ -5355,19 +5291,12 @@ function computeOptionPriceFromCosts(
 function buildQuoteOptions(
   record: Record<string, string>,
   metals: string[],
-  adjustments: Record<string, PriceAdjustment>
+  costValues: CostChartValues,
+  diamondPrices: DiamondPriceEntry[],
+  clarityGroups?: DiamondClarityGroups | null,
+  discountDetails?: DiscountDetails
 ) {
   const options: QuoteOption[] = [];
-  const requestedMetal = normalizeMetalOption(record.metal || "");
-  const baseMetalKey = requestedMetal || "18K";
-  const baseFactor =
-    findAdjustmentMultiplier(adjustments, [
-      resolveMetalPricingKey(baseMetalKey, requestedMetal),
-      baseMetalKey,
-      "18K",
-      "18K Yellow Gold",
-      "18K White Gold",
-    ]) || null;
   for (let i = 1; i <= 3; i += 1) {
     const clarity = record[`quote_option_${i}_clarity`] || "";
     const color = record[`quote_option_${i}_color`] || "";
@@ -5377,19 +5306,20 @@ function buildQuoteOptions(
     const prices: Record<string, number> = {};
     metals.forEach((metal) => {
       const normalized = normalizeMetalOption(metal);
-      const base = price18k;
       if (!normalized) return;
-      const targetKey = resolveMetalPricingKey(normalized, requestedMetal);
-      const targetFactor = findAdjustmentMultiplier(adjustments, [targetKey, normalized]);
-      if (baseFactor && targetFactor && baseFactor > 0) {
-        prices[normalized] = Math.round(base * (targetFactor / baseFactor));
-      } else {
-        const directAdjustment = adjustments[targetKey] || adjustments[normalized];
-        if (normalized !== baseMetalKey && directAdjustment) {
-          prices[normalized] = Math.round(applyPriceAdjustment(base, directAdjustment));
-        } else {
-          prices[normalized] = Math.round(base);
-        }
+      const overrideRecord = { ...record, metal: normalized };
+      const computed = computeOptionPriceFromCosts(
+        overrideRecord,
+        clarity,
+        color,
+        costValues,
+        diamondPrices,
+        clarityGroups,
+        {},
+        discountDetails
+      );
+      if (computed.ok) {
+        prices[normalized] = computed.price;
       }
     });
     options.push({
@@ -5407,7 +5337,11 @@ async function computeQuoteOptionPrices(
   record: Record<string, string>,
   options?: { force?: boolean }
 ): Promise<
-  | { ok: true; fields: Record<string, string>; meta: { discountSummary: string; discountPercent: number } }
+  | {
+      ok: true;
+      fields: Record<string, string>;
+      meta: { discountSummary: string; discountPercent: number; discountDetails: DiscountDetails };
+    }
   | { ok: false; error: string }
 > {
   const fields: Record<string, string> = {};
@@ -5437,13 +5371,13 @@ async function computeQuoteOptionPrices(
       meta: {
         discountSummary: discountDetails.summary,
         discountPercent: discountDetails.appliedPercent,
+        discountDetails,
       },
     };
   }
 
   const diamondPrices = await loadDiamondPriceChart(env);
   const clarityGroups = await loadDiamondClarityGroups(env);
-  const adjustments = await loadPriceChartAdjustments(env);
   for (let i = 1; i <= 3; i += 1) {
     const priceRaw = record[`quote_option_${i}_price_18k`] || "";
     const clarity = record[`quote_option_${i}_clarity`] || "";
@@ -5458,7 +5392,7 @@ async function computeQuoteOptionPrices(
       costValues,
       diamondPrices,
       clarityGroups,
-      adjustments,
+      {},
       discountDetails
     );
     if (!result.ok) {
@@ -5473,6 +5407,7 @@ async function computeQuoteOptionPrices(
     meta: {
       discountSummary: discountDetails.summary,
       discountPercent: discountDetails.appliedPercent,
+      discountDetails,
     },
   };
 }
@@ -5698,9 +5633,27 @@ async function submitQuoteAdmin(
   const merged = { ...mergedBase, ...computed.fields };
   const discountSummary = computed.meta?.discountSummary || "";
   const discountPercent = Number(computed.meta?.discountPercent || 0);
+  const discountDetails = computed.meta?.discountDetails;
   const metals = resolveQuoteMetalOptions(merged.quote_metal_options || "", merged.metal || "");
-  const adjustments = await loadPriceChartAdjustments(env);
-  const quoteOptions = buildQuoteOptions(merged, metals, adjustments);
+  const costValues = await loadCostChartValues(env);
+  const diamondPrices = await loadDiamondPriceChart(env);
+  const clarityGroups = await loadDiamondClarityGroups(env);
+  const quoteOptions = buildQuoteOptions(
+    merged,
+    metals,
+    costValues,
+    diamondPrices,
+    clarityGroups,
+    discountDetails ||
+      (computed.meta?.discountPercent !== undefined
+        ? {
+            label: discountSummary,
+            rawPercent: discountPercent,
+            appliedPercent: discountPercent,
+            summary: discountSummary,
+          }
+        : undefined)
+  );
   if (!quoteOptions.length) {
     return { ok: false, error: "quote_options_missing" };
   }
