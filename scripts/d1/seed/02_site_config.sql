@@ -10,7 +10,7 @@ INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('webmail_com
 INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('newsletter_email', 'info@heerawalla.com', datetime('now'));
 INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('newsletter_subject', 'Join Heerawalla', datetime('now'));
 INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('newsletter_body', 'Please add me to the Heerawalla list.', datetime('now'));
-INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('orders_email', 'orders@heerawalla.com', datetime('now'));
+INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('orders_email', 'atelier@heerawalla.com', datetime('now'));
 INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('consultation_booking_link', 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0syAfIydQJsRwm2FovSPItSvwSQFRmytbKkOYUj5kUiPHhjOR2C_G90dnkPZk5c3np6Z7oZxj-?gv=true', datetime('now'));
 INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('calendar_api_base', 'https://admin-api.heerawalla.com/calendar', datetime('now'));
 INSERT OR REPLACE INTO site_config (key, value, updated_at) VALUES ('atelier_api_base', 'https://admin-api.heerawalla.com', datetime('now'));

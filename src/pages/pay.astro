@@ -5,7 +5,7 @@ import Footer from '../components/Footer.astro';
 import { loadSiteConfig, getConfigValue } from '../lib/config';
 
 const config = await loadSiteConfig();
-const ordersEmail = getConfigValue(config, 'orders_email', 'orders@heerawalla.com');
+const ordersEmail = getConfigValue(config, 'orders_email', 'atelier@heerawalla.com');
 ---
 
 <BaseLayout

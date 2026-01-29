@@ -1049,7 +1049,7 @@ INSERT INTO site_config ("key", "value", "updated_at") VALUES ('webmail_compose_
 INSERT INTO site_config ("key", "value", "updated_at") VALUES ('newsletter_email', 'info@heerawalla.com', '2026-01-23 02:33:39');
 INSERT INTO site_config ("key", "value", "updated_at") VALUES ('newsletter_subject', 'Join Heerawalla', '2026-01-23 02:33:39');
 INSERT INTO site_config ("key", "value", "updated_at") VALUES ('newsletter_body', 'Please add me to the Heerawalla list.', '2026-01-23 02:33:39');
-INSERT INTO site_config ("key", "value", "updated_at") VALUES ('orders_email', 'orders@heerawalla.com', '2026-01-23 02:33:39');
+INSERT INTO site_config ("key", "value", "updated_at") VALUES ('orders_email', 'atelier@heerawalla.com', '2026-01-23 02:33:39');
 INSERT INTO site_config ("key", "value", "updated_at") VALUES ('consultation_booking_link', 'https://calendar.google.com/calendar/appointments/schedules/AcZssZ0syAfIydQJsRwm2FovSPItSvwSQFRmytbKkOYUj5kUiPHhjOR2C_G90dnkPZk5c3np6Z7oZxj-?gv=true', '2026-01-23 02:33:39');
 INSERT INTO site_config ("key", "value", "updated_at") VALUES ('calendar_api_base', 'https://admin-api.heerawalla.com/calendar', '2026-01-23 02:33:39');
 INSERT INTO site_config ("key", "value", "updated_at") VALUES ('atelier_api_base', 'https://admin-api.heerawalla.com', '2026-01-23 02:33:39');

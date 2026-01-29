@@ -57,17 +57,23 @@
         </label>
       </section>
 
-      <nav class="tabs">
-        <button class="tab is-active" data-tab="orders" type="button">Orders</button>
-        <button class="tab" data-tab="quotes" type="button">Quotes</button>
-        <button class="tab" data-tab="tickets" type="button">Customer Tickets</button>
-        <button class="tab" data-tab="contacts" type="button">Contacts</button>
-        <button class="tab" data-tab="products" type="button">Products</button>
-        <button class="tab" data-tab="inspirations" type="button">Inspirations</button>
-        <button class="tab" data-tab="media-library" type="button">Media Library</button>
-        <button class="tab" data-tab="price-chart" data-admin-only type="button">Price Chart</button>
-        <button class="tab" data-tab="cost-chart" data-admin-only type="button">Cost Chart</button>
-        <button class="tab" data-tab="diamond-price-chart" data-admin-only type="button">Diamond Pricing</button>
+      <nav class="tabs" aria-label="Admin sections">
+        <div class="tab-group">
+          <button class="tab is-active" data-tab="orders" type="button" title="Orders">📦 Orders</button>
+          <button class="tab" data-tab="quotes" type="button" title="Quotes">💬 Quotes</button>
+          <button class="tab" data-tab="tickets" type="button" title="Customer Tickets">🎟 Tickets</button>
+          <button class="tab" data-tab="contacts" type="button" title="Contacts">👤 Contacts</button>
+          <button class="tab" data-tab="products" type="button" title="Products">🛍 Products</button>
+          <button class="tab" data-tab="inspirations" type="button" title="Inspirations">✨ Inspirations</button>
+          <button class="tab" data-tab="media-library" type="button" title="Media Library">🖼 Media</button>
+        </div>
+        <div class="tab-group tab-group--admin" aria-label="Pricing">
+          <span class="tab-label" data-admin-only>Pricing</span>
+          <button class="tab" data-tab="cost-chart" data-admin-only type="button" title="Cost Chart">Cost</button>
+          <button class="tab" data-tab="diamond-price-chart" data-admin-only type="button" title="Diamond Pricing">
+            Diamonds
+          </button>
+        </div>
       </nav>
 
       <section class="filters">

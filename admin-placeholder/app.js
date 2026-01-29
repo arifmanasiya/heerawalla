@@ -41,7 +41,6 @@
     products: [],
     inspirations: [],
     "media-library": [],
-    "price-chart": [],
     "cost-chart": [],
     "diamond-price-chart": [],
   };
@@ -112,14 +111,6 @@
       { key: "url", label: "URL" },
       { key: "view", label: "" },
     ],
-    "price-chart": [
-      { key: "row_number", label: "Row" },
-      { key: "metal", label: "Metal" },
-      { key: "adjustment_type", label: "Adjustment" },
-      { key: "adjustment_value", label: "Value" },
-      { key: "notes", label: "Notes" },
-      { key: "view", label: "" },
-    ],
     "cost-chart": [
       { key: "row_number", label: "Row" },
       { key: "key", label: "Key" },
@@ -188,11 +179,6 @@
       { value: "label", label: "Label" },
       { value: "media_type", label: "Type" },
     ],
-    "price-chart": [
-      { value: "row_number", label: "Row" },
-      { value: "metal", label: "Metal" },
-      { value: "adjustment_value", label: "Value" },
-    ],
     "cost-chart": [
       { value: "row_number", label: "Row" },
       { value: "key", label: "Key" },
@@ -215,7 +201,6 @@
     products: { sort: "name", dir: "asc" },
     inspirations: { sort: "name", dir: "asc" },
     "media-library": { sort: "media_id", dir: "asc" },
-    "price-chart": { sort: "row_number", dir: "asc" },
     "cost-chart": { sort: "row_number", dir: "asc" },
     "diamond-price-chart": { sort: "row_number", dir: "asc" },
   };
@@ -248,7 +233,6 @@
     products: [{ action: "delete", label: "Delete", confirm: "Delete this product? This cannot be undone." }],
     inspirations: [],
     "media-library": [],
-    "price-chart": [],
     "cost-chart": [],
     "diamond-price-chart": [],
   };
@@ -294,7 +278,6 @@
     products: [],
     inspirations: [],
     "media-library": [],
-    "price-chart": ["metal", "adjustment_type", "adjustment_value", "notes"],
     "cost-chart": ["key", "value", "unit", "notes"],
     "diamond-price-chart": ["clarity", "color", "weight_min", "weight_max", "price_per_ct", "notes"],
   };
@@ -372,12 +355,11 @@
     products: "Product",
     inspirations: "Inspiration",
     "media-library": "Media library",
-    "price-chart": "Price chart",
     "cost-chart": "Cost chart",
     "diamond-price-chart": "Diamond price chart",
   };
 
-  const PRICING_TABS = new Set(["price-chart", "cost-chart", "diamond-price-chart"]);
+  const PRICING_TABS = new Set(["cost-chart", "diamond-price-chart"]);
   const CATALOG_TABS = new Set(["products", "inspirations", "media-library"]);
   const QUOTE_OPTION_FIELDS = [
     { clarity: "quote_option_1_clarity", color: "quote_option_1_color", price: "quote_option_1_price_18k" },
@@ -416,7 +398,6 @@
       return state.role === "admin" || state.role === "ops";
     }
     if (
-      state.tab === "price-chart" ||
       state.tab === "cost-chart" ||
       state.tab === "diamond-price-chart"
     ) {
@@ -1444,7 +1425,6 @@
     if (tab === "products") return "/products";
     if (tab === "inspirations") return "/inspirations";
     if (tab === "media-library") return "/media-library";
-    if (tab === "price-chart") return "/price-chart";
     if (tab === "cost-chart") return "/cost-chart";
     if (tab === "diamond-price-chart") return "/diamond-price-chart";
     return `/${tab}`;
@@ -1458,7 +1438,6 @@
     if (state.tab === "products") return "/products/action";
     if (state.tab === "inspirations") return "/inspirations/action";
     if (state.tab === "media-library") return "/media-library/action";
-    if (state.tab === "price-chart") return "/price-chart/action";
     if (state.tab === "cost-chart") return "/cost-chart/action";
     if (state.tab === "diamond-price-chart") return "/diamond-price-chart/action";
     return "";
@@ -1825,10 +1804,7 @@
       item.product_name || item.name || item.key || item.metal || item.clarity || requestId;
     ui.detailSub.textContent = requestId;
     const statusValue =
-      state.tab === "contacts" ||
-      state.tab === "price-chart" ||
-      state.tab === "cost-chart" ||
-      state.tab === "diamond-price-chart"
+      state.tab === "contacts" || state.tab === "cost-chart" || state.tab === "diamond-price-chart"
         ? "--"
         : item.status || "NEW";
     ui.detailStatus.textContent = statusValue;
@@ -1867,14 +1843,6 @@
             ["Interests", item.interests],
             ["Contact preference", item.contact_preference],
             ["Customer notes", item.notes],
-          ]
-        : state.tab === "price-chart"
-        ? [
-            ["Row", item.row_number],
-            ["Metal", item.metal],
-            ["Adjustment type", item.adjustment_type],
-            ["Adjustment value", item.adjustment_value],
-            ["Notes", item.notes],
           ]
         : state.tab === "cost-chart"
         ? [
@@ -2534,8 +2502,6 @@
         return "contact_detail";
       case "media-library":
         return "media_detail";
-      case "price-chart":
-        return "price_chart_detail";
       case "cost-chart":
         return "cost_chart_detail";
       case "diamond-price-chart":
@@ -2604,11 +2570,7 @@
       }
     }
     const payload = { action };
-    if (
-      state.tab === "price-chart" ||
-      state.tab === "cost-chart" ||
-      state.tab === "diamond-price-chart"
-    ) {
+    if (state.tab === "cost-chart" || state.tab === "diamond-price-chart") {
       payload.rowNumber = recordId;
     } else {
       payload.requestId = recordId;
@@ -2648,11 +2610,7 @@
       fields.notes = notes;
     }
     const payload = { action: "edit", fields };
-    if (
-      state.tab === "price-chart" ||
-      state.tab === "cost-chart" ||
-      state.tab === "diamond-price-chart"
-    ) {
+    if (state.tab === "cost-chart" || state.tab === "diamond-price-chart") {
       payload.rowNumber = recordId;
     } else {
       payload.requestId = recordId;
@@ -2707,11 +2665,7 @@
     }
     const notes = getNotesValue();
     const payload = { action: "edit", notes };
-    if (
-      state.tab === "price-chart" ||
-      state.tab === "cost-chart" ||
-      state.tab === "diamond-price-chart"
-    ) {
+    if (state.tab === "cost-chart" || state.tab === "diamond-price-chart") {
       payload.rowNumber = recordId;
     } else {
       payload.requestId = recordId;

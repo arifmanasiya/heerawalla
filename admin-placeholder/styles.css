@@ -321,8 +321,16 @@ body {
 
 .tabs {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
+  padding: 6px 4px;
   margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  overflow-x: auto;
 }
 
 .tabs--compact {
@@ -331,23 +339,54 @@ body {
   margin-top: 12px;
 }
 
+.tab-group {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tab-group--admin {
+  margin-left: auto;
+  gap: 6px;
+}
+
+.tab-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  padding: 4px 0;
+}
+
 .tab {
   border: 1px solid var(--line-dark);
-  padding: 11px 20px;
-  background: rgba(255, 255, 255, 0.8);
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: none;
   cursor: pointer;
-  transition: border 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, border 0.2s ease, transform 0.15s ease;
+  white-space: nowrap;
+}
+
+.tab[data-admin-only] {
+  color: var(--muted);
 }
 
 .tab.is-active {
   background: var(--ink);
   color: #ffffff;
   border-color: var(--ink);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
   transform: translateY(-1px);
+}
+
+.tab:hover:not(.is-active) {
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 .catalog-panel {
