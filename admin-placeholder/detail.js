@@ -3952,6 +3952,9 @@
     });
     updateFulfillmentDirty();
     updateTrackingUrlAuto();
+    if (state.selectedItem) {
+      updateSummaryCard(state.selectedItem);
+    }
   }
 
   function buildSummaryAddress(item) {
@@ -4009,11 +4012,16 @@
       const delayText = formatDelayWeeks(item.timeline_adjustment_weeks);
       ui.summaryTimelineDelay.textContent = delayText || "--";
     }
+    const stoneValue = item.stone || (state.orderDetails && state.orderDetails.stone) || "";
+    const stoneWeightValue =
+      item.stone_weight ||
+      (state.orderDetails && state.orderDetails.stone_weight) ||
+      "";
     if (ui.summaryMetal) ui.summaryMetal.textContent = item.metal || "--";
-    if (ui.summaryStone) ui.summaryStone.textContent = item.stone || "--";
+    if (ui.summaryStone) ui.summaryStone.textContent = stoneValue || "--";
     if (ui.summaryStoneWeight) {
       ui.summaryStoneWeight.textContent =
-        formatStoneWeight(item.stone_weight) || "--";
+        formatStoneWeight(stoneWeightValue) || "--";
     }
     if (ui.summaryMetalWeight) {
       ui.summaryMetalWeight.textContent =

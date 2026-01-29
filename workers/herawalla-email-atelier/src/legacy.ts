@@ -3613,6 +3613,16 @@ function mapD1RowToRecord(row: Record<string, unknown>) {
     return { items: paged, total: sorted.length, headers: headerFallback };
   }
 
+  if (!hasD1(env) && (kind === "order" || kind === "quote" || kind === "contact")) {
+    const headerFallback =
+      kind === "order"
+        ? ORDER_SHEET_HEADER
+        : kind === "quote"
+        ? QUOTE_SHEET_HEADER
+        : CONTACT_SHEET_HEADER;
+    return { items: [], total: 0, headers: headerFallback, error: "d1_unavailable" };
+  }
+
   const isCatalog =
     kind === "product" ||
     kind === "inspiration" ||
@@ -3823,46 +3833,14 @@ async function buildPricingList(
 
     return { items: paged, total: sorted.length, headers: headerFallback };
   }
-  const config = getPricingSheetConfig(env, kind);
-  if (!config) {
-    return { items: [], total: 0 };
-  }
+  // Require D1 for pricing data; do not fall back to Sheets.
   const headerFallback =
     kind === "price_chart"
       ? PRICE_CHART_HEADER
       : kind === "cost_chart"
       ? COST_CHART_HEADER
       : DIAMOND_PRICE_CHART_HEADER;
-  const cacheKey = `sheet_header:${config.sheetId}:${config.sheetName}`;
-  await ensureSheetHeader(env, config, headerFallback, cacheKey);
-  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
-  const requiredKey =
-    kind === "price_chart" ? "metal" : kind === "cost_chart" ? "key" : "price_per_ct";
-  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
-  const rows = await fetchSheetValues(
-    env,
-    config.sheetId,
-    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
-  );
-  const items = rows.map((row, index) => {
-    const entry: Record<string, string> = {
-      row_number: String(index + headerConfig.rowStart),
-    };
-    headerConfig.header.forEach((key, idx) => {
-      if (!key) return;
-      entry[key] = String(row[idx] ?? "");
-    });
-    return entry;
-  });
-
-  const filtered = applyPricingFilters(items, params);
-  const sorted = applyAdminSort(filtered, params);
-  const offset = Math.max(Number(params.get("offset") || 0), 0);
-  const limit = Math.min(Math.max(Number(params.get("limit") || 200), 1), 500);
-  const paged = sorted.slice(offset, offset + limit);
-
-  return { items: paged, total: sorted.length };
+  return { items: [], total: 0, headers: headerFallback, error: "d1_unavailable" };
 }
 
 async function buildUnifiedContactsList(env: Env, params: URLSearchParams) {
@@ -5489,6 +5467,7 @@ async function computeQuoteOptionPrices(
     payload: Record<string, unknown>,
     adminEmail: string
   ) {
+    if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
     const requestId = getString(payload.requestId || payload.request_id);
     if (!requestId) return { ok: false, error: "missing_request_id" };
     const action = getString(payload.action).toLowerCase();
@@ -5616,6 +5595,7 @@ async function computeQuoteOptionPrices(
 }
 
   async function handleQuoteAdminAction(env: Env, payload: Record<string, unknown>) {
+    if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
     const requestId = getString(payload.requestId || payload.request_id);
     if (!requestId) return { ok: false, error: "missing_request_id" };
     const action = getString(payload.action).toLowerCase();
@@ -5775,6 +5755,7 @@ async function submitQuoteAdmin(
 }
 
 async function handleContactAdminAction(env: Env, payload: Record<string, unknown>) {
+  if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
   const requestId = getString(payload.requestId || payload.request_id);
   if (!requestId) return { ok: false, error: "missing_request_id" };
   const action = getString(payload.action).toLowerCase();
@@ -5882,6 +5863,7 @@ async function handlePricingAdminAction(
   kind: "price_chart" | "cost_chart" | "diamond_price_chart",
   payload: Record<string, unknown>
 ) {
+  if (!hasD1(env)) return { ok: false, error: "d1_unavailable" };
   const action = getString(payload.action).toLowerCase();
   const updates =
     kind === "price_chart"
@@ -6640,7 +6622,7 @@ async function updateAdminRow(
 
     let result = await d1Run(
       env,
-      `UPDATE ${table} SET ${setClause} WHERE request_id = ?`,
+      `UPDATE ${table} SET ${setClause} WHERE LOWER(request_id) = LOWER(?)`,
       [...values, normalizedRequestId]
     );
     let changes = (result as { changes?: number }).changes || 0;
@@ -6652,7 +6634,15 @@ async function updateAdminRow(
       changes = (result as { changes?: number }).changes || 0;
     }
 
-    if (!changes) return { ok: false, error: "request_not_found" };
+    if (!changes) {
+      // UPDATE can report zero changes even when the row exists but values are unchanged.
+      const exists = await d1All(env, `SELECT 1 FROM ${table} WHERE LOWER(request_id) = LOWER(?) LIMIT 1`, [
+        normalizedRequestId,
+      ]);
+      if (!exists.length) {
+        return { ok: false, error: "request_not_found" };
+      }
+    }
     return { ok: true, status: status || undefined };
   }
   const config = getSheetConfig(env, kind);
@@ -7022,22 +7012,34 @@ async function findSheetRowByRequestId(
     const headerIndex = new Map(header.map((key, idx) => [String(key || ""), idx]));
     let rows: Record<string, unknown>[] = [];
     if (kind === "order") {
-      rows = await d1All(env, "SELECT * FROM orders WHERE request_id = ? LIMIT 1", [normalizedRequestId]);
+      rows = await d1All(
+        env,
+        "SELECT * FROM orders WHERE LOWER(request_id) = LOWER(?) LIMIT 1",
+        [normalizedRequestId]
+      );
     } else if (kind === "quote") {
-      rows = await d1All(env, "SELECT * FROM quotes WHERE request_id = ? LIMIT 1", [normalizedRequestId]);
+      rows = await d1All(
+        env,
+        "SELECT * FROM quotes WHERE LOWER(request_id) = LOWER(?) LIMIT 1",
+        [normalizedRequestId]
+      );
     } else {
-      rows = await d1All(env, "SELECT * FROM contacts WHERE request_id = ? LIMIT 1", [normalizedRequestId]);
+      rows = await d1All(
+        env,
+        "SELECT * FROM contacts WHERE request_id = ? LIMIT 1",
+        [normalizedRequestId]
+      );
       if (!rows.length && normalizedRequestId.includes("@")) {
         rows = await d1All(env, "SELECT * FROM contacts WHERE email = ? LIMIT 1", [
           normalizeEmailAddress(normalizedRequestId),
         ]);
       }
     }
-    if (!rows.length) return null;
-    const row = rows[0];
-    const rowValues = header.map((key) => (row as Record<string, unknown>)[key]);
-    return {
-      config: {
+  if (!rows.length) return null;
+  const row = rows[0];
+  const rowValues = header.map((key) => (row as Record<string, unknown>)[key]);
+  return {
+    config: {
         sheetId: "",
         sheetName: "",
         headerRange: "",
@@ -7048,35 +7050,7 @@ async function findSheetRowByRequestId(
       row: rowValues,
     };
   }
-  const config = getSheetConfig(env, kind);
-  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerFallback =
-    kind === "order" ? ORDER_SHEET_HEADER : kind === "quote" ? QUOTE_SHEET_HEADER : CONTACT_SHEET_HEADER;
-  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
-  const requiredKey = kind === "contact" ? "email" : "request_id";
-  const headerConfig = resolveHeaderConfig(headerRow, headerFallback, requiredKey);
-  const headerIndex = new Map(
-    headerConfig.header.map((key, idx) => [String(key || ""), idx])
-  );
-  const requestIdx = headerIndex.get("request_id") ?? -1;
-  if (requestIdx < 0) return null;
-  const rows = await fetchSheetValues(
-    env,
-    config.sheetId,
-    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
-  );
-  const normalizedTarget = normalizeRequestId(requestId);
-  for (let i = 0; i < rows.length; i += 1) {
-    const candidate = normalizeRequestId(getString(rows[i]?.[requestIdx]));
-    if (candidate && candidate === normalizedTarget) {
-      return {
-        config,
-        headerIndex,
-        rowNumber: i + headerConfig.rowStart,
-        row: rows[i],
-      };
-    }
-  }
+  // For orders/quotes/contacts we no longer fall back to Sheets when D1 is missing.
   return null;
 }
 
@@ -7122,56 +7096,23 @@ async function findOrderDetailsRowByRequestId(
 }
 
 async function getOrderDetailsRecord(env: Env, requestId: string): Promise<OrderDetailsRecord | null> {
-  if (hasD1(env)) {
-    const normalizedRequestId = normalizeRequestId(requestId);
-    const rows = await d1All(env, "SELECT * FROM order_details WHERE request_id = ? LIMIT 1", [
-      normalizedRequestId,
-    ]);
-    if (!rows.length) return null;
-    return mapD1RowToRecord(rows[0]) as OrderDetailsRecord;
-  }
-  try {
-    const lookup = await findOrderDetailsRowByRequestId(env, requestId);
-    if (!lookup) return null;
-    const header = Array.from(lookup.headerIndex.keys());
-    const record = mapSheetRowToRecord(header, lookup.row);
-    return record as OrderDetailsRecord;
-  } catch {
-    return null;
-  }
+  if (!hasD1(env)) return null;
+  const normalizedRequestId = normalizeRequestId(requestId);
+  const rows = await d1All(env, "SELECT * FROM order_details WHERE request_id = ? LIMIT 1", [
+    normalizedRequestId,
+  ]);
+  if (!rows.length) return null;
+  return mapD1RowToRecord(rows[0]) as OrderDetailsRecord;
 }
 
 async function loadOrderDetailsMap(env: Env) {
   const map = new Map<string, OrderDetailsRecord>();
-  if (hasD1(env)) {
-    const rows = await d1All(env, "SELECT * FROM order_details");
-    rows.forEach((row) => {
-      const requestId = getString(row.request_id);
-      if (!requestId) return;
-      map.set(normalizeRequestId(requestId), mapD1RowToRecord(row) as OrderDetailsRecord);
-    });
-    return map;
-  }
-  const config = getOrderDetailsSheetConfig(env);
-  const headerRows = await fetchSheetValues(env, config.sheetId, config.headerRange);
-  const headerRow = headerRows[0] && headerRows[0].length ? headerRows[0] : [];
-  const headerConfig = resolveHeaderConfig(headerRow, ORDER_DETAILS_SHEET_HEADER, "request_id");
-  const requestIdx = headerConfig.header.findIndex(
-    (value) => String(value || "").trim() === "request_id"
-  );
-  if (requestIdx < 0) return map;
-  const rows = await fetchSheetValues(
-    env,
-    config.sheetId,
-    `${config.sheetName}!A${headerConfig.rowStart}:AZ`
-  );
+  if (!hasD1(env)) return map;
+  const rows = await d1All(env, "SELECT * FROM order_details");
   rows.forEach((row) => {
-    const requestId = getString(row[requestIdx]);
+    const requestId = getString(row.request_id);
     if (!requestId) return;
-    map.set(
-      normalizeRequestId(requestId),
-      mapSheetRowToRecord(headerConfig.header, row) as OrderDetailsRecord
-    );
+    map.set(normalizeRequestId(requestId), mapD1RowToRecord(row) as OrderDetailsRecord);
   });
   return map;
 }
