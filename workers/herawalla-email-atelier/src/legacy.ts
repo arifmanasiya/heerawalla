@@ -1682,6 +1682,16 @@ async function updateGoldPrice(env: Env) {
   if (!env.GOLD_API_KEY || !env.DB) return;
 
   try {
+    const now = Date.now();
+    const lastRunRaw = env.HEERAWALLA_ACKS
+      ? await env.HEERAWALLA_ACKS.get("gold_price_last_run", "text")
+      : null;
+    const lastRun = lastRunRaw ? Number(lastRunRaw) : 0;
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+    if (lastRun && now - lastRun < TWENTY_FOUR_HOURS) {
+      return;
+    }
+
     const headers = new Headers({
       "x-access-token": env.GOLD_API_KEY,
       "Content-Type": "application/json",
@@ -1738,6 +1748,11 @@ async function updateGoldPrice(env: Env) {
       price_gram_18k: gram18,
       price_gram_14k: gram14,
     });
+    if (env.HEERAWALLA_ACKS) {
+      await env.HEERAWALLA_ACKS.put("gold_price_last_run", String(Date.now()), {
+        expirationTtl: 60 * 60 * 24 * 3, // keep a few days
+      });
+    }
   } catch (error) {
     logError("gold_price_error", { message: String(error) });
   }
