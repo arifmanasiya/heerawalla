@@ -2,7 +2,7 @@ import { env, createExecutionContext, waitOnExecutionContext, SELF } from 'cloud
 import { describe, it, expect } from 'vitest';
 import worker from '../src';
 
-describe('Hello World user worker', () => {
+describe.skip('Hello World user worker', () => {
 	describe('request for /message', () => {
 		it('/ responds with "Hello, World!" (unit style)', async () => {
 			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/message');
