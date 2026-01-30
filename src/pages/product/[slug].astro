@@ -462,21 +462,29 @@ const buildStoneWeightInfoValue = (rawValue: string) => {
       })
       .map((value) => ({ value, label: formatSizeTypeLabel(value) }));
   };
-  const stoneWeightGroups = buildStoneWeightGroupsFromOptions(
-    Array.isArray(product.stone_options) ? product.stone_options : []
-  );
-  const stoneWeightFallback = parseOptionList(product.stone_weight).map((value) => ({
-    value,
-    label: value,
-    size_type: 'size'
-  }));
-const stoneWeightOptions = (stoneWeightGroups.length ? stoneWeightGroups : stoneWeightFallback).map(
-  (group) => ({
+const stoneWeightGroups = buildStoneWeightGroupsFromOptions(
+  Array.isArray(product.stone_options) ? product.stone_options : []
+);
+const stoneWeightFallback = parseOptionList(product.stone_weight).map((value) => ({
+  value,
+  label: value,
+  size_type: 'size'
+}));
+const stoneWeightTotal = (raw: string) => {
+  const breakdown = parseStoneWeightBreakdown(raw);
+  if (breakdown.length) {
+    return breakdown.reduce((sum, entry) => sum + entry.weight * entry.count, 0);
+  }
+  const numeric = Number(String(raw).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(numeric) ? numeric : Number.POSITIVE_INFINITY;
+};
+const stoneWeightOptions = (stoneWeightGroups.length ? stoneWeightGroups : stoneWeightFallback)
+  .map((group) => ({
     value: group.value,
     label: formatStoneWeightBriefLabel(group.value),
     size_type: group.size_type,
-  })
-);
+  }))
+  .sort((a, b) => stoneWeightTotal(a.value) - stoneWeightTotal(b.value));
   const hasStoneWeight = stoneWeightOptions.length > 0;
   const buildMetalWeightOptionsFromOptions = (options?: Array<Record<string, unknown>>) => {
     if (!Array.isArray(options) || !options.length) return [];
@@ -3036,14 +3044,24 @@ void jsonLdString;
           label: value,
           size_type: 'size'
         }));
+        const stoneWeightTotal = (raw) => {
+          const breakdown = parseBreakdownLocal(raw);
+          if (breakdown.length) {
+            return breakdown.reduce((sum, entry) => sum + entry.weight * entry.count, 0);
+          }
+          const numeric = Number(String(raw).replace(/[^0-9.]/g, ''));
+          return Number.isFinite(numeric) ? numeric : Number.POSITIVE_INFINITY;
+        };
         const stoneWeightOptions = (stoneWeightGroups.length
             ? stoneWeightGroups
             : stoneWeightFallback
-          ).map((option) => ({
+          )
+          .map((option) => ({
             value: option.value,
             label: formatStoneWeightBriefLabelLocal(option.value),
             size_type: option.size_type
-          }));
+          }))
+          .sort((a, b) => stoneWeightTotal(a.value) - stoneWeightTotal(b.value));
         const metalWeightSource = buildMetalWeightOptionsFromOptions(item.metal_weight_options);
         const metalWeightBySizeType = buildMetalWeightBySizeType(item.metal_weight_options);
         const sizeTypeOptions = buildSizeTypeOptions(stoneWeightGroups, metalWeightBySizeType);
@@ -3239,6 +3257,65 @@ void jsonLdString;
         const cacheBust = `&bust=${Date.now()}`;
         const slugParam = productSlugValue ? `&slug=${encodeURIComponent(productSlugValue)}` : '';
         const url = `${catalogUrlValue}${joiner}include=products${slugParam}${cacheBust}`;
+        const buildMetalOptionsLocal = (value, fallbackLabel) => {
+          const list = parseList(value);
+          if (list.length) {
+            return list.map((label) => ({ value: label, label }));
+          }
+          const parseMetalColors = (v) => {
+            const normalized = String(v || '').toLowerCase();
+            const colors = [];
+            if (normalized.includes('yellow')) colors.push('yellow');
+            if (normalized.includes('white')) colors.push('white');
+            if (normalized.includes('rose')) colors.push('rose');
+            return colors.length ? colors : ['yellow', 'white'];
+          };
+          const colors = parseMetalColors(fallbackLabel);
+          return [
+            ...colors.map((color) => ({
+              value: `18K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`,
+              label: `18K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`
+            })),
+            { value: 'Platinum', label: 'Platinum' }
+          ];
+        };
+        const buildMetalWeightBySizeTypeLocal = (options) => {
+          const map = new Map();
+          if (!Array.isArray(options) || !options.length) return map;
+          options.forEach((option) => {
+            const sizeType = String(option.size_type || '').trim().toLowerCase() || 'size';
+            const raw = String(option.metal_weight || '').trim();
+            if (!raw) return;
+            const parsed = parseOptionList(raw)[0];
+            if (parsed && !map.has(sizeType)) map.set(sizeType, parsed);
+          });
+          return map;
+        };
+        const buildSizeTypeOptionsLocal = (stoneGroups, metalBySizeType) => {
+          const sizeTypes = new Set();
+          const primaryTypes = new Set();
+          (stoneGroups || []).forEach((group) => {
+            if (group.size_type) sizeTypes.add(group.size_type);
+            if (group.is_primary) primaryTypes.add(group.size_type);
+          });
+          (metalBySizeType || new Map()).forEach((_value, sizeType) => {
+            if (sizeType) sizeTypes.add(sizeType);
+          });
+          return Array.from(sizeTypes).sort().map((value) => ({ value, label: value }));
+        };
+        const formatPriceLabel = (value) => {
+          const num = Number(value);
+          if (!Number.isFinite(num)) return null;
+          return num.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+        };
+        const stoneWeightTotal = (raw) => {
+          const breakdown = parseBreakdownLocal(raw);
+          if (breakdown.length) {
+            return breakdown.reduce((sum, entry) => sum + entry.weight * entry.count, 0);
+          }
+          const numeric = Number(String(raw).replace(/[^0-9.]/g, ''));
+          return Number.isFinite(numeric) ? numeric : Number.POSITIVE_INFINITY;
+        };
         try {
           const response = await fetch(url, { cache: 'no-store' });
           if (!response.ok) return;
@@ -3246,7 +3323,60 @@ void jsonLdString;
           if (!data || !Array.isArray(data.products)) return;
           const match = data.products.find((entry) => entry && entry.slug === productSlugValue);
           if (!match) return;
-          updatePricingFromProduct(match);
+          // Update price label
+          if (priceEl) {
+            const nextPrice = formatPriceLabel(match.price);
+            if (nextPrice) priceEl.textContent = nextPrice;
+          }
+          // Update media if available
+          if (window.__hwSetProductMedia && Array.isArray(match.media?.images)) {
+            const meta = match.media.images.map((m) => ({
+              url: m.url,
+              description: m.description || ''
+            }));
+            if (meta.length) {
+              window.__hwSetProductMedia(meta, match.description || '', match.name || '');
+            }
+          }
+          // Update option selects to reflect latest catalog data
+          const metalOptions = buildMetalOptionsLocal(match.metal_options || match.metals, match.metal || '18K Gold');
+          const metalDefaultValue = metalOptions[metalOptions.length - 1]?.value || '';
+          setSelectOptions(metalSelect, metalOptions, metalSelect?.value || metalDefaultValue);
+          if (selectedMetal && metalSelect) {
+            selectedMetal.textContent = metalSelect.options[metalSelect.selectedIndex]?.textContent || '';
+          }
+
+          const stoneWeightGroups = buildStoneWeightGroupsFromOptions(match.stone_options);
+          const stoneWeightFallback = parseOptionList(match.stone_weight).map((value) => ({
+            value,
+            label: value,
+            size_type: 'size'
+          }));
+          const stoneWeightOptions = (stoneWeightGroups.length ? stoneWeightGroups : stoneWeightFallback)
+            .map((option) => ({
+              value: option.value,
+              label: formatStoneWeightBriefLabelLocal(option.value),
+              size_type: option.size_type
+            }))
+            .sort((a, b) => stoneWeightTotal(a.value) - stoneWeightTotal(b.value));
+          const sizeTypeOptions = buildSizeTypeOptionsLocal(
+            stoneWeightGroups,
+            buildMetalWeightBySizeTypeLocal(match.metal_weight_options)
+          );
+          setSelectOptions(sizeTypeSelect, sizeTypeOptions, sizeTypeSelect?.value || sizeTypeOptions[0]?.value || '');
+          setSelectOptions(
+            stoneWeightSelect,
+            stoneWeightOptions,
+            stoneWeightSelect?.value || stoneWeightOptions[0]?.value || ''
+          );
+          if (window.__hwRenderStoneWeightSwatches) window.__hwRenderStoneWeightSwatches();
+          if (window.__hwSyncStoneWeightSwatches) window.__hwSyncStoneWeightSwatches();
+          if (window.__hwUpdateStoneWeightVisual) window.__hwUpdateStoneWeightVisual();
+          if (window.__hwRefreshPricingDefaults) {
+            window.__hwRefreshPricingDefaults();
+          } else if (window.__hwApplyPricing) {
+            window.__hwApplyPricing();
+          }
         } catch {
           // Ignore catalog errors; fall back to SSR data.
         }
