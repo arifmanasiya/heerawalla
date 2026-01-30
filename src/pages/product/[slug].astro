@@ -2378,7 +2378,9 @@ void jsonLdString;
         const params = new URLSearchParams();
           if (metalSelect?.value) params.set('metal', metalSelect.value);
           if (hasStoneOptions && stoneSelect?.value) params.set('stone', stoneSelect.value);
-          const metalWeightValue = (metalWeightSelect && metalWeightSelect.value) || selectedMetalWeightValue || '';
+          const metalWeightValue =
+            (metalWeightSelect && metalWeightSelect.value) ||
+            (metalWeightSelect?.options?.[0]?.value || '');
           if (metalWeightValue) {
             params.set('metalWeight', metalWeightValue);
           }
@@ -3228,10 +3230,16 @@ void jsonLdString;
           if (selected) {
             updateSizeTypeInfo(selected.dataset.stoneWeight || '', selected.dataset.metalWeight || '');
           } else {
-            updateSizeTypeInfo(selectedStoneWeightValue, selectedMetalWeightValue);
+            updateSizeTypeInfo(
+              stoneWeightSelect ? stoneWeightSelect.value : '',
+              metalWeightSelect ? metalWeightSelect.value : ''
+            );
           }
         } else {
-          updateSizeTypeInfo(selectedStoneWeightValue, selectedMetalWeightValue);
+          updateSizeTypeInfo(
+            stoneWeightSelect ? stoneWeightSelect.value : '',
+            metalWeightSelect ? metalWeightSelect.value : ''
+          );
         }
         if (window.__hwRenderStoneWeightSwatches) {
           window.__hwRenderStoneWeightSwatches();

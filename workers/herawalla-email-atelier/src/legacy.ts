@@ -3453,7 +3453,7 @@ async function triggerSiteRebuild(env: Env) {
     }
   );
   if (!response.ok) {
-    const message = await response.text();
+    const message = (await response.text()).slice(0, 500);
     logError("github_dispatch_failed", {
       status: response.status,
       message,
@@ -3462,7 +3462,12 @@ async function triggerSiteRebuild(env: Env) {
       workflow,
       ref,
     });
-    return { ok: false, error: "github_dispatch_failed", status: response.status };
+    return {
+      ok: false,
+      error: "github_dispatch_failed",
+      status: response.status,
+      message,
+    };
   }
   return { ok: true };
 }
