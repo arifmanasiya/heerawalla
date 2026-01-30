@@ -387,7 +387,7 @@ const buildStoneWeightInfoValue = (rawValue: string) => {
   const totalLabel = total > 0 ? `Total: ${formatWeightFixed2(total)} ct` : '';
   return { details: detailText, totalLabel };
 };
-  const SIZE_TYPE_ORDER = ['small', 'medium', 'large', 'xlarge', 'xxlarge', 'xxxlarge', 'xxxxlarge'];
+  const SIZE_TYPE_ORDER = ['xsmall', 'small', 'medium', 'large', 'xlarge', 'xxlarge', 'xxxlarge', 'xxxxlarge'];
   const sizeTypeOrderIndex = new Map(SIZE_TYPE_ORDER.map((label, idx) => [label, idx]));
   const formatSizeTypeLabel = (value: string) => {
     const trimmed = String(value || '').trim().toLowerCase();
@@ -396,23 +396,25 @@ const buildStoneWeightInfoValue = (rawValue: string) => {
   };
   const buildStoneWeightGroupsFromOptions = (options?: Array<Record<string, unknown>>) => {
     if (!Array.isArray(options) || !options.length) return [];
-    const groups = new Map<string, { items: string[]; isPrimary: boolean }>();
+    const groups = new Map<string, { items: string[]; total: number }>();
     options.forEach((option) => {
       const sizeType = String(option.size_type || '').trim().toLowerCase() || 'size';
-      const carat = formatWeightNumber(option.carat);
-      const count = formatWeightNumber(option.count);
-      if (!carat || !count) return;
-      const entry = `${carat} x ${count}`;
-      const existing = groups.get(sizeType) || { items: [], isPrimary: false };
+      const caratStr = formatWeightNumber(option.carat);
+      const countStr = formatWeightNumber(option.count);
+      const caratNum = Number(option.carat);
+      const countNum = Number(option.count);
+      if (!caratStr || !countStr || !Number.isFinite(caratNum) || !Number.isFinite(countNum)) return;
+      const entry = `${caratStr} x ${countStr}`;
+      const existing = groups.get(sizeType) || { items: [], total: 0 };
       existing.items.push(entry);
-      if (option.is_primary) existing.isPrimary = true;
+      existing.total += caratNum * countNum;
       groups.set(sizeType, existing);
     });
     return Array.from(groups.entries())
       .sort((a, b) => {
-        const aPrimary = a[1].isPrimary ? 0 : 1;
-        const bPrimary = b[1].isPrimary ? 0 : 1;
-        if (aPrimary !== bPrimary) return aPrimary - bPrimary;
+        const aTotal = a[1].total;
+        const bTotal = b[1].total;
+        if (aTotal !== bTotal) return aTotal - bTotal;
         const aOrder = sizeTypeOrderIndex.get(a[0]) ?? 999;
         const bOrder = sizeTypeOrderIndex.get(b[0]) ?? 999;
         if (aOrder !== bOrder) return aOrder - bOrder;
@@ -422,39 +424,52 @@ const buildStoneWeightInfoValue = (rawValue: string) => {
         size_type: sizeType,
         value: group.items.join(', '),
         label: `${formatSizeTypeLabel(sizeType)} · ${group.items.join(', ')}`,
-        is_primary: group.isPrimary,
+        total: group.total,
       }));
   };
   const buildMetalWeightBySizeType = (options?: Array<Record<string, unknown>>) => {
+    const totals = new Map<string, number>();
     const map = new Map<string, string>();
     if (!Array.isArray(options) || !options.length) return map;
     options.forEach((option) => {
       const sizeType = String(option.size_type || '').trim().toLowerCase() || 'size';
       const raw = String(option.metal_weight || '').trim();
       if (!raw) return;
-      const parsed = parseOptionList(raw)[0];
-      if (parsed && !map.has(sizeType)) map.set(sizeType, parsed);
+      const parsedValues = parseOptionList(raw);
+      parsedValues.forEach((parsed) => {
+        const num = Number(parsed);
+        if (!Number.isFinite(num)) return;
+        const current = totals.get(sizeType) ?? 0;
+        totals.set(sizeType, current + num);
+      });
+    });
+    totals.forEach((total, sizeType) => {
+      map.set(sizeType, String(total));
     });
     return map;
   };
   const buildSizeTypeOptions = (
-    stoneGroups: Array<{ size_type: string; is_primary: boolean }>,
+    stoneGroups: Array<{ size_type: string; total?: number }>,
     metalBySizeType: Map<string, string>
   ) => {
     const sizeTypes = new Set<string>();
-    const primaryTypes = new Set<string>();
+    const totals = new Map<string, number>();
     stoneGroups.forEach((group) => {
       if (group.size_type) sizeTypes.add(group.size_type);
-      if (group.is_primary) primaryTypes.add(group.size_type);
+      const total = Number(group.total);
+      if (Number.isFinite(total)) {
+        const prev = totals.get(group.size_type) ?? Number.POSITIVE_INFINITY;
+        totals.set(group.size_type, Math.min(prev, total));
+      }
     });
     metalBySizeType.forEach((_value, sizeType) => {
       if (sizeType) sizeTypes.add(sizeType);
     });
     return Array.from(sizeTypes)
       .sort((a, b) => {
-        const aPrimary = primaryTypes.has(a) ? 0 : 1;
-        const bPrimary = primaryTypes.has(b) ? 0 : 1;
-        if (aPrimary !== bPrimary) return aPrimary - bPrimary;
+        const aTotal = totals.get(a);
+        const bTotal = totals.get(b);
+        if (aTotal !== undefined && bTotal !== undefined && aTotal !== bTotal) return aTotal - bTotal;
         const aOrder = sizeTypeOrderIndex.get(a) ?? 999;
         const bOrder = sizeTypeOrderIndex.get(b) ?? 999;
         if (aOrder !== bOrder) return aOrder - bOrder;
@@ -583,7 +598,8 @@ const pickLowestMetalValue = (options: Array<{ value: string }>) => {
       best = option.value;
     }
   });
-  return best || options[0]?.value || '';
+  if (!Number.isFinite(lowest) || lowest > 14) return '14K Yellow Gold';
+  return best || options[0]?.value || '14K Yellow Gold';
 };
 const metalDisplayOptions = (() => {
   const availableMetals = new Set(metalOptions.map((option) => option.value));
@@ -651,8 +667,7 @@ const editionKey = (product.gender || (product.category || '').split('/')[0] || 
 const editionHref = editionHrefMap[editionKey];
 const breadcrumbCrumbs = [
   { label: 'Home', href: withBase('/') },
-  { label: designCode, href: designCodeHref, kind: 'design-code' },
-  ...(editionHref ? [{ label: editionLabel, href: editionHref }] : []),
+  { label: 'Shop', href: withBase('/shop') },
   { label: product.name }
 ];
 const bespokeHref = withBase(`/bespoke/${product.slug}`);
@@ -2242,7 +2257,7 @@ void jsonLdString;
           const m = String(val || '').match(/(\d+)\s*K/i);
           return m ? Number(m[1]) : Number.POSITIVE_INFINITY;
         };
-        let best = metalSelect.value || '';
+        let best = opts[0] || '';
         let lowest = parseKarat(best);
         opts.forEach((val) => {
           const k = parseKarat(val);
@@ -2251,7 +2266,10 @@ void jsonLdString;
             best = val;
           }
         });
-        return best || metalSelect.value || '';
+        const selected = metalSelect.value || '';
+        if (selected) return selected;
+        if (!Number.isFinite(lowest) || lowest > 14) return '14K Yellow Gold';
+        return best || '14K Yellow Gold';
       };
       const buildPayload = () => ({
         metal: metalSelect ? pickLowestMetalFromSelect() : '',
@@ -2749,7 +2767,7 @@ void jsonLdString;
         return { details: detailText, totalLabel };
       };
 
-        const SIZE_TYPE_ORDER = ['small', 'medium', 'large', 'xlarge', 'xxlarge', 'xxxlarge', 'xxxxlarge'];
+        const SIZE_TYPE_ORDER = ['xsmall', 'small', 'medium', 'large', 'xlarge', 'xxlarge', 'xxxlarge', 'xxxxlarge'];
         const sizeTypeOrderIndex = new Map(SIZE_TYPE_ORDER.map((label, idx) => [label, idx]));
         const formatSizeTypeLabel = (value) => {
           const trimmed = String(value || '').trim().toLowerCase();
@@ -2761,20 +2779,22 @@ void jsonLdString;
           const groups = new Map();
           options.forEach((option) => {
             const sizeType = String(option.size_type || '').trim().toLowerCase() || 'size';
-            const carat = formatWeightNumber(option.carat);
-            const count = formatWeightNumber(option.count);
-            if (!carat || !count) return;
-            const entry = `${carat} x ${count}`;
-            const existing = groups.get(sizeType) || { items: [], isPrimary: false };
+            const caratStr = formatWeightNumber(option.carat);
+            const countStr = formatWeightNumber(option.count);
+            const caratNum = Number(option.carat);
+            const countNum = Number(option.count);
+            if (!caratStr || !countStr || !Number.isFinite(caratNum) || !Number.isFinite(countNum)) return;
+            const entry = `${caratStr} x ${countStr}`;
+            const existing = groups.get(sizeType) || { items: [], total: 0 };
             existing.items.push(entry);
-            if (option.is_primary) existing.isPrimary = true;
+            existing.total += caratNum * countNum;
             groups.set(sizeType, existing);
           });
           return Array.from(groups.entries())
             .sort((a, b) => {
-              const aPrimary = a[1].isPrimary ? 0 : 1;
-              const bPrimary = b[1].isPrimary ? 0 : 1;
-              if (aPrimary !== bPrimary) return aPrimary - bPrimary;
+              const aTotal = a[1].total;
+              const bTotal = b[1].total;
+              if (aTotal !== bTotal) return aTotal - bTotal;
               const aOrder = sizeTypeOrderIndex.get(a[0]) ?? 999;
               const bOrder = sizeTypeOrderIndex.get(b[0]) ?? 999;
               if (aOrder !== bOrder) return aOrder - bOrder;
@@ -2784,7 +2804,7 @@ void jsonLdString;
               size_type: sizeType,
               value: group.items.join(', '),
               label: `${formatSizeTypeLabel(sizeType)} · ${group.items.join(', ')}`,
-              is_primary: group.isPrimary,
+              total: group.total,
             }));
         };
         const buildMetalWeightBySizeType = (options) => {
@@ -2794,26 +2814,39 @@ void jsonLdString;
             const sizeType = String(option.size_type || '').trim().toLowerCase() || 'size';
             const raw = String(option.metal_weight || '').trim();
             if (!raw) return;
-            const parsed = parseOptionList(raw)[0];
-            if (parsed && !map.has(sizeType)) map.set(sizeType, parsed);
+            const parsedValues = parseOptionList(raw);
+            parsedValues.forEach((parsed) => {
+              const num = Number(parsed);
+              const current = map.get(sizeType);
+              const currentNum = current === undefined ? Number.POSITIVE_INFINITY : Number(current);
+              if (parsed && Number.isFinite(num) && num < currentNum) {
+                map.set(sizeType, parsed);
+              } else if (parsed && !current) {
+                map.set(sizeType, parsed);
+              }
+            });
           });
           return map;
         };
         const buildSizeTypeOptions = (stoneGroups, metalBySizeType) => {
           const sizeTypes = new Set();
-          const primaryTypes = new Set();
+          const totals = new Map();
           stoneGroups.forEach((group) => {
             if (group.size_type) sizeTypes.add(group.size_type);
-            if (group.is_primary) primaryTypes.add(group.size_type);
+            const total = Number(group.total);
+            if (Number.isFinite(total)) {
+              const prev = totals.get(group.size_type) ?? Number.POSITIVE_INFINITY;
+              totals.set(group.size_type, Math.min(prev, total));
+            }
           });
           metalBySizeType.forEach((_value, sizeType) => {
             if (sizeType) sizeTypes.add(sizeType);
           });
           return Array.from(sizeTypes)
             .sort((a, b) => {
-              const aPrimary = primaryTypes.has(a) ? 0 : 1;
-              const bPrimary = primaryTypes.has(b) ? 0 : 1;
-              if (aPrimary !== bPrimary) return aPrimary - bPrimary;
+              const aTotal = totals.get(a);
+              const bTotal = totals.get(b);
+              if (aTotal !== undefined && bTotal !== undefined && aTotal !== bTotal) return aTotal - bTotal;
               const aOrder = sizeTypeOrderIndex.get(a) ?? 999;
               const bOrder = sizeTypeOrderIndex.get(b) ?? 999;
               if (aOrder !== bOrder) return aOrder - bOrder;
@@ -2885,7 +2918,8 @@ void jsonLdString;
             best = option.value;
           }
         });
-        return best || options[0]?.value || '';
+        if (!Number.isFinite(lowest) || lowest > 14) return '14K Yellow Gold';
+        return best || options[0]?.value || '14K Yellow Gold';
       };
 
       const parseNumber = (value) => {
@@ -3361,31 +3395,55 @@ void jsonLdString;
               best = option.value;
             }
           });
-          return best || options[0]?.value || '';
+          if (!Number.isFinite(lowest) || lowest > 14) return '14K Yellow Gold';
+          return best || options[0]?.value || '14K Yellow Gold';
         };
+        const SIZE_TYPE_ORDER_LOCAL = ['xsmall', 'small', 'medium', 'large', 'xlarge', 'xxlarge', 'xxxlarge', 'xxxxlarge'];
+        const sizeTypeOrderIndexLocal = new Map(SIZE_TYPE_ORDER_LOCAL.map((label, idx) => [label, idx]));
         const buildMetalWeightBySizeTypeLocal = (options) => {
+          const totals = new Map();
           const map = new Map();
           if (!Array.isArray(options) || !options.length) return map;
           options.forEach((option) => {
             const sizeType = String(option.size_type || '').trim().toLowerCase() || 'size';
             const raw = String(option.metal_weight || '').trim();
             if (!raw) return;
-            const parsed = parseOptionList(raw)[0];
-            if (parsed && !map.has(sizeType)) map.set(sizeType, parsed);
+            const parsedValues = parseOptionList(raw);
+            parsedValues.forEach((parsed) => {
+              const num = Number(parsed);
+              if (!Number.isFinite(num)) return;
+              const current = totals.get(sizeType) ?? 0;
+              totals.set(sizeType, current + num);
+            });
           });
+          totals.forEach((total, sizeType) => map.set(sizeType, String(total)));
           return map;
         };
         const buildSizeTypeOptionsLocal = (stoneGroups, metalBySizeType) => {
           const sizeTypes = new Set();
-          const primaryTypes = new Set();
+          const totals = new Map();
           (stoneGroups || []).forEach((group) => {
             if (group.size_type) sizeTypes.add(group.size_type);
-            if (group.is_primary) primaryTypes.add(group.size_type);
+            const total = Number(group.total);
+            if (Number.isFinite(total)) {
+              const prev = totals.get(group.size_type) ?? Number.POSITIVE_INFINITY;
+              totals.set(group.size_type, Math.min(prev, total));
+            }
           });
           (metalBySizeType || new Map()).forEach((_value, sizeType) => {
             if (sizeType) sizeTypes.add(sizeType);
           });
-          return Array.from(sizeTypes).sort().map((value) => ({ value, label: value }));
+          return Array.from(sizeTypes)
+            .sort((a, b) => {
+              const aTotal = totals.get(a);
+              const bTotal = totals.get(b);
+              if (aTotal !== undefined && bTotal !== undefined && aTotal !== bTotal) return aTotal - bTotal;
+              const aOrder = sizeTypeOrderIndexLocal.get(a) ?? 999;
+              const bOrder = sizeTypeOrderIndexLocal.get(b) ?? 999;
+              if (aOrder !== bOrder) return aOrder - bOrder;
+              return a.localeCompare(b);
+            })
+            .map((value) => ({ value, label: value }));
         };
         const formatPriceLabel = (value) => {
           const num = Number(value);

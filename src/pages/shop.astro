@@ -106,6 +106,8 @@ const metalColors = Array.from(
   )
 );
 const METAL_COLOR_OPTIONS = metalColors.length ? metalColors : ['yellow gold', 'white gold', 'rose gold'];
+const SIZE_TYPE_ORDER = ['xsmall', 'small', 'medium', 'large', 'xlarge', 'xxlarge', 'xxxlarge', 'xxxxlarge', 'size'];
+const sizeTypeOrderIndex = new Map(SIZE_TYPE_ORDER.map((value, index) => [value, index]));
 
 const formatTitle = (value: string) =>
   value
@@ -757,17 +759,42 @@ const formatTitle = (value: string) =>
         .replace(/\s+/g, ' ')
         .trim();
 
+    const sizeTypeOrder = ['xsmall', 'small', 'medium', 'large', 'xlarge', 'xxlarge', 'xxxlarge', 'xxxxlarge', 'size'];
+
     const buildStoneWeightFromOptions = (options) => {
       if (!Array.isArray(options) || !options.length) return { total: '', breakdown: '' };
-      let totalNum = 0;
-      const parts = [];
+      const groups = new Map();
       options.forEach((opt) => {
+        const sizeType = String(opt?.size_type || 'size').toLowerCase() || 'size';
         const carat = Number(opt?.carat);
         const count = Number(opt?.count || 1);
         if (!Number.isFinite(carat) || !Number.isFinite(count) || carat <= 0 || count <= 0) return;
-        totalNum += carat * count;
-        parts.push(`${count} × ${carat}`);
+        const list = groups.get(sizeType) || [];
+        list.push({ carat, count });
+        groups.set(sizeType, list);
       });
+      if (!groups.size) return { total: '', breakdown: '' };
+      const pickSizeType = () => {
+        // prefer defined order
+        for (const key of sizeTypeOrder) {
+          if (groups.has(key)) return key;
+        }
+        // fallback to smallest total
+        let best = null;
+        let bestTotal = Number.POSITIVE_INFINITY;
+        groups.forEach((entries, key) => {
+          const t = entries.reduce((sum, e) => sum + e.carat * e.count, 0);
+          if (t < bestTotal) {
+            bestTotal = t;
+            best = key;
+          }
+        });
+        return best;
+      };
+      const sizeType = pickSizeType();
+      const entries = groups.get(sizeType) || [];
+      const totalNum = entries.reduce((sum, e) => sum + e.carat * e.count, 0);
+      const parts = entries.map((e) => `${e.carat} x ${e.count}`);
       return {
         total: totalNum > 0 ? totalNum.toString() : '',
         breakdown: parts.join(', ')
@@ -776,21 +803,29 @@ const formatTitle = (value: string) =>
 
     const buildMetalWeightFromOptions = (options) => {
       if (!Array.isArray(options) || !options.length) return '';
-      let best = '';
-      let bestNum = -Infinity;
+      // Sum weights per size_type, then pick the lowest total as the "starting at" baseline
+      const totals = new Map();
       const parseNum = (val) => {
         const m = String(val || '').match(/-?\d+(\.\d+)?/);
         return m ? Number(m[0]) : NaN;
       };
       options.forEach((opt) => {
+        const sizeType = String(opt?.size_type || 'size').toLowerCase() || 'size';
         const raw = String(opt?.metal_weight || '').trim();
         const n = parseNum(raw);
-        if (Number.isFinite(n) && n > bestNum) {
-          bestNum = n;
-          best = raw;
+        if (!Number.isFinite(n) || n <= 0) return;
+        totals.set(sizeType, (totals.get(sizeType) || 0) + n);
+      });
+      if (!totals.size) return '';
+      let bestSize = '';
+      let bestVal = Number.POSITIVE_INFINITY;
+      totals.forEach((val, key) => {
+        if (val < bestVal) {
+          bestVal = val;
+          bestSize = key;
         }
       });
-      return best;
+      return Number.isFinite(bestVal) ? String(bestVal) : '';
     };
 
     const normalizeTokenList = (raw) => {
@@ -829,7 +864,25 @@ const formatTitle = (value: string) =>
       const stone = lab || natural || stoneTypes[0] || '';
 
       const metalOptions = parseList(product.metal_options || product.metals || product.metal);
-      const metal = metalOptions[metalOptions.length - 1] || product.metal || '18K Gold';
+      const pickLowestMetal = (options) => {
+        if (!options.length) return '14K Yellow Gold';
+        const parseKarat = (val) => {
+          const m = String(val || '').match(/(\d+)\s*K/i);
+          return m ? Number(m[1]) : Number.POSITIVE_INFINITY;
+        };
+        let best = options[0];
+        let lowest = parseKarat(best);
+        options.forEach((val) => {
+          const k = parseKarat(val);
+          if (k < lowest) {
+            lowest = k;
+            best = val;
+          }
+        });
+        if (!Number.isFinite(lowest) || lowest > 14) return '14K Yellow Gold';
+        return best || '14K Yellow Gold';
+      };
+      const metal = pickLowestMetal(metalOptions);
 
       const stoneOptionData = buildStoneWeightFromOptions(product.stone_options);
       const stoneWeight = stoneOptionData.total || String(product.stone_weight || product.carat || '');
