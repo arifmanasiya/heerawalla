@@ -23,7 +23,19 @@ const pricingApiBase = (() => {
 const parseList = (value?: string | string[]) => {
   if (!value) return [];
   if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
-  return String(value)
+  const str = String(value).trim();
+  if (!str) return [];
+  if (str.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => String(v).trim()).filter(Boolean);
+      }
+    } catch {
+      // fall through to delimiter parsing
+    }
+  }
+  return str
     .split(/[|,]/)
     .map((v) => v.trim())
     .filter(Boolean);
