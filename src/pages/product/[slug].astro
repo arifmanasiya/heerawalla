@@ -2255,10 +2255,10 @@ void jsonLdString;
         if (metalWeightTotal) {
           const metalNum = parseMetalNumber(metalValue);
           if (Number.isFinite(metalNum) && metalNum > 0) {
-            metalWeightTotal.textContent = `Metal: ${metalNum.toFixed(2)} g`;
+            metalWeightTotal.textContent = `Metal: ${metalNum.toFixed(2)}g`;
             metalWeightTotal.classList.remove('hidden');
           } else if (metalValue) {
-            metalWeightTotal.textContent = `Metal: ${metalValue}`;
+            metalWeightTotal.textContent = `Metal: ${metalValue}g`;
             metalWeightTotal.classList.remove('hidden');
           } else {
             metalWeightTotal.textContent = '';
