@@ -136,24 +136,34 @@ const formatTitle = (value: string) =>
   </section>
 
   <section class="space-y-6 hidden" data-discovery data-collapsed="true">
-    <div class="intent-row" data-intent-group>
-      {[
-        { key: '', label: 'All', desc: 'Every expression' },
-        { key: 'her', label: 'For Her', desc: 'Soft radiance' },
-        { key: 'him', label: 'For Him', desc: 'Structured strength' },
-        { key: 'couples', label: 'Couples', desc: 'In sync' },
-        { key: 'gifts', label: 'Gifts', desc: 'Considered gestures' },
-        { key: 'new', label: 'New', desc: 'Latest arrivals' },
-      ].map((intent, idx) => (
-        <button
-          class={`intent-chip${idx === 0 ? ' is-active' : ''}`}
-          data-intent={intent.key}
-          type="button"
-        >
-          <span>{intent.label}</span>
+    <div class="intent-and-controls">
+      <div class="intent-row" data-intent-group>
+        {[
+          { key: '', label: 'All', desc: 'Every expression' },
+          { key: 'her', label: 'For Her', desc: 'Soft radiance' },
+          { key: 'him', label: 'For Him', desc: 'Structured strength' },
+          { key: 'couples', label: 'Couples', desc: 'In sync' },
+          { key: 'gifts', label: 'Gifts', desc: 'Considered gestures' },
+          { key: 'new', label: 'New', desc: 'Latest arrivals' },
+        ].map((intent, idx) => (
+          <button
+            class={`intent-chip${idx === 0 ? ' is-active' : ''}`}
+            data-intent={intent.key}
+            type="button"
+          >
+            <span>{intent.label}</span>
+          </button>
+        ))}
+        <div class="intent-fade" aria-hidden="true"></div>
+      </div>
+
+      <div class="control-bar" data-control-bar>
+        <button class="control-btn" type="button" data-refine-trigger>
+          Refine
+          <span class="badge hidden" data-refine-count>0</span>
         </button>
-      ))}
-      <div class="intent-fade" aria-hidden="true"></div>
+        <button class="control-btn" type="button" data-sort-trigger>Sort</button>
+      </div>
     </div>
 
     <div class="design-grid" data-design-group>
@@ -175,13 +185,6 @@ const formatTitle = (value: string) =>
       ))}
     </div>
 
-    <div class="control-bar" data-control-bar>
-      <button class="control-btn" type="button" data-refine-trigger>
-        Refine
-        <span class="badge hidden" data-refine-count>0</span>
-      </button>
-      <button class="control-btn" type="button" data-sort-trigger>Sort</button>
-    </div>
   </section>
 
     <section>
@@ -234,6 +237,20 @@ const formatTitle = (value: string) =>
       background: #fff;
       color: #0b1928;
     }
+    .intent-and-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: stretch;
+    }
+    @media (min-width: 1024px) {
+      .intent-and-controls {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+    }
     .intent-row {
       position: relative;
       display: grid;
@@ -244,6 +261,7 @@ const formatTitle = (value: string) =>
       padding-bottom: 4px;
       scroll-snap-type: x mandatory;
       scrollbar-width: none;
+      flex: 1 1 auto;
     }
     .intent-row::-webkit-scrollbar { display: none; }
     .intent-chip {
@@ -321,9 +339,21 @@ const formatTitle = (value: string) =>
       gap: 10px;
       background: #fff;
       padding: 8px 0;
+      flex: 0 0 auto;
+      min-width: 200px;
+    }
+    @media (min-width: 1024px) {
+      .control-bar {
+        position: static;
+        grid-template-columns: repeat(2, auto);
+        gap: 12px;
+        padding: 0;
+        justify-items: end;
+      }
     }
     .control-btn {
       height: 44px;
+      min-width: 110px;
       border: 1px solid rgba(11, 25, 40, 0.16);
       border-radius: 12px;
       background: #fff;
@@ -335,6 +365,7 @@ const formatTitle = (value: string) =>
       align-items: center;
       justify-content: center;
       gap: 8px;
+      padding: 0 14px;
     }
     .badge {
       display: inline-flex;
