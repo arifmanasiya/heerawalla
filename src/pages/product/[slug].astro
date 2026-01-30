@@ -422,8 +422,22 @@ const buildStoneWeightInfoValue = (rawValue: string) => {
       })
       .map(([sizeType, group]) => ({
         size_type: sizeType,
-        value: group.items.join(', '),
-        label: `${formatSizeTypeLabel(sizeType)} · ${group.items.join(', ')}`,
+        value: group.items
+          .slice()
+          .sort((a, b) => {
+            const an = Number(a.split(' x ')[0]);
+            const bn = Number(b.split(' x ')[0]);
+            return (an - bn) || a.localeCompare(b);
+          })
+          .join(', '),
+        label: `${formatSizeTypeLabel(sizeType)} · ${group.items
+          .slice()
+          .sort((a, b) => {
+            const an = Number(a.split(' x ')[0]);
+            const bn = Number(b.split(' x ')[0]);
+            return (an - bn) || a.localeCompare(b);
+          })
+          .join(', ')}`,
         total: group.total,
       }));
   };
@@ -2812,8 +2826,22 @@ void jsonLdString;
             })
             .map(([sizeType, group]) => ({
               size_type: sizeType,
-              value: group.items.join(', '),
-              label: `${formatSizeTypeLabel(sizeType)} · ${group.items.join(', ')}`,
+              value: group.items
+                .slice()
+                .sort((a, b) => {
+                  const an = Number(a.split(' x ')[0]);
+                  const bn = Number(b.split(' x ')[0]);
+                  return (an - bn) || a.localeCompare(b);
+                })
+                .join(', '),
+              label: `${formatSizeTypeLabel(sizeType)} · ${group.items
+                .slice()
+                .sort((a, b) => {
+                  const an = Number(a.split(' x ')[0]);
+                  const bn = Number(b.split(' x ')[0]);
+                  return (an - bn) || a.localeCompare(b);
+                })
+                .join(', ')}`,
               total: group.total,
             }));
         };
@@ -3139,7 +3167,7 @@ void jsonLdString;
           STANDARD_METAL_OPTIONS,
           new Set(metalOptions.map((option) => option.value))
         );
-        const stoneWeightGroups = buildStoneWeightGroupsFromOptions(item.stone_options);
+          const stoneWeightGroups = buildStoneWeightGroupsFromOptions(item.stone_options);
         const stoneWeightFallback = parseOptionList(item.stone_weight).map((value) => ({
           value,
           label: value,

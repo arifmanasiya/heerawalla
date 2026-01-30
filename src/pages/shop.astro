@@ -792,7 +792,7 @@ const formatTitle = (value: string) =>
         return best;
       };
       const sizeType = pickSizeType();
-      const entries = groups.get(sizeType) || [];
+      const entries = (groups.get(sizeType) || []).sort((a, b) => a.carat - b.carat || a.count - b.count);
       const totalNum = entries.reduce((sum, e) => sum + e.carat * e.count, 0);
       const parts = entries.map((e) => `${e.carat} x ${e.count}`);
       return {
