@@ -2235,8 +2235,26 @@ void jsonLdString;
         }
         return true;
       };
+      const pickLowestMetalFromSelect = () => {
+        if (!metalSelect) return '';
+        const opts = Array.from(metalSelect.options).map((o) => o.value);
+        const parseKarat = (val) => {
+          const m = String(val || '').match(/(\d+)\s*K/i);
+          return m ? Number(m[1]) : Number.POSITIVE_INFINITY;
+        };
+        let best = metalSelect.value || '';
+        let lowest = parseKarat(best);
+        opts.forEach((val) => {
+          const k = parseKarat(val);
+          if (k < lowest) {
+            lowest = k;
+            best = val;
+          }
+        });
+        return best || metalSelect.value || '';
+      };
       const buildPayload = () => ({
-        metal: metalSelect ? metalSelect.value : '',
+        metal: metalSelect ? pickLowestMetalFromSelect() : '',
         metal_weight: metalWeightSelect ? metalWeightSelect.value : '',
         stone: stoneSelect ? stoneSelect.value : '',
         stone_weight: (() => {

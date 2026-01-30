@@ -759,23 +759,71 @@ const formatTitle = (value: string) =>
 
     const buildStoneWeightFromOptions = (options) => {
       if (!Array.isArray(options) || !options.length) return { total: '', breakdown: '' };
-      const primary = options.find((opt) => opt && opt.is_primary) || options[0];
-      const carat = primary && Number(primary.carat);
-      const count = primary && Number(primary.count || 1);
-      const total = Number.isFinite(carat) && Number.isFinite(count) ? (carat * count).toString() : '';
-      const breakdown =
-        Number.isFinite(carat) && Number.isFinite(count) ? `${count} × ${carat}` : String(primary?.carat || '');
-      return { total, breakdown };
+      let totalNum = 0;
+      const parts = [];
+      options.forEach((opt) => {
+        const carat = Number(opt?.carat);
+        const count = Number(opt?.count || 1);
+        if (!Number.isFinite(carat) || !Number.isFinite(count) || carat <= 0 || count <= 0) return;
+        totalNum += carat * count;
+        parts.push(`${count} × ${carat}`);
+      });
+      return {
+        total: totalNum > 0 ? totalNum.toString() : '',
+        breakdown: parts.join(', ')
+      };
     };
 
     const buildMetalWeightFromOptions = (options) => {
       if (!Array.isArray(options) || !options.length) return '';
-      const primary = options.find((opt) => opt && opt.is_primary) || options[0];
-      return String(primary?.metal_weight || '').trim();
+      let best = '';
+      let bestNum = -Infinity;
+      const parseNum = (val) => {
+        const m = String(val || '').match(/-?\d+(\.\d+)?/);
+        return m ? Number(m[0]) : NaN;
+      };
+      options.forEach((opt) => {
+        const raw = String(opt?.metal_weight || '').trim();
+        const n = parseNum(raw);
+        if (Number.isFinite(n) && n > bestNum) {
+          bestNum = n;
+          best = raw;
+        }
+      });
+      return best;
+    };
+
+    const normalizeTokenList = (raw) => {
+      const base = parseList(raw);
+      const tokens = [];
+      base.forEach((entry) => {
+        const str = String(entry || '').trim();
+        if (!str) return;
+        if (str.startsWith('[') && str.endsWith(']')) {
+          try {
+            const parsed = JSON.parse(str);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((v) => {
+                const t = String(v || '').trim();
+                if (t) tokens.push(t);
+              });
+              return;
+            }
+          } catch {
+            // fall through
+          }
+        }
+        str
+          .split(/[\|,\s]+/)
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .forEach((t) => tokens.push(t));
+      });
+      return tokens;
     };
 
     const buildPricingPayload = (product) => {
-      const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
+      const stoneTypes = normalizeTokenList(product.stone_types).map(normalizeStoneType).filter(Boolean);
       const lab = stoneTypes.find((item) => /lab/i.test(item));
       const natural = stoneTypes.find((item) => /natural/i.test(item));
       const stone = lab || natural || stoneTypes[0] || '';
@@ -787,16 +835,40 @@ const formatTitle = (value: string) =>
       const stoneWeight = stoneOptionData.total || String(product.stone_weight || product.carat || '');
       const diamondBreakdown = stoneOptionData.breakdown || '';
 
-      const metalWeight =
+      const metalWeightRaw =
         buildMetalWeightFromOptions(product.metal_weight_options) ||
-        String(product.metal_weight || '').trim();
-      const metalWeightNum = Number(metalWeight);
+        String(product.metal_weight || '').trim() ||
+        String(product.metal_weight_range || '').trim();
+      const metalWeightNum = Number(metalWeightRaw);
+      const metalWeight = metalWeightRaw;
 
-      const clarityOptions = parseList(product.clarity);
-      const colorOptions = parseList(product.color);
-      const cutOptions = parseList(product.cut);
-      const clarity = clarityOptions.length ? clarityOptions[clarityOptions.length - 1] : '';
-      const color = colorOptions.length ? colorOptions[colorOptions.length - 1] : '';
+      const clarityOptions = normalizeTokenList(product.clarity);
+      const colorOptions = normalizeTokenList(product.color);
+      const cutOptions = normalizeTokenList(product.cut);
+      const pickClarity = () => {
+        const allowed = ['IF','VVS1','VVS2','VS1','VS2','SI1','SI2','SI3','I1','I2','I3'];
+        if (clarityOptions.length) {
+          for (let i = allowed.length - 1; i >= 0; i--) {
+            const val = allowed[i];
+            if (clarityOptions.some((c) => String(c).toUpperCase() === val)) return val;
+          }
+          return clarityOptions[clarityOptions.length - 1];
+        }
+        return '';
+      };
+      const clarity = pickClarity();
+      const pickColor = () => {
+        if (!colorOptions.length) return '';
+        const last = colorOptions[colorOptions.length - 1];
+        // Clamp to H or better to match pricing table ranges (commonly D-F or G-H)
+        const letter = String(last).trim().toUpperCase();
+        if (!letter) return '';
+        const allowed = ['D', 'E', 'F', 'G', 'H'];
+        if (allowed.includes(letter)) return letter;
+        // pick worst allowed
+        return allowed[allowed.length - 1];
+      };
+      const color = pickColor();
       const cut = cutOptions.length ? cutOptions[cutOptions.length - 1] : '';
 
       return {
