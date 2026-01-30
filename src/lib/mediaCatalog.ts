@@ -86,14 +86,18 @@ const normalizeMediaUrl = (raw: string) => {
 };
 
 async function ensureCatalogLoaded() {
-  if (cache.promise) return cache.promise;
-  cache.promise = (async () => {
-    const apiBase = (getEnv('PUBLIC_CATALOG_API_URL') || '').trim();
-    if (!apiBase) {
-      throw new Error('PUBLIC_CATALOG_API_URL is required to load media from D1.');
-    }
+  const apiBase = (getEnv('PUBLIC_CATALOG_API_URL') || '').trim();
+  if (!apiBase) {
+    throw new Error('PUBLIC_CATALOG_API_URL is required to load media from D1.');
+  }
+  const nodeEnv = String(getEnv('NODE_ENV') || '').toLowerCase();
+  const isDev = nodeEnv !== 'production';
+  if (!isDev && cache.promise) return cache.promise;
+  const load = async () => {
     const joiner = apiBase.includes('?') ? '&' : '?';
-    const url = `${apiBase}${joiner}include=media_library,product_media,inspiration_media`;
+    const isLocalApi = /localhost|127\.0\.0\.1/i.test(apiBase);
+    const cacheBust = isDev || isLocalApi ? `&bust=${Date.now()}` : '';
+    const url = `${apiBase}${joiner}include=media_library,product_media,inspiration_media${cacheBust}`;
     const response = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!response.ok) {
       throw new Error(`Catalog media API failed (${response.status} ${response.statusText}).`);
@@ -131,7 +135,12 @@ async function ensureCatalogLoaded() {
         order: typeof row.order === 'number' ? row.order : parseNumber(String(row.order || '')),
       }))
       .filter((entry) => entry.media_id && entry.inspiration_slug);
-  })();
+  };
+  if (isDev) {
+    await load();
+    return;
+  }
+  cache.promise = load();
   return cache.promise;
 }
 
