@@ -1,0 +1,872 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import ProductCard from '../components/ProductCard.astro';
+import { loadProductsWithMedia, type ProductWithMedia } from '../lib/products';
+import { withBase } from '../lib/paths';
+
+const products: ProductWithMedia[] = await loadProductsWithMedia();
+const catalogUrl = import.meta.env.PUBLIC_CATALOG_API_URL || '';
+const pricingApiBase = (() => {
+  const preferred = import.meta.env.PUBLIC_PRICING_API_URL || import.meta.env.PUBLIC_CATALOG_API_URL || '';
+  if (preferred && preferred.includes('://')) {
+    try {
+      return new URL(preferred).origin;
+    } catch {
+      return 'https://admin-api.heerawalla.com';
+    }
+  }
+  return 'https://admin-api.heerawalla.com';
+})();
+
+const parseList = (value?: string | string[]) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+  return String(value)
+    .split(/[|,]/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+};
+
+const getStoneTotal = (product: ProductWithMedia) => {
+  const raw = String(product.stone_weight || '').trim();
+  if (raw) {
+    const nums = raw.match(/[0-9]*\.?[0-9]+/g) || [];
+    const vals = nums.map((n) => Number(n)).filter((n) => Number.isFinite(n));
+    if (vals.length) return vals.reduce((a, b) => a + b, 0);
+  }
+  if (Array.isArray(product.stone_options) && product.stone_options.length) {
+    return product.stone_options.reduce((sum, option) => {
+      const carat = Number(option.carat);
+      const count = Number(option.count || 1);
+      if (Number.isFinite(carat) && Number.isFinite(count)) return sum + carat * count;
+      return sum;
+    }, 0);
+  }
+  return 0;
+};
+
+const stoneBucket = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  if (value < 0.3) return 'petite';
+  if (value < 0.75) return 'everyday';
+  if (value < 1.5) return 'statement';
+  return 'bold';
+};
+
+const normalizeCategory = (value: string) => value.toLowerCase();
+
+const categories = Array.from(
+  new Set(
+    products
+      .flatMap((p) => parseList(p.categories || p.category))
+      .map((entry) => {
+        const norm = normalizeCategory(entry);
+        if (norm.endsWith('s')) {
+          const trimmed = norm.slice(0, -1);
+          if (trimmed === 'ring' || trimmed === 'pendant' || trimmed === 'bracelet' || trimmed === 'earring') {
+            return trimmed;
+          }
+        }
+        return norm;
+      })
+      .filter(Boolean)
+  )
+).sort();
+const cleanColor = (raw: string) => {
+  const trimmed = String(raw || '').trim().replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
+  return trimmed.toUpperCase();
+};
+const normalizeMetalColor = (metal: string) => {
+  const m = metal.toLowerCase();
+  if (m.includes('rose')) return 'rose gold';
+  if (m.includes('yellow')) return 'yellow gold';
+  if (m.includes('white')) return 'white gold';
+  return '';
+};
+const metalColors = Array.from(
+  new Set(
+    products
+      .flatMap((p) => parseList(p.metal_options || p.metal || ''))
+      .map(normalizeMetalColor)
+      .filter(Boolean)
+  )
+);
+const METAL_COLOR_OPTIONS = metalColors.length ? metalColors : ['yellow gold', 'white gold', 'rose gold'];
+
+const formatTitle = (value: string) =>
+  value
+    .split(' ')
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(' ');
+---
+
+<BaseLayout title="Shop | Heerawalla" description="Browse the Heerawalla catalog and filter by gender, design code, category, and color.">
+  <Header />
+
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-10">
+  <section class="space-y-3">
+    <h1 class="text-4xl sm:text-5xl font-semibold tracking-tight">Shop</h1>
+    <div class="flex items-center gap-3">
+      <p class="text-sm text-slate-500" data-result-count></p>
+      <button
+        type="button"
+        class="text-sm font-medium text-ink underline underline-offset-4 decoration-1"
+        data-discovery-toggle
+        aria-expanded="false"
+      >
+        Show filters
+      </button>
+    </div>
+  </section>
+
+  <section class="space-y-6 hidden" data-discovery data-collapsed="true">
+    <div class="intent-row" data-intent-group>
+      {[
+        { key: '', label: 'All', desc: 'Every expression' },
+        { key: 'her', label: 'For Her', desc: 'Soft radiance' },
+        { key: 'him', label: 'For Him', desc: 'Structured strength' },
+        { key: 'couples', label: 'Couples', desc: 'In sync' },
+        { key: 'gifts', label: 'Gifts', desc: 'Considered gestures' },
+        { key: 'new', label: 'New', desc: 'Latest arrivals' },
+      ].map((intent, idx) => (
+        <button
+          class={`intent-chip${idx === 0 ? ' is-active' : ''}`}
+          data-intent={intent.key}
+          type="button"
+        >
+          <span>{intent.label}</span>
+        </button>
+      ))}
+      <div class="intent-fade" aria-hidden="true"></div>
+    </div>
+
+    <div class="design-grid" data-design-group>
+      {[
+        { key: '', label: 'All', desc: 'Every line' },
+        { key: 'axis', label: 'Axis', desc: 'Precision & balance' },
+        { key: 'continuum', label: 'Continuum', desc: 'Flow & grace' },
+        { key: 'eclipse', label: 'Eclipse', desc: 'Bold & power' },
+        { key: 'signature', label: 'Signature', desc: 'Icons' },
+      ].map((code) => (
+        <button
+          class={`design-card${code.key === '' ? ' is-active' : ''}`}
+          data-design={code.key}
+          type="button"
+        >
+          <span class="design-label">{code.label}</span>
+          <span class="design-desc">{code.desc}</span>
+        </button>
+      ))}
+    </div>
+
+    <div class="control-bar" data-control-bar>
+      <button class="control-btn" type="button" data-refine-trigger>
+        Refine
+        <span class="badge hidden" data-refine-count>0</span>
+      </button>
+      <button class="control-btn" type="button" data-sort-trigger>Sort</button>
+    </div>
+  </section>
+
+    <section>
+      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" data-grid>
+        {products.map((product) => {
+          const stoneTotal = getStoneTotal(product);
+          const gender = (product.gender || '').toLowerCase();
+          const design = (product.design_code || '').toLowerCase();
+          const category = parseList(product.categories || product.category)[0]?.toLowerCase() || '';
+          const color = cleanColor(parseList(product.color || '')[0] || '');
+          const metalColor = normalizeMetalColor(
+            parseList(product.metal_options || product.metal || '')[0] || ''
+          );
+          return (
+            <div
+              data-product-card
+              data-gender={gender}
+              data-design={design}
+              data-category={category}
+              data-color={color}
+              data-metalcolor={metalColor}
+              data-price={(product as any).price || 0}
+              data-stone={stoneTotal}
+              data-stone-bucket={stoneBucket(stoneTotal)}
+              data-featured={product.is_featured ? '1' : '0'}
+            >
+              <ProductCard product={product} />
+            </div>
+          );
+        })}
+      </div>
+      <p class="text-center text-sm text-slate-500 mt-6 hidden" data-empty>Nothing matches these filters yet.</p>
+    </section>
+  </main>
+
+  <style>
+    .sort-select {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #475569;
+    }
+    .sort-select select {
+      border: 1px solid rgba(11, 25, 40, 0.16);
+      padding: 10px 12px;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      background: #fff;
+      color: #0b1928;
+    }
+    .intent-row {
+      position: relative;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: max-content;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+    }
+    .intent-row::-webkit-scrollbar { display: none; }
+    .intent-chip {
+      height: 44px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(11, 25, 40, 0.16);
+      background: #fff;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #0b1928;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      scroll-snap-align: start;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 120px;
+    }
+    .intent-chip.is-active {
+      background: #0b1928;
+      color: #fff;
+      box-shadow: 0 10px 22px rgba(11, 25, 40, 0.18);
+      border-color: #0b1928;
+    }
+    .intent-fade {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 60px;
+      pointer-events: none;
+      background: linear-gradient(90deg, rgba(255,255,255,0) 0%, #fff 70%);
+    }
+    .design-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+    .design-card {
+      border: 1px solid rgba(11, 25, 40, 0.12);
+      background: #fff;
+      color: #0b1928;
+      padding: 16px;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border 0.18s ease;
+      min-height: 120px;
+      border-radius: 14px;
+    }
+    .design-card .design-label {
+      display: block;
+      font-size: 14px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .design-card .design-desc {
+      font-size: 13px;
+      color: #475569;
+      line-height: 1.4;
+    }
+    .design-card.is-active {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 30px rgba(11, 25, 40, 0.18);
+      border-color: rgba(11, 25, 40, 0.35);
+    }
+    .control-bar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      background: #fff;
+      padding: 8px 0;
+    }
+    .control-btn {
+      height: 44px;
+      border: 1px solid rgba(11, 25, 40, 0.16);
+      border-radius: 12px;
+      background: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 12px;
+      color: #0b1928;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #0b1928;
+      color: #fff;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+    }
+    .bottom-sheet,
+    .sheet-backdrop,
+    .sort-sheet {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease, transform 0.22s ease;
+    }
+    .sheet-backdrop {
+      background: rgba(11, 25, 40, 0.45);
+      backdrop-filter: blur(2px);
+      z-index: 40;
+    }
+    .bottom-sheet {
+      z-index: 41;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      transform: translateY(100%);
+    }
+    .bottom-sheet.is-open,
+    .sort-sheet.is-open,
+    .sheet-backdrop.is-open {
+      pointer-events: auto;
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .sheet-panel {
+      margin-top: auto;
+      background: #fff;
+      border-radius: 18px 18px 0 0;
+      padding: 16px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .sheet-footer {
+      position: sticky;
+      bottom: 0;
+      background: #fff;
+      padding: 12px 0 4px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .sheet-button {
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid rgba(11, 25, 40, 0.16);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 12px;
+    }
+    .sheet-button.primary {
+      background: #0b1928;
+      color: #fff;
+      border-color: #0b1928;
+    }
+    .accordion {
+      border-top: 1px solid rgba(11, 25, 40, 0.08);
+      padding-top: 8px;
+      margin-top: 8px;
+    }
+    .accordion summary {
+      cursor: pointer;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #0b1928;
+      padding: 10px 0;
+      list-style: none;
+    }
+    .accordion summary::-webkit-details-marker { display: none; }
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+    }
+    .segmented button,
+    .segmented select {
+      border: 1px solid rgba(11, 25, 40, 0.16);
+      border-radius: 10px;
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      background: #fff;
+      color: #0b1928;
+    }
+    .segmented button.is-active {
+      background: #0b1928;
+      color: #fff;
+      border-color: #0b1928;
+    }
+    .sort-sheet {
+      z-index: 42;
+      display: grid;
+      place-items: end center;
+      padding: 16px;
+      transform: translateY(100%);
+    }
+    .sort-panel {
+      width: 100%;
+      max-width: 480px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+      overflow: hidden;
+    }
+    .sort-list button {
+      width: 100%;
+      text-align: left;
+      padding: 14px 16px;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(11, 25, 40, 0.08);
+    }
+    .sort-list button:last-child { border-bottom: none; }
+    .sort-list button.is-active {
+      background: rgba(11, 25, 40, 0.06);
+      font-weight: 600;
+    }
+  </style>
+
+  <Footer />
+</BaseLayout>
+
+<div class="sheet-backdrop" data-sheet-backdrop></div>
+
+<div class="bottom-sheet" data-bottom-sheet>
+  <div class="sheet-panel">
+    <div class="accordion">
+      <details open>
+        <summary>Jewelry Type</summary>
+        <div class="segmented">
+          <select data-refine="category">
+            <option value="">All</option>
+            {categories.map((cat) => (
+              <option value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+            ))}
+          </select>
+        </div>
+      </details>
+      <details open>
+        <summary>Metal Color</summary>
+        <div class="segmented">
+          <select data-refine="metalColor">
+            <option value="">All</option>
+            {METAL_COLOR_OPTIONS.map((color) => (
+              <option value={color}>{formatTitle(color)}</option>
+            ))}
+          </select>
+        </div>
+      </details>
+      <details open>
+        <summary>Diamond Scale</summary>
+        <div class="segmented">
+          <select data-refine="stoneBucket">
+            <option value="">All</option>
+            <option value="petite">Petite (&lt;0.3 ct)</option>
+            <option value="everyday">Everyday (0.3–0.75 ct)</option>
+            <option value="statement">Statement (0.75–1.5 ct)</option>
+            <option value="bold">Bold (&gt;=1.5 ct)</option>
+          </select>
+        </div>
+      </details>
+    </div>
+    <div class="sheet-footer">
+      <button class="sheet-button" type="button" data-sheet-clear>Clear all</button>
+      <button class="sheet-button primary" type="button" data-sheet-apply>Apply</button>
+    </div>
+  </div>
+</div>
+
+<div class="sort-sheet" data-sort-sheet>
+  <div class="sort-panel">
+    <div class="sort-list">
+      <button type="button" class="is-active" data-sort-option="featured">Featured</button>
+      <button type="button" data-sort-option="price-asc">Price · Low to High</button>
+      <button type="button" data-sort-option="price-desc">Price · High to Low</button>
+      <button type="button" data-sort-option="stone-desc">Diamond Size</button>
+    </div>
+  </div>
+</div>
+
+<script is:inline define:vars={{ catalogUrl, pricingApiBase }}>
+  (() => {
+    const grid = document.querySelector('[data-grid]');
+    if (!grid) return;
+    const cards = Array.from(grid.querySelectorAll('[data-product-card]'));
+    const empty = document.querySelector('[data-empty]');
+    const resultCount = document.querySelector('[data-result-count]');
+    const discovery = document.querySelector('[data-discovery]');
+    const discoveryToggle = document.querySelector('[data-discovery-toggle]');
+    const priceEls = Array.from(document.querySelectorAll('[data-price][data-product-slug]'));
+    const pricingApiBaseValue = String(pricingApiBase || '');
+
+    const state = {
+      genderList: [],
+      design: '',
+      category: '',
+      color: '',
+      metalColor: '',
+      sort: 'featured',
+      stoneBucket: '',
+    };
+
+    const updateCounts = (visible) => {
+      if (!resultCount) return;
+      resultCount.textContent = `${visible} styles`;
+    };
+
+    const apply = () => {
+      let visible = [];
+      cards.forEach((card) => {
+        const match =
+          (!state.genderList.length || state.genderList.includes(card.dataset.gender || '')) &&
+          (!state.design || card.dataset.design === state.design) &&
+          (!state.category || card.dataset.category === state.category) &&
+          (!state.color || card.dataset.color === state.color) &&
+          (!state.metalColor || card.dataset.metalcolor === state.metalColor) &&
+          (!state.stoneBucket || card.dataset.stoneBucket === state.stoneBucket);
+        card.classList.toggle('hidden', !match);
+        if (match) visible.push(card);
+      });
+
+      const sortKey = state.sort;
+      visible.sort((a, b) => {
+        const featuredA = Number(a.dataset.featured || '0');
+        const featuredB = Number(b.dataset.featured || '0');
+        if (!state.category && featuredA !== featuredB) return featuredB - featuredA;
+        if (sortKey === 'price-asc') return Number(a.dataset.price) - Number(b.dataset.price);
+        if (sortKey === 'price-desc') return Number(b.dataset.price) - Number(a.dataset.price);
+        if (sortKey === 'stone-asc') return Number(a.dataset.stone) - Number(b.dataset.stone);
+        if (sortKey === 'stone-desc') return Number(b.dataset.stone) - Number(a.dataset.stone);
+        return featuredB - featuredA;
+      });
+
+      visible.forEach((card) => grid.appendChild(card));
+      if (empty) empty.classList.toggle('hidden', visible.length > 0);
+      updateCounts(visible.length);
+      updateRefineBadge();
+    };
+
+    const intentButtons = Array.from(document.querySelectorAll('[data-intent-group] .intent-chip'));
+    intentButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        intentButtons.forEach((b) => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        const intent = btn.dataset.intent || '';
+        if (intent === 'her') state.genderList = ['women', 'female'];
+        else if (intent === 'him') state.genderList = ['men', 'male'];
+        else if (intent === 'couples') state.genderList = ['unisex', 'couple', 'couples'];
+        else state.genderList = [];
+        apply();
+      });
+    });
+
+    const designButtons = Array.from(document.querySelectorAll('[data-design-group] .design-card'));
+    designButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        designButtons.forEach((b) => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        state.design = btn.dataset.design || '';
+        apply();
+      });
+    });
+
+    const refineSelects = Array.from(document.querySelectorAll('[data-refine]'));
+    const updateRefineBadge = () => {
+      const badge = document.querySelector('[data-refine-count]');
+      if (!badge) return;
+      const count =
+        (state.category ? 1 : 0) +
+        (state.color ? 1 : 0) +
+        (state.metalColor ? 1 : 0) +
+        (state.stoneBucket ? 1 : 0);
+      badge.textContent = String(count);
+      badge.classList.toggle('hidden', count === 0);
+    };
+
+    refineSelects.forEach((select) => {
+      select.addEventListener('change', () => {
+        const key = select.dataset.refine;
+        state[key] = select.value;
+        apply();
+      });
+    });
+
+    // Bottom sheet logic
+    const sheet = document.querySelector('[data-bottom-sheet]');
+    const sheetBackdrop = document.querySelector('[data-sheet-backdrop]');
+    const sortSheet = document.querySelector('[data-sort-sheet]');
+    const refineTrigger = document.querySelector('[data-refine-trigger]');
+    const clearBtn = document.querySelector('[data-sheet-clear]');
+    const applyBtn = document.querySelector('[data-sheet-apply]');
+    const closeSheet = () => {
+      sheet?.classList.remove('is-open');
+      sheetBackdrop?.classList.remove('is-open');
+    };
+    const openSheet = () => {
+      sheet?.classList.add('is-open');
+      sheetBackdrop?.classList.add('is-open');
+    };
+    refineTrigger?.addEventListener('click', openSheet);
+    sheetBackdrop?.addEventListener('click', () => {
+      closeSheet();
+      sortSheet?.classList.remove('is-open');
+    });
+    clearBtn?.addEventListener('click', () => {
+      state.category = '';
+      state.color = '';
+      state.metalColor = '';
+      state.stoneBucket = '';
+      refineSelects.forEach((sel) => (sel.value = ''));
+      apply();
+    });
+    applyBtn?.addEventListener('click', () => {
+      closeSheet();
+      apply();
+    });
+
+    // Sort modal
+    const sortTrigger = document.querySelector('[data-sort-trigger]');
+    const sortOptions = Array.from(document.querySelectorAll('[data-sort-option]'));
+    const openSort = () => {
+      sortSheet?.classList.add('is-open');
+      sheetBackdrop?.classList.add('is-open');
+    };
+    const closeSort = () => {
+      sortSheet?.classList.remove('is-open');
+      sheetBackdrop?.classList.remove('is-open');
+    };
+    sortTrigger?.addEventListener('click', openSort);
+    sortOptions.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sortOptions.forEach((b) => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        state.sort = btn.dataset.sortOption || 'featured';
+        closeSort();
+        apply();
+      });
+    });
+
+    let userToggledDiscovery = false;
+    const setDiscoveryOpen = (open) => {
+      if (!discovery) return;
+      discovery.classList.toggle('hidden', !open);
+      discovery.dataset.collapsed = open ? 'false' : 'true';
+      if (discoveryToggle) {
+        discoveryToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        discoveryToggle.textContent = open ? 'Hide filters' : 'Show filters';
+      }
+    };
+    discoveryToggle?.addEventListener('click', () => {
+      userToggledDiscovery = true;
+      const open = discovery?.classList.contains('hidden');
+      setDiscoveryOpen(open);
+    });
+
+    const mq = window.matchMedia('(min-width: 640px)');
+    const syncDiscovery = () => {
+      if (userToggledDiscovery) return;
+      setDiscoveryOpen(mq.matches);
+    };
+    mq.addEventListener ? mq.addEventListener('change', syncDiscovery) : mq.addListener(syncDiscovery);
+
+    const applyCatalogPrices = (catalogProducts) => {
+      if (!Array.isArray(catalogProducts) || !catalogProducts.length) return;
+      const bySlug = new Map();
+      catalogProducts.forEach((p) => {
+        if (p && typeof p.slug === 'string') bySlug.set(p.slug, p);
+      });
+      priceEls.forEach((el) => {
+        const slug = el.dataset.productSlug || '';
+        const prod = bySlug.get(slug);
+        const priceValue =
+          prod && typeof prod.price === 'number'
+            ? prod.price
+            : prod && typeof prod.price_usd === 'number'
+            ? prod.price_usd
+            : prod && typeof prod.price_min === 'number'
+            ? prod.price_min
+            : 0;
+        if (priceValue && Number.isFinite(priceValue)) {
+          el.textContent = priceValue.toLocaleString('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            maximumFractionDigits: 0,
+          });
+          const card = el.closest('[data-product-card]');
+          if (card) card.dataset.price = String(priceValue);
+        }
+      });
+      apply();
+    };
+
+    const parseList = (value) => {
+      if (value === undefined || value === null) return [];
+      if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+      return String(value)
+        .split('|')
+        .map((v) => v.trim())
+        .filter(Boolean);
+    };
+
+    const normalizeStoneType = (value) =>
+      String(value || '')
+        .replace(/diamond\(s\)/gi, 'Diamond')
+        .replace(/diamonds?\b/gi, 'Diamond')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const buildStoneWeightFromOptions = (options) => {
+      if (!Array.isArray(options) || !options.length) return { total: '', breakdown: '' };
+      const primary = options.find((opt) => opt && opt.is_primary) || options[0];
+      const carat = primary && Number(primary.carat);
+      const count = primary && Number(primary.count || 1);
+      const total = Number.isFinite(carat) && Number.isFinite(count) ? (carat * count).toString() : '';
+      const breakdown =
+        Number.isFinite(carat) && Number.isFinite(count) ? `${count} × ${carat}` : String(primary?.carat || '');
+      return { total, breakdown };
+    };
+
+    const buildMetalWeightFromOptions = (options) => {
+      if (!Array.isArray(options) || !options.length) return '';
+      const primary = options.find((opt) => opt && opt.is_primary) || options[0];
+      return String(primary?.metal_weight || '').trim();
+    };
+
+    const buildPricingPayload = (product) => {
+      const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
+      const lab = stoneTypes.find((item) => /lab/i.test(item));
+      const natural = stoneTypes.find((item) => /natural/i.test(item));
+      const stone = lab || natural || stoneTypes[0] || '';
+
+      const metalOptions = parseList(product.metal_options || product.metals || product.metal);
+      const metal = metalOptions[metalOptions.length - 1] || product.metal || '18K Gold';
+
+      const stoneOptionData = buildStoneWeightFromOptions(product.stone_options);
+      const stoneWeight = stoneOptionData.total || String(product.stone_weight || product.carat || '');
+      const diamondBreakdown = stoneOptionData.breakdown || '';
+
+      const metalWeight =
+        buildMetalWeightFromOptions(product.metal_weight_options) ||
+        String(product.metal_weight || '').trim();
+
+      const clarityOptions = parseList(product.clarity);
+      const colorOptions = parseList(product.color);
+      const cutOptions = parseList(product.cut);
+      const clarity = clarityOptions.length ? clarityOptions[clarityOptions.length - 1] : '';
+      const color = colorOptions.length ? colorOptions[colorOptions.length - 1] : '';
+      const cut = cutOptions.length ? cutOptions[cutOptions.length - 1] : '';
+
+      return {
+        metal,
+        metal_weight: metalWeight,
+        stone,
+        stone_weight: stoneWeight,
+        diamond_breakdown: diamondBreakdown,
+        clarity,
+        color,
+        cut,
+      };
+    };
+
+    const resolvePricingBase = () => {
+      let base = pricingApiBaseValue || '';
+      if (!base) base = 'https://admin-api.heerawalla.com';
+      const host = window.location.hostname;
+      if ((host === 'localhost' || host === '127.0.0.1') && base.includes('admin-api.heerawalla.com')) {
+        base = 'http://localhost:8787';
+      }
+      return base.replace(/\/$/, '');
+    };
+
+    const updatePrices = async (items) => {
+      const base = resolvePricingBase();
+      if (!base || !Array.isArray(items) || !items.length) return;
+      const bySlug = new Map(priceEls.map((node) => [node.getAttribute('data-product-slug') || '', node]));
+      await Promise.all(
+        items.map(async (product) => {
+          const slug = String(product.slug || '');
+          const target = bySlug.get(slug);
+          if (!target) return;
+          const payload = buildPricingPayload(product);
+          if (!payload.metal_weight) return;
+          target.textContent = 'Calculating...';
+          try {
+            const response = await fetch(`${base}/pricing/estimate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (data && data.ok && typeof data.price === 'number') {
+              const formatted = data.price.toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                maximumFractionDigits: 0,
+              });
+              target.textContent = `Starting at ${formatted}`;
+              const card = target.closest('[data-product-card]');
+              if (card) card.dataset.price = String(data.price);
+            }
+          } catch {
+            // Ignore pricing errors.
+          }
+        })
+      );
+      apply();
+    };
+
+    const fetchCatalog = async () => {
+      let catalogUrlValue = String(catalogUrl || '');
+      if (!catalogUrlValue) catalogUrlValue = 'http://localhost:8787/catalog';
+      const joiner = catalogUrlValue.includes('?') ? '&' : '?';
+      const url = `${catalogUrlValue}${joiner}include=products&ts=${Date.now()}`;
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.products?.length) {
+          applyCatalogPrices(data.products);
+          updatePrices(data.products);
+        }
+      } catch {
+        // ignore catalog errors
+      }
+    };
+
+    syncDiscovery();
+    fetchCatalog();
+    apply();
+    updateRefineBadge();
+  })();
+</script>

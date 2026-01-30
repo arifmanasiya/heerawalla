@@ -11,6 +11,31 @@ const normalizeListValue = (value: unknown): string => {
   return String(value).trim();
 };
 
+const CANONICAL_CATEGORIES = [
+  'ring',
+  'band',
+  'pendant',
+  'necklace',
+  'bracelet',
+  'bangle',
+  'earring',
+  'stud',
+  'hoop',
+  'set',
+  'chain',
+  'anklet',
+  'brooch',
+  'cufflink'
+] as const;
+
+function normalizeCategoryValue(raw: string): string {
+  if (!raw) return '';
+  const base = raw.trim().toLowerCase();
+  const singular = base.endsWith('s') ? base.slice(0, -1) : base;
+  const match = CANONICAL_CATEGORIES.find((cat) => cat === singular);
+  return match || singular;
+}
+
 function toBoolean(value: string | undefined): boolean {
   if (!value) return false;
   return ['true', '1', 'yes', 'y'].includes(value.trim().toLowerCase());
@@ -90,13 +115,20 @@ async function loadProductsFromApi(slug?: string): Promise<Product[]> {
             // ignore parse errors; leave undefined
           }
         }
+        const normalizedCategory = normalizeCategoryValue(toOptionalFirstListItem(categoryValue) || categoryValue);
+        const normalizedCategories = normalizeListValue(
+          categoryValue
+            .split('|')
+            .map(normalizeCategoryValue)
+            .filter(Boolean)
+        );
         const base = {
           id: String(row.id || ''),
           name: String(row.name || ''),
           slug: String(row.slug || ''),
           description: String(row.description || row.long_desc || ''),
-          category: toOptionalFirstListItem(categoryValue) || categoryValue,
-          categories: categoryValue,
+          category: normalizedCategory,
+          categories: normalizedCategories,
           gender: genderValue,
           design_code: String(row.design_code || 'Signature'),
           metal: toOptionalFirstListItem(metalOptions) || String(row.metal || ''),

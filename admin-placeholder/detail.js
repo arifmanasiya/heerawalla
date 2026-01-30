@@ -428,10 +428,9 @@
     { value: "side", label: "Side" },
     { value: "halo", label: "Halo" },
   ];
-  const DEFAULT_STONE_SIZE_TYPES = [
+  const DEFAULT_SIZE_TYPES = [
     { value: "xsmall", label: "X-Small" },
     { value: "small", label: "Small" },
-    { value: "medium", label: "Medium" },
     { value: "large", label: "Large" },
     { value: "xlarge", label: "X-Large" },
     { value: "xxlarge", label: "XX-Large" },
@@ -2841,7 +2840,14 @@
     const sizes = enums?.stone_size_types;
     return Array.isArray(sizes) && sizes.length
       ? sizes
-      : DEFAULT_STONE_SIZE_TYPES;
+      : DEFAULT_SIZE_TYPES;
+  }
+
+  function getMetalSizeTypeOptions(enums) {
+    const sizes = enums?.metal_size_types;
+    return Array.isArray(sizes) && sizes.length
+      ? sizes
+      : DEFAULT_SIZE_TYPES;
   }
 
   function getStoneShapeOptions(enums) {
@@ -3064,10 +3070,17 @@
     }
   }
 
-  function renderMetalOptionRow(entry) {
+  function renderMetalOptionRow(entry, enums) {
     const isPrimary =
       String(entry.is_primary || entry.isPrimary || "") === "1" ||
       entry.is_primary === true;
+    const sizeOptions = getMetalSizeTypeOptions(enums || {});
+    const sizeSelect = buildSelectOptions(
+      sizeOptions,
+      entry.size_type || "",
+      true,
+      "Select",
+    );
     return `
       <div class="catalog-stone-row" data-metal-option-id="${escapeAttribute(entry.id || "")}">
         <div class="catalog-stone-grid">
@@ -3079,7 +3092,9 @@
           </label>
           <label class="field">
             <span>Size type</span>
-            <input type="text" data-metal-field="size_type" value="${escapeAttribute(entry.size_type || "")}">
+            <select data-metal-field="size_type">
+              ${sizeSelect}
+            </select>
           </label>
           <label class="field">
             <span>Primary</span>
@@ -3128,7 +3143,9 @@
       );
       const items = Array.isArray(data.items) ? data.items : [];
       state.catalogMetalOptions = { items };
-      const rows = items.map((entry) => renderMetalOptionRow(entry));
+      const rows = items.map((entry) =>
+        renderMetalOptionRow(entry, state.catalogEnums),
+      );
       ui.catalogMetalList.innerHTML = rows.length
         ? rows.join("")
         : `<div class="muted">No metal options yet.</div>`;
@@ -5264,6 +5281,13 @@
       window.CatalogForm.setSelectOptions(
         ui.stoneAddSizeType,
         sizeTypeOptions,
+        true,
+        "Select",
+      );
+      const metalSizeOptions = getMetalSizeTypeOptions(enums);
+      window.CatalogForm.setSelectOptions(
+        ui.metalAddSizeType,
+        metalSizeOptions,
         true,
         "Select",
       );

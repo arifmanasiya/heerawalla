@@ -1558,7 +1558,7 @@
       const message = payload?.error || response.statusText;
       throw new Error(message);
     }
-    return payload;
+    return payload || { ok: true };
   }
 
   async function triggerSiteRebuild() {
@@ -1568,13 +1568,15 @@
     setDeployStatus("Dispatching...");
     setButtonEnabled(ui.triggerDeploy, false);
     try {
-      await requestDeploy();
+      const result = await requestDeploy();
       const stamp = new Date().toLocaleTimeString();
       setDeployStatus(`Queued ${stamp}`);
-      showToast("Rebuild triggered");
+      const note = result?.ok ? "" : ` (${result?.error || "unknown"})`;
+      showToast(`Rebuild triggered${note}`);
     } catch (error) {
+      const message = error?.message ? String(error.message) : "Rebuild failed";
       setDeployStatus("Failed");
-      showToast("Rebuild failed", "error");
+      showToast(message, "error");
     } finally {
       setButtonEnabled(ui.triggerDeploy, true);
     }
