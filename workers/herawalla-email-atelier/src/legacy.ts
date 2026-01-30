@@ -301,6 +301,7 @@ const legacyWorker = {
           }
           return "";
         };
+        const wantsDebug = payload.debug === true;
         const record = {
           metal: normalizeField(["metal"]),
           metal_weight: normalizeField(["metal_weight", "metalWeight"]),
@@ -349,19 +350,22 @@ const legacyWorker = {
             headers: buildCorsHeaders(allowedOrigin, true),
           });
         }
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            price: Math.round(result.price),
-            meta: {
-              discountSummary: discountDetails.summary,
-              discountPercent: discountDetails.appliedPercent,
-              input: record,
-            },
-            debug: result.debug || null,
-          }),
-          { status: 200, headers: buildCorsHeaders(allowedOrigin, true) }
-        );
+        const responseBody: Record<string, unknown> = {
+          ok: true,
+          price: Math.round(result.price),
+          meta: {
+            discountSummary: discountDetails.summary,
+            discountPercent: discountDetails.appliedPercent,
+            input: record,
+          },
+        };
+        if (wantsDebug) {
+          responseBody.debug = result.debug || null;
+        }
+        return new Response(JSON.stringify(responseBody), {
+          status: 200,
+          headers: buildCorsHeaders(allowedOrigin, true),
+        });
       } catch (error) {
         const message = String(error);
         logError("pricing_estimate_error", { message });

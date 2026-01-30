@@ -559,10 +559,13 @@ const breadcrumbs = [
             const response = await fetch(`${base}/pricing/estimate`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
+              body: JSON.stringify({ ...payload, debug: false })
             });
             if (!response.ok) return;
             const data = await response.json();
+            if (data && data.debug) {
+              delete data.debug;
+            }
             if (data && data.ok && typeof data.price === 'number') {
               const formatted = data.price.toLocaleString('en-US', {
                 style: 'currency',

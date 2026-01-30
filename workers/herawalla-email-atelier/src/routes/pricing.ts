@@ -38,6 +38,7 @@ export async function handlePricingRoute(
         headers: buildCorsHeaders(allowedOrigin, true),
       });
     }
+    const wantsDebug = payload.debug === true;
     const { result, discountDetails } = await estimatePricing(payload, env);
     if (!result.ok) {
       return new Response(JSON.stringify({ ok: false, error: result.error }), {
@@ -53,7 +54,7 @@ export async function handlePricingRoute(
           discountSummary: discountDetails.summary,
           discountPercent: discountDetails.appliedPercent,
         },
-        debug: result.debug || null,
+        ...(wantsDebug ? { debug: result.debug || null } : {}),
       }),
       { status: 200, headers: buildCorsHeaders(allowedOrigin, true) }
     );

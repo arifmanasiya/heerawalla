@@ -2332,11 +2332,14 @@ void jsonLdString;
           const response = await fetch(`${base}/pricing/estimate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ ...payload, debug: false })
           });
           if (requestId !== pricingRequest) return;
           if (!response.ok) throw new Error('pricing_failed');
           const data = await response.json();
+          if (data && data.debug) {
+            delete data.debug;
+          }
           if (data && data.ok && typeof data.price === 'number') {
             priceEl.dataset.priceRaw = String(data.price);
             priceEl.textContent = data.price.toLocaleString('en-US', {
