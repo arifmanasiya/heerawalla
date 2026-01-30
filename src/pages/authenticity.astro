@@ -2,6 +2,7 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
+import { withBase } from "../lib/paths";
 import { loadSiteConfig, getConfigValue } from "../lib/config";
 
 const config = await loadSiteConfig();
@@ -10,7 +11,6 @@ const authenticityApiBase = getConfigValue(
   "order_authenticity_api_base",
   "https://admin-api.heerawalla.com"
 );
-const ordersEmail = getConfigValue(config, "orders_email", "atelier@heerawalla.com");
 ---
 
 <BaseLayout
