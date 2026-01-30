@@ -463,7 +463,7 @@ const buildStoneWeightInfoValue = (rawValue: string) => {
     return map;
   };
   const buildSizeTypeOptions = (
-    stoneGroups: Array<{ size_type: string; total?: number }>,
+    stoneGroups: Array<{ size_type: string; total?: number; value?: string }>,
     metalBySizeType: Map<string, string>
   ) => {
     const sizeTypes = new Set<string>();
