@@ -780,6 +780,7 @@ void jsonLdString;
               src={image}
               alt={product.name}
               class="block max-h-[70vh] w-auto max-w-full object-contain"
+              style="aspect-ratio: auto;"
               loading="lazy"
               decoding="async"
               fetchpriority="high"
@@ -787,10 +788,10 @@ void jsonLdString;
               data-product-image-meta={JSON.stringify(imageMeta)}
               data-protected-image
             />
-            <span class="signature-mark" aria-hidden="true">
-              <svg viewBox="0 0 128 128" class="h-8 w-8 text-ink/70" role="presentation">
-                <circle cx="64" cy="64" r="46" stroke="currentColor" stroke-width="10" fill="none" />
-                <line x1="64" y1="10" x2="64" y2="118" stroke="currentColor" stroke-width="9" stroke-linecap="round" />
+            <span class="signature-mark signature-mark--hero" data-signature-mark aria-hidden="true">
+              <svg viewBox="0 0 128 128" class="h-6 w-6 text-ink/40" role="presentation">
+                <circle cx="64" cy="64" r="46" stroke="currentColor" stroke-width="8" fill="none" />
+                <line x1="64" y1="10" x2="64" y2="118" stroke="currentColor" stroke-width="7" stroke-linecap="round" />
               </svg>
             </span>
           </div>
@@ -3675,6 +3676,29 @@ void jsonLdString;
   </script>
   <script is:inline>
     (() => {
+      const img = document.querySelector('[data-product-image]');
+      const mark = document.querySelector('[data-signature-mark]');
+      const updateSignature = () => {
+        if (!img || !mark) return;
+        const imgRect = img.getBoundingClientRect();
+        const wrap = img.closest('.relative');
+        const wrapRect = wrap?.getBoundingClientRect();
+        if (!wrapRect) return;
+        const offsetRight = Math.max(6, wrapRect.right - imgRect.right + 6);
+        const offsetBottom = Math.max(6, wrapRect.bottom - imgRect.bottom + 6);
+        mark.style.right = `${offsetRight}px`;
+        mark.style.bottom = `${offsetBottom}px`;
+      };
+      if (img) {
+        if (img.complete) updateSignature();
+        img.addEventListener('load', updateSignature);
+      }
+      window.addEventListener('resize', updateSignature);
+    })();
+  </script>
+
+  <script is:inline>
+    (() => {
       const link = document.querySelector('[data-breadcrumb-kind="design-code"]');
       if (!(link instanceof HTMLAnchorElement)) return;
       const ref = document.referrer;
@@ -3711,13 +3735,18 @@ void jsonLdString;
 
   .signature-mark {
     position: absolute;
-    right: 0.75rem;
-    bottom: 0.75rem;
-    background: rgba(255, 255, 255, 0.82);
+    right: 10px;
+    bottom: 10px;
+    background: rgba(255, 255, 255, 0.66);
     border-radius: 999px;
-    padding: 7px;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+    padding: 5px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
     pointer-events: none;
+  }
+
+  .signature-mark--hero {
+    padding: 6px;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
   }
 </style>
 
