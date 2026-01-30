@@ -1,12 +1,5 @@
-DELETE FROM price_chart;
 DELETE FROM cost_chart;
 DELETE FROM diamond_price_chart;
-INSERT OR REPLACE INTO price_chart (metal, adjustment_type, adjustment_value, notes) VALUES ('18K White Gold', 'Percent', 0.79, NULL);
-INSERT OR REPLACE INTO price_chart (metal, adjustment_type, adjustment_value, notes) VALUES ('18K Yellow Gold', 'Percent', 0.79, NULL);
-INSERT OR REPLACE INTO price_chart (metal, adjustment_type, adjustment_value, notes) VALUES ('18K Rose Gold', 'Percent', 0.79, NULL);
-INSERT OR REPLACE INTO price_chart (metal, adjustment_type, adjustment_value, notes) VALUES ('14K White Gold', 'Percent', 0.62, NULL);
-INSERT OR REPLACE INTO price_chart (metal, adjustment_type, adjustment_value, notes) VALUES ('14K Rose Gold', 'Percent', 0.62, NULL);
-INSERT OR REPLACE INTO price_chart (metal, adjustment_type, adjustment_value, notes) VALUES ('14K Yellow Gold', 'Percent', 0.62, NULL);
 INSERT OR REPLACE INTO cost_chart (key, value, unit, notes) VALUES ('labor_cost_per_gram_usd', 15, 'USD/g', '24K spot');
 INSERT OR REPLACE INTO cost_chart (key, value, unit, notes) VALUES ('shipping_cost_usd', 25, 'USD/g', NULL);
 INSERT OR REPLACE INTO cost_chart (key, value, unit, notes) VALUES ('price_premium_pct', 10, 'USD/g', NULL);

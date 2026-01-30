@@ -778,6 +778,7 @@ const formatTitle = (value: string) =>
       const metalWeight =
         buildMetalWeightFromOptions(product.metal_weight_options) ||
         String(product.metal_weight || '').trim();
+      const metalWeightNum = Number(metalWeight);
 
       const clarityOptions = parseList(product.clarity);
       const colorOptions = parseList(product.color);
@@ -789,8 +790,10 @@ const formatTitle = (value: string) =>
       return {
         metal,
         metal_weight: metalWeight,
+        metal_weight_num: Number.isFinite(metalWeightNum) ? metalWeightNum : undefined,
         stone,
         stone_weight: stoneWeight,
+        stone_weight_num: Number.isFinite(Number(stoneWeight)) ? Number(stoneWeight) : undefined,
         diamond_breakdown: diamondBreakdown,
         clarity,
         color,
@@ -817,8 +820,42 @@ const formatTitle = (value: string) =>
           const slug = String(product.slug || '');
           const target = bySlug.get(slug);
           if (!target) return;
+          const fallbackNumber =
+            Number(product.price) ||
+            Number(product.price_usd) ||
+            Number(product.price_min) ||
+            Number(product.price_max);
+          const fallbackLabel = Number.isFinite(fallbackNumber) && fallbackNumber > 0
+            ? `Starting at ${fallbackNumber.toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                maximumFractionDigits: 0,
+              })}`
+            : 'Pricing on request';
           const payload = buildPricingPayload(product);
-          if (!payload.metal_weight) return;
+          const required = [payload.metal_weight, payload.metal, payload.stone_weight || payload.stone];
+          const hasRequired = required.every((v) => v !== undefined && v !== null && String(v).trim() !== '');
+          const numericOk =
+            Number.isFinite(payload.metal_weight_num) &&
+            payload.metal_weight_num > 0 &&
+            Number.isFinite(payload.stone_weight_num) &&
+            payload.stone_weight_num > 0;
+          if (!hasRequired) {
+            target.textContent = fallbackLabel;
+            const card = target.closest('[data-product-card]');
+            if (card && Number.isFinite(fallbackNumber) && fallbackNumber > 0) {
+              card.dataset.price = String(fallbackNumber);
+            }
+            return;
+          }
+          if (!numericOk) {
+            target.textContent = fallbackLabel;
+            const card = target.closest('[data-product-card]');
+            if (card && Number.isFinite(fallbackNumber) && fallbackNumber > 0) {
+              card.dataset.price = String(fallbackNumber);
+            }
+            return;
+          }
           target.textContent = 'Calculating...';
           try {
             const response = await fetch(`${base}/pricing/estimate`, {
@@ -826,9 +863,16 @@ const formatTitle = (value: string) =>
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
             });
-            if (!response.ok) return;
-            const data = await response.json();
-            if (data && data.ok && typeof data.price === 'number') {
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data || data.ok === false || typeof data.price !== 'number') {
+              target.textContent = fallbackLabel;
+              const card = target.closest('[data-product-card]');
+              if (card && Number.isFinite(fallbackNumber) && fallbackNumber > 0) {
+                card.dataset.price = String(fallbackNumber);
+              }
+              return;
+            }
+            if (data && typeof data.price === 'number') {
               const formatted = data.price.toLocaleString('en-US', {
                 style: 'currency',
                 currency: 'USD',
@@ -837,9 +881,16 @@ const formatTitle = (value: string) =>
               target.textContent = `Starting at ${formatted}`;
               const card = target.closest('[data-product-card]');
               if (card) card.dataset.price = String(data.price);
+              return;
             }
           } catch {
             // Ignore pricing errors.
+          }
+          // fallback on any failure
+          target.textContent = fallbackLabel;
+          const card = target.closest('[data-product-card]');
+          if (card && Number.isFinite(fallbackNumber) && fallbackNumber > 0) {
+            card.dataset.price = String(fallbackNumber);
           }
         })
       );
