@@ -431,6 +431,7 @@
   const DEFAULT_SIZE_TYPES = [
     { value: "xsmall", label: "X-Small" },
     { value: "small", label: "Small" },
+    { value: "medium", label: "Medium" },
     { value: "large", label: "Large" },
     { value: "xlarge", label: "X-Large" },
     { value: "xxlarge", label: "XX-Large" },
