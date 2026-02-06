@@ -805,16 +805,6 @@ void jsonLdString;
             </button>
           ) : null}
         </div>
-        <div class="desc-card space-y-2">
-          <div class="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-600">
-            <span class="inline-flex items-center gap-1 rounded-full bg-slate-900 text-slate-50 px-3 py-1">
-              Highlights
-            </span>
-          </div>
-          <p class="desc-body whitespace-pre-line" data-product-description>
-            {product.description}
-          </p>
-        </div>
       </div>
       <div class="space-y-6">
         <div class="hidden lg:block">
@@ -1371,6 +1361,16 @@ void jsonLdString;
           </div>
           <div class="text-xs text-rose-600 hidden" data-size-warning></div>
         </div>
+      </div>
+      <div class="desc-card space-y-2 w-full col-span-full">
+        <div class="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-600">
+          <span class="inline-flex items-center gap-1 rounded-full bg-slate-900 text-slate-50 px-3 py-1">
+            Highlights
+          </span>
+        </div>
+        <p class="desc-body whitespace-pre-line" data-product-description>
+          {product.description}
+        </p>
       </div>
     </div>
   </main>
@@ -2588,7 +2588,6 @@ void jsonLdString;
       window.__hwSyncStoneWeightSwatches = syncStoneWeightSwatches;
       window.__hwUpdateStoneWeightVisual = () =>
         renderStoneWeightVisual(stoneWeightSelect ? stoneWeightSelect.value : '');
-      void updatePricingFromProduct;
     })();
   </script>
   <script is:inline define:vars={{ catalogUrl, catalogMode, productSlug, metalWeightBySizeTypeData: Object.fromEntries(metalWeightBySizeType) }}>
@@ -3392,8 +3391,7 @@ void jsonLdString;
           window.__hwApplyPricing();
         }
       };
- updatePricingFromProduct;
- fetchCatalog = async () => {
+      const fetchCatalog = async () => {
         const joiner = catalogUrlValue.includes('?') ? '&' : '?';
         const cacheBust = `&bust=${Date.now()}`;
         const slugParam = productSlugValue ? `&slug=${encodeURIComponent(productSlugValue)}` : '';
