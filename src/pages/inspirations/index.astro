@@ -22,11 +22,6 @@ const styles = uniqueValues(inspirations.map((item) => item.styles)).sort();
 const motifs = uniqueValues(inspirations.map((item) => item.motifs)).sort();
 const metals = uniqueValues(inspirations.map((item) => item.metals)).sort();
 
-const formatNumber = (value: number) => {
-  if (Number.isInteger(value)) return value.toString();
-  return value.toString();
-};
-
 const buildEstimateMeta = (item: Inspiration) => {
   const sections: Array<{ label: string; text?: string; items?: string[] }> = [];
   const ariaParts: string[] = [];
@@ -260,10 +255,9 @@ const buildEstimateMeta = (item: Inspiration) => {
   <Footer />
 </BaseLayout>
 
-<script is:inline define:vars={{ catalogUrl, catalogMode, basePath }}>
+<script is:inline define:vars={{ catalogUrl, catalogMode, basePath, mediaPlaceholderUrl: MEDIA_PLACEHOLDER_URL }}>
   (() => {
     let catalogUrlValue = String(catalogUrl || '');
-    const catalogModeValue = String(catalogMode || '').toLowerCase();
     if (!catalogUrlValue) {
       const host = window.location.hostname;
       if (host === 'localhost' || host === '127.0.0.1') {
@@ -293,12 +287,6 @@ const buildEstimateMeta = (item: Inspiration) => {
         .replace(/>/g, '&gt;')
         .replace(/\"/g, '&quot;')
         .replace(/'/g, '&#39;');
-
-    const formatNumber = (value) => {
-      if (!Number.isFinite(value)) return '';
-      if (Number.isInteger(value)) return value.toString();
-      return value.toString();
-    };
 
     const buildEstimateMeta = (item) => {
       const sections = [];
@@ -422,7 +410,7 @@ const buildEstimateMeta = (item: Inspiration) => {
             ? (String(item.heroImage).startsWith('http')
                 ? item.heroImage
                 : withBase(item.heroImage))
-            : MEDIA_PLACEHOLDER_URL;
+            : mediaPlaceholderUrl;
           const title = escapeHtml(item.title || '');
           const shortDesc = escapeHtml(item.description || '');
           const tags = (item.tags || []).slice(0, 3);

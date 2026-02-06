@@ -13,20 +13,6 @@ const thumbnails = showThumbnails ? product.media.images.slice(1) : [];
 const visibleThumbs = showThumbnails ? thumbnails.slice(0, 4) : [];
 const hasThumbs = showThumbnails && visibleThumbs.length > 0;
 const hasMoreThumbs = showThumbnails && thumbnails.length > 4;
-const parseList = (value?: string) => {
-  if (!value) return [];
-  return value
-    .split('|')
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
-const normalizeStoneType = (value: string) =>
-  value
-    .replace(/diamond\(s\)/gi, 'Diamond')
-    .replace(/diamonds?\b/gi, 'Diamond')
-    .replace(/\s+/g, ' ')
-    .trim();
-const stoneTypes = parseList(product.stone_types).map(normalizeStoneType).filter(Boolean);
 const priceLabel = 'Pricing on request';
 const editionLabel = (() => {
   const gender = (product.gender || '').toLowerCase();
@@ -40,20 +26,6 @@ const editionLabel = (() => {
   if (group === 'unisex') return 'Unisex Edition';
   return product.design_code || product.category || '';
 })();
-const formatCarat = (value: number | undefined) => {
-  if (!value || Number.isNaN(value)) return '';
-  if (Number.isInteger(value)) return value.toString();
-  return value.toString();
-};
-const formatWeight = (value: number | undefined) => {
-  if (!value || Number.isNaN(value)) return '';
-  if (Number.isInteger(value)) return value.toString();
-  return value.toString();
-};
-const normalizeMetalLabel = (value: string | undefined) => {
-  if (!value) return '18K Gold';
-  return value.replace(/\s+/g, ' ').trim();
-};
 const buildEstimateTooltip = () => {
   const sections: Array<{ label: string; text?: string; items?: string[] }> = [];
   const ariaParts: string[] = [];

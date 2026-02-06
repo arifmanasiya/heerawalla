@@ -112,6 +112,7 @@ void websiteJson;
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta name="facebook-domain-verification" content="omtrqbw6qylnxiy3r1o3bptpeauo1w" />
     <meta http-equiv="Content-Security-Policy" content={csp} />
     <link rel="icon" type="image/svg+xml" href={logoImage} />
     <link rel="shortcut icon" href={logoImage} />
@@ -159,9 +160,9 @@ void websiteJson;
         </noscript>
       </>
     ) : null}
-    <script type="application/ld+json" set:html={organizationJson} />
-    <script type="application/ld+json" set:html={breadcrumbJson} />
-    <script type="application/ld+json" set:html={websiteJson} />
+    <script type="application/ld+json" is:inline set:html={organizationJson} />
+    <script type="application/ld+json" is:inline set:html={breadcrumbJson} />
+    <script type="application/ld+json" is:inline set:html={websiteJson} />
   </head>
   <body class="min-h-screen bg-white text-ink">
     <div

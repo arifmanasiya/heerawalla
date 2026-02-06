@@ -4,7 +4,6 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import ProductCard from '../components/ProductCard.astro';
 import { loadProductsWithMedia, type ProductWithMedia } from '../lib/products';
-import { withBase } from '../lib/paths';
 
 const products: ProductWithMedia[] = await loadProductsWithMedia();
 const catalogUrl = import.meta.env.PUBLIC_CATALOG_API_URL || '';
@@ -106,8 +105,6 @@ const metalColors = Array.from(
   )
 );
 const METAL_COLOR_OPTIONS = metalColors.length ? metalColors : ['yellow gold', 'white gold', 'rose gold'];
-const SIZE_TYPE_ORDER = ['xsmall', 'small', 'medium', 'large', 'xlarge', 'xxlarge', 'xxxlarge', 'xxxxlarge', 'size'];
-const sizeTypeOrderIndex = new Map(SIZE_TYPE_ORDER.map((value, index) => [value, index]));
 
 const formatTitle = (value: string) =>
   value
@@ -742,7 +739,9 @@ const formatTitle = (value: string) =>
       if (userToggledDiscovery) return;
       setDiscoveryOpen(mq.matches);
     };
-    mq.addEventListener ? mq.addEventListener('change', syncDiscovery) : mq.addListener(syncDiscovery);
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', syncDiscovery);
+    }
 
     const applyCatalogPrices = (catalogProducts) => {
       if (!Array.isArray(catalogProducts) || !catalogProducts.length) return;
@@ -848,12 +847,10 @@ const formatTitle = (value: string) =>
         totals.set(sizeType, (totals.get(sizeType) || 0) + n);
       });
       if (!totals.size) return '';
-      let bestSize = '';
       let bestVal = Number.POSITIVE_INFINITY;
-      totals.forEach((val, key) => {
+      totals.forEach((val) => {
         if (val < bestVal) {
           bestVal = val;
-          bestSize = key;
         }
       });
       return Number.isFinite(bestVal) ? String(bestVal) : '';

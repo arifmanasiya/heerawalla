@@ -69,6 +69,8 @@ jobs:
         run: npm ci
       - name: Build site
         run: npm run build
+      - name: Validate JSON-LD
+        run: npm run validate:jsonld
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact

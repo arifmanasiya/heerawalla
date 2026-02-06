@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
+    "validate:jsonld": "node scripts/validate-jsonld.mjs dist",
     "deploy": "node scripts/deploy.mjs",
     "sync:worker-vars": "node scripts/sync-worker-vars.mjs",
     "preview": "astro preview",

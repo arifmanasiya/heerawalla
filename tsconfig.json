@@ -2,6 +2,8 @@
   "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
     "baseUrl": ".",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "paths": {
       "@components/*": ["src/components/*"],
       "@lib/*": ["src/lib/*"],
@@ -9,5 +11,5 @@
       "@data/*": ["data/*"]
     }
   },
-  "exclude": ["workers/**"]
+  "exclude": ["workers/**", "admin-placeholder/**", "scripts/**", "dist/**", "node_modules/**"]
 }

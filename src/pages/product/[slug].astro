@@ -205,12 +205,6 @@ const formatWeightFixed2 = (value: unknown) => {
   if (!Number.isFinite(num)) return '';
   return num.toFixed(2);
 };
-const formatDiamondMm = (carat: number) => {
-  if (!Number.isFinite(carat) || carat <= 0) return '';
-  const mm = Math.cbrt(carat / 0.0037);
-  if (!Number.isFinite(mm)) return '';
-  return mm.toFixed(1);
-};
 const getDiamondMmNumber = (carat: number) => {
   if (!Number.isFinite(carat) || carat <= 0) return 0;
   const mm = Math.cbrt(carat / 0.0037);
@@ -523,7 +517,6 @@ const stoneWeightOptions = (stoneWeightGroups.length ? stoneWeightGroups : stone
 const metalWeightBySizeType = buildMetalWeightBySizeType(
   Array.isArray(product.metal_weight_options) ? product.metal_weight_options : []
 );
-let metalWeightBySizeTypeLive = new Map(metalWeightBySizeType);
   const sizeTypeOptions = buildSizeTypeOptions(stoneWeightGroups, metalWeightBySizeType);
   const hasSizeType = sizeTypeOptions.length > 0;
   const selectedSizeType = sizeTypeOptions[0]?.value || '';
@@ -648,10 +641,6 @@ const designCodeHref = (() => {
   }
   return withBase(`/womens-jewelry?design_code=${designCodeSlug}`);
 })();
-const editionHrefMap: Record<string, string> = {
-  women: withBase('/womens-jewelry'),
-  men: withBase('/mens-jewelry')
-};
 const editionLabel = (() => {
   const gender = (product.gender || '').toLowerCase();
   if (gender === 'women') return "Women's Edition";
@@ -665,8 +654,6 @@ const editionLabel = (() => {
   return product.design_code || product.category || '';
 })();
 const groupLabel = editionLabel || product.category || product.design_code || '';
-const editionKey = (product.gender || (product.category || '').split('/')[0] || '').toLowerCase();
-const editionHref = editionHrefMap[editionKey];
 const breadcrumbCrumbs = [
   { label: 'Home', href: withBase('/') },
   { label: 'Shop', href: withBase('/shop') },
@@ -1511,8 +1498,6 @@ void jsonLdString;
       const chainWeightValue = chainField ? chainField.querySelector('[data-chain-weight-value]') : null;
       const chainWeightUnit = chainField ? chainField.querySelector('[data-chain-weight-unit]') : null;
       const chainSelect = chainField ? chainField.querySelector('[data-size-select]') : null;
-      const titleEl = document.querySelector('[data-product-title]');
-      const descEl = document.querySelector('[data-product-description]');
       const sizeHelpers = sizeFields
         .map((field) => field.querySelector('[data-size-helper]'))
         .filter(Boolean);
@@ -1520,28 +1505,9 @@ void jsonLdString;
       const selectedStone = document.querySelector('[data-selected-stone]');
       const bespokeLink = document.querySelector('[data-bespoke-link]');
       const bespokeBase = bespokeLink ? (bespokeLink.getAttribute('data-bespoke-base') || bespokeLink.getAttribute('href') || '') : '';
-      const sizeLabelEls = sizeFields
-        .map((field) => field.querySelector('[data-size-label-text]'))
-        .filter(Boolean);
       const sizeWarning = document.querySelector('[data-size-warning]');
       const priceLabel = priceEl.textContent || 'Pricing on request';
       let pricingBase = priceEl.dataset.pricingBase || '';
-      const STANDARD_STONE_TYPE_CONFIG = [
-        { key: 'lab', summaryLabel: 'Lab', displayLabel: 'LAB', matcher: /lab/i },
-        { key: 'natural', summaryLabel: 'Natural', displayLabel: 'NATURAL', matcher: /natural/i }
-      ];
-      const STANDARD_METAL_OPTIONS = [
-        '14K Yellow Gold',
-        '14K Rose Gold',
-        '14K White Gold',
-        '18K Yellow Gold',
-        '18K Rose Gold',
-        '18K White Gold',
-        'Platinum'
-      ];
-      const STANDARD_CLARITY_OPTIONS = ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'SI3', 'I1', 'I2', 'I3'];
-      const STANDARD_COLOR_OPTIONS = ['D', 'E', 'F', 'G', 'H', 'I'];
-      const STANDARD_CUT_OPTIONS = ['BRILLIANT', 'VERY GOOD', 'GOOD'];
       const resolvePricingBase = () => {
         let base = pricingBase || '';
         if (!base) base = 'https://admin-api.heerawalla.com';
@@ -1592,28 +1558,6 @@ void jsonLdString;
           .filter(Boolean);
       const getSizeEntryForSelect = (select) =>
         getSizeEntries().find((entry) => entry.select === select);
-      const buildStoneTypeDisplay = (stoneTypes, labStoneLabel, naturalStoneLabel) =>
-        STANDARD_STONE_TYPE_CONFIG.map((entry) => {
-          const match = stoneTypes.find((value) => entry.matcher.test(value));
-          const available = Boolean(match);
-          const value = match
-            ? match
-            : entry.key === 'lab'
-              ? labStoneLabel
-              : naturalStoneLabel;
-          return {
-            key: entry.key,
-            summaryLabel: entry.summaryLabel,
-            displayLabel: entry.displayLabel,
-            value,
-            available
-          };
-        });
-      const buildStandardDisplayOptions = (standardList, availableValues) =>
-        standardList.map((value) => ({
-          value,
-          available: availableValues.has(value)
-        }));
       const metalToneClass = (value) => {
         const normalized = String(value || '').toLowerCase();
         if (normalized.includes('rose')) return 'rose';
@@ -2028,6 +1972,7 @@ void jsonLdString;
         const unique = Array.from(new Set(weights));
         return unique.map((weight) => `${weight}ct`).join(', ');
       };
+      void formatStoneWeightBriefLabelLocal;
       const parseSizeInches = (value) => {
         if (!value) return Number.NaN;
         const match = String(value).match(/([0-9]*\.?[0-9]+)/);
@@ -2305,9 +2250,8 @@ void jsonLdString;
         const option = select.options[select.selectedIndex];
         return option ? option.textContent || '' : '';
       };
-      const getMissingSizeEntry = () =>
-        getSizeEntries().find((entry) => entry.required && !entry.select.value);
-      const isSizeRequired = () => Boolean(getMissingSizeEntry());
+        const getMissingSizeEntry = () =>
+          getSizeEntries().find((entry) => entry.required && !entry.select.value);
       const sizeLabel = () => {
         const missing = getMissingSizeEntry();
         if (missing) return (missing.labelEl.textContent || '').trim() || 'size';
@@ -2646,12 +2590,12 @@ void jsonLdString;
       window.__hwSyncStoneWeightSwatches = syncStoneWeightSwatches;
       window.__hwUpdateStoneWeightVisual = () =>
         renderStoneWeightVisual(stoneWeightSelect ? stoneWeightSelect.value : '');
+      void updatePricingFromProduct;
     })();
   </script>
   <script is:inline define:vars={{ catalogUrl, catalogMode, productSlug, metalWeightBySizeTypeData: Object.fromEntries(metalWeightBySizeType) }}>
     (() => {
       let catalogUrlValue = String(catalogUrl || '');
-      const catalogModeValue = String(catalogMode || '').toLowerCase();
       if (!catalogUrlValue) {
         const host = window.location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') {
@@ -2686,9 +2630,6 @@ void jsonLdString;
         const cutField = document.querySelector('[data-cut-field]');
         const cutSelect = document.querySelector('[data-cut-select]');
         const sizeFields = Array.from(document.querySelectorAll('[data-size-field]'));
-        const sizeSelects = sizeFields
-          .map((field) => field.querySelector('[data-size-select]'))
-          .filter(Boolean);
         const chainField = sizeFields.find((field) => field.getAttribute('data-size-kind') === 'chain');
         const chainSelect = chainField ? chainField.querySelector('[data-size-select]') : null;
         const setSelectValue = (select, value) => {
@@ -3031,15 +2972,6 @@ void jsonLdString;
         });
         if (!Number.isFinite(lowest) || lowest > 14) return '14K Yellow Gold';
         return best || options[0]?.value || '14K Yellow Gold';
-      };
-
-      const parseNumber = (value) => {
-        if (value === undefined || value === null) return undefined;
-        if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
-        const trimmed = String(value).trim();
-        if (!trimmed) return undefined;
-        const parsed = Number(trimmed);
-        return Number.isFinite(parsed) ? parsed : undefined;
       };
 
       const setSelectOptions = (select, options, selectedValue, placeholderLabel) => {
@@ -3462,8 +3394,8 @@ void jsonLdString;
           window.__hwApplyPricing();
         }
       };
-
-      const fetchCatalog = async () => {
+ updatePricingFromProduct;
+ fetchCatalog = async () => {
         const joiner = catalogUrlValue.includes('?') ? '&' : '?';
         const cacheBust = `&bust=${Date.now()}`;
         const slugParam = productSlugValue ? `&slug=${encodeURIComponent(productSlugValue)}` : '';
@@ -3888,6 +3820,7 @@ void jsonLdString;
     box-shadow: none;
   }
 </style>
+
 
 
 
