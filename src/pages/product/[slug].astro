@@ -520,18 +520,6 @@ const stoneWeightOptions = (stoneWeightGroups.length ? stoneWeightGroups : stone
   }))
   .sort((a, b) => stoneWeightTotal(a.value) - stoneWeightTotal(b.value));
   const hasStoneWeight = stoneWeightOptions.length > 0;
-  const buildMetalWeightOptionsFromOptions = (options?: Array<Record<string, unknown>>) => {
-    if (!Array.isArray(options) || !options.length) return [];
-    const weights: string[] = [];
-  options.forEach((option) => {
-    const raw = String(option.metal_weight || '').trim();
-    if (!raw) return;
-    parseOptionList(raw).forEach((value) => {
-      if (value) weights.push(value);
-    });
-  });
-  return Array.from(new Set(weights));
-};
 const metalWeightBySizeType = buildMetalWeightBySizeType(
   Array.isArray(product.metal_weight_options) ? product.metal_weight_options : []
 );
@@ -546,15 +534,9 @@ const selectedStoneWeightValue =
     '';
 const selectedStoneWeightInfo = buildStoneWeightInfoValue(selectedStoneWeightValue);
 const selectedStoneWeightVisual = buildStoneWeightVisual(selectedStoneWeightValue);
-  const metalWeightOptions = (() => {
-    const fromOptions = buildMetalWeightOptionsFromOptions(
-      Array.isArray(product.metal_weight_options) ? product.metal_weight_options : []
-    );
-    if (fromOptions.length) return fromOptions;
-    return parseOptionList(
-      product.metal_weight_range || (product.metal_weight === undefined ? '' : String(product.metal_weight))
-    );
-  })();
+  const metalWeightOptions = parseOptionList(
+    product.metal_weight === undefined ? '' : String(product.metal_weight)
+  );
   const selectedMetalWeightValue =
     (selectedSizeType ? metalWeightBySizeType.get(selectedSizeType) : '') ||
     metalWeightOptions[0] ||
@@ -1640,6 +1622,8 @@ void jsonLdString;
         if (normalized.includes('yellow')) return 'yellow';
         return 'neutral';
       };
+      const isDisabledButton = (button) =>
+        button?.disabled || button?.getAttribute?.('aria-disabled') === 'true';
       const metalSwatchParts = (value) => {
         const normalized = String(value || '').toLowerCase();
         if (normalized.includes('platinum')) return { karat: 'PT', label: 'Platinum' };
@@ -1671,9 +1655,10 @@ void jsonLdString;
         syncDisplayOptions(metalSwatchWrap, 'metalDisplay', displayOptions);
         const buttons = Array.from(metalSwatchWrap.querySelectorAll('[data-metal-option]'));
         buttons.forEach((button) => {
-          if (button.disabled) return;
+          if (isDisabledButton(button)) return;
           button.addEventListener('click', () => {
             const nextValue = button.getAttribute('data-metal-value') || '';
+            if (!nextValue || nextValue === metalSelect?.value) return;
             setSelectValue(metalSelect, nextValue);
             buttons.forEach((node) => {
               const isActive = node.getAttribute('data-metal-value') === nextValue;
@@ -1711,9 +1696,10 @@ void jsonLdString;
         syncDisplayOptions(colorSwatchWrap, 'colorDisplay', displayOptions);
         const buttons = Array.from(colorSwatchWrap.querySelectorAll('[data-color-option]'));
         buttons.forEach((button) => {
-          if (button.disabled) return;
+          if (isDisabledButton(button)) return;
           button.addEventListener('click', () => {
             const nextValue = button.getAttribute('data-color-value') || '';
+            if (!nextValue || nextValue === colorSelect?.value) return;
             setSelectValue(colorSelect, nextValue);
             buttons.forEach((node) => {
               const isActive = node.getAttribute('data-color-value') === nextValue;
@@ -1751,9 +1737,10 @@ void jsonLdString;
         syncDisplayOptions(claritySwatchWrap, 'clarityDisplay', displayOptions);
         const buttons = Array.from(claritySwatchWrap.querySelectorAll('[data-clarity-option]'));
         buttons.forEach((button) => {
-          if (button.disabled) return;
+          if (isDisabledButton(button)) return;
           button.addEventListener('click', () => {
             const nextValue = button.getAttribute('data-clarity-value') || '';
+            if (!nextValue || nextValue === claritySelect?.value) return;
             setSelectValue(claritySelect, nextValue);
             buttons.forEach((node) => {
               const isActive = node.getAttribute('data-clarity-value') === nextValue;
@@ -1793,9 +1780,10 @@ void jsonLdString;
         syncDisplayOptions(stoneSwatchWrap, 'stoneDisplay', displayOptions);
         const buttons = Array.from(stoneSwatchWrap.querySelectorAll('[data-stone-option]'));
         buttons.forEach((button) => {
-          if (button.disabled) return;
+          if (isDisabledButton(button)) return;
           button.addEventListener('click', () => {
             const nextValue = button.getAttribute('data-stone-value') || '';
+            if (!nextValue || nextValue === stoneSelect?.value) return;
             setSelectValue(stoneSelect, nextValue);
             buttons.forEach((node) => {
               const isActive = node.getAttribute('data-stone-value') === nextValue;
@@ -1826,6 +1814,7 @@ void jsonLdString;
           const nextValue = target.getAttribute('data-stone-weight-value') || '';
           const fallbackLabel = target.textContent ? target.textContent.trim() : '';
           if (!stoneWeightSelect) return;
+          if (nextValue && nextValue === stoneWeightSelect.value) return;
           const options = Array.from(stoneWeightSelect.options);
           const match =
             options.find((option) => option.value === nextValue) ||
@@ -1960,6 +1949,7 @@ void jsonLdString;
         buttons.forEach((button) => {
           button.addEventListener('click', () => {
             const nextValue = decodeURIComponent(button.getAttribute('data-size-value') || '');
+            if (!nextValue || nextValue === entry.select.value) return;
             setSelectValue(entry.select, nextValue);
             if (entry.kind === 'chain') {
               updateChainWeightInfo(nextValue);
@@ -2672,7 +2662,6 @@ void jsonLdString;
       if (!catalogUrlValue || !productSlugValue) return;
 
       const priceEl = document.getElementById('price-display');
-      if (!priceEl) return;
       const stoneField = document.querySelector('[data-stone-field]');
       const stoneSelect = document.querySelector('[data-stone-select]');
       const metalSelect = document.querySelector('[data-metal-select]');
@@ -3645,12 +3634,37 @@ void jsonLdString;
           buildMetalWeightBySizeTypeLocal(match.metal_weight_options) || new Map(Object.entries(metalWeightMapRaw));
         metalWeightBySizeTypeLive = metalBySizeTypeLocal;
         const sizeTypeOptions = buildSizeTypeOptionsLocal(stoneWeightGroups, metalBySizeTypeLocal);
-          setSelectOptions(sizeTypeSelect, sizeTypeOptions, sizeTypeSelect?.value || sizeTypeOptions[0]?.value || '');
-          setSelectOptions(
-            stoneWeightSelect,
-            stoneWeightOptions,
-            stoneWeightSelect?.value || stoneWeightOptions[0]?.value || ''
-          );
+        setSelectOptions(sizeTypeSelect, sizeTypeOptions, sizeTypeSelect?.value || sizeTypeOptions[0]?.value || '');
+        if (sizeTypeSelect) {
+          sizeTypeOptions.forEach((option, index) => {
+            const optionEl = sizeTypeSelect.options[index];
+            if (!optionEl) return;
+            const stoneWeightValue =
+              stoneWeightGroups.find((group) => group.size_type === option.value)?.value || '';
+            optionEl.dataset.stoneWeight = stoneWeightValue;
+            optionEl.dataset.metalWeight = metalBySizeTypeLocal.get(option.value) || '';
+          });
+        }
+        setSelectOptions(
+          stoneWeightSelect,
+          stoneWeightOptions,
+          stoneWeightSelect?.value || stoneWeightOptions[0]?.value || ''
+        );
+        const metalWeightOptionsRaw = Array.from(
+          new Set(parseOptionList(match.metal_weight || '').filter(Boolean))
+        );
+        const metalWeightOptions = metalWeightOptionsRaw.map((option) => ({
+          value: option,
+          label: option
+        }));
+        const selectedMetalWeightValue =
+          (sizeTypeSelect?.selectedOptions?.[0]?.dataset.metalWeight || '') ||
+          metalWeightOptionsRaw[0] ||
+          '';
+        if (metalWeightSelect) {
+          setSelectOptions(metalWeightSelect, metalWeightOptions, selectedMetalWeightValue);
+          metalWeightSelect.disabled = metalWeightOptions.length === 0 || sizeTypeOptions.length > 0;
+        }
           // Refresh color / clarity / cut options from live catalog so removed grades are disabled
           const colorOptions = expandStandardOptions(match.color, STANDARD_COLOR_OPTIONS).map((value) => ({
             value,

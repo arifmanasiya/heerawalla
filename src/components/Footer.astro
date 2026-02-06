@@ -3,40 +3,52 @@ import { withBase } from '../lib/paths';
 ---
 
 <footer class="mt-16 border-t border-slate-200 bg-white">
-  <div class="container py-10 grid gap-8 md:grid-cols-4">
-    <div class="space-y-3">
-      <a href={withBase('/')} class="wordmark text-[24px] sm:text-[24px] hover:text-accent">Heerawalla</a>
+  <div class="container py-10 grid gap-8 md:grid-cols-6">
+    <div class="space-y-3 md:col-span-1">
+      <div class="flex items-center gap-3">
+        <a href={withBase('/')} class="wordmark text-[24px] sm:text-[20px] hover:text-accent">Heerawalla</a>
+        <svg
+          viewBox="0 0 128 128"
+          class="h-6 w-6 text-ink/70"
+          aria-hidden="true"
+        >
+          <circle cx="64" cy="64" r="46" stroke="currentColor" stroke-width="10" fill="none"/>
+          <line x1="64" y1="10" x2="64" y2="118" stroke="currentColor" stroke-width="9" stroke-linecap="round"/>
+        </svg>
+      </div>
       <p class="text-sm text-slate-500">Timeless pieces crafted with precision and care.</p>
-      <svg
-        viewBox="0 0 128 128"
-        class="h-6 w-6 text-ink/70"
-        aria-hidden="true"
-      >
-        <circle cx="64" cy="64" r="46" stroke="currentColor" stroke-width="10" fill="none"/>
-        <line x1="64" y1="10" x2="64" y2="118" stroke="currentColor" stroke-width="9" stroke-linecap="round"/>
-      </svg>
     </div>
-    <div>
+    <div class="md:col-span-1">
       <div class="text-sm font-semibold mb-3">Explore</div>
       <ul class="space-y-2 text-sm text-slate-600">
         <li><a href={withBase('/inspirations')} class="hover:text-accent">Inspirations</a></li>
         <li><a href={withBase('/about')} class="hover:text-accent">About</a></li>
       </ul>
     </div>
-    <div>
-      <div class="text-sm font-semibold mb-3">Support</div>
+    <div class="md:col-span-1">
+      <div class="text-sm font-semibold mb-3">Help</div>
       <ul class="space-y-2 text-sm text-slate-600">
-        <li><a href={withBase('/policies')} class="hover:text-accent">Policies</a></li>
+        <li><a href={withBase('/contact')} class="hover:text-accent">Contact</a></li>
         <li><a href={withBase('/faq')} class="hover:text-accent">FAQ</a></li>
         <li><a href={withBase('/sizing')} class="hover:text-accent">Sizing Guide</a></li>
+      </ul>
+    </div>
+    <div class="md:col-span-1">
+      <div class="text-sm font-semibold mb-3">Guides</div>
+      <ul class="space-y-2 text-sm text-slate-600">
         <li><a href={withBase('/diamond-quality')} class="hover:text-accent">Diamond Quality Guide</a></li>
         <li><a href={withBase('/gold-purity')} class="hover:text-accent">Gold Purity Guide</a></li>
         <li><a href={withBase('/jewelry-care')} class="hover:text-accent">Jewelry Care</a></li>
-        <li><a href={withBase('/authenticity')} class="hover:text-accent">Authenticity</a></li>
-        <li><a href={withBase('/contact')} class="hover:text-accent">Contact</a></li>
       </ul>
     </div>
-    <div class="space-y-3">
+    <div class="md:col-span-1">
+      <div class="text-sm font-semibold mb-3">Policies</div>
+      <ul class="space-y-2 text-sm text-slate-600">
+        <li><a href={withBase('/policies')} class="hover:text-accent">Policies</a></li>
+        <li><a href={withBase('/authenticity')} class="hover:text-accent">Authenticity</a></li>
+      </ul>
+    </div>
+    <div class="space-y-3 md:col-span-1">
       <div class="text-sm font-semibold">Newsletter</div>
       <p class="text-sm text-slate-500">Sign up to hear about limited drops and bespoke services.</p>
       <a class="btn btn-primary" href={withBase('/join')}>Join</a>
