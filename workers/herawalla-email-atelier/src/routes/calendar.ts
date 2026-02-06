@@ -1,6 +1,13 @@
 import type { Env } from "../config";
 import type { RouteContext } from "../types";
-import { BookingError, isEnabled, resolveAttribution, sendConsultationAck, generateRequestId } from "../legacy";
+import {
+  BookingError,
+  generateRequestId,
+  hasD1,
+  isEnabled,
+  resolveAttribution,
+  sendConsultationAck,
+} from "../legacy";
 import { bookCalendarSlot, getCalendarAvailability } from "../services/calendar-service";
 import { appendContactRow, syncGoogleContact, upsertUnifiedContact } from "../services/contacts-service";
 import { buildCorsHeaders } from "../utils/cors";
@@ -81,6 +88,9 @@ export async function handleCalendarRoute(
       const replaceExisting = getBoolean(payload.replaceExisting || payload.replace_existing);
       const requestId = generateRequestId();
       const pageUrl = getString(payload.pageUrl);
+      const landingPageUrl =
+        getString(payload.landingPageUrl || payload.landing_page_url || payload.landingPage) || pageUrl;
+      const howHeard = getString(payload.source || payload.howHeardAboutUs || payload.how_heard_about_us);
       const { utmSource, utmMedium, utmCampaign, utmTerm, utmContent, referrer } =
         resolveAttribution(payload, request);
       const resolvedPageUrl = pageUrl || referrer;
@@ -175,6 +185,66 @@ export async function handleCalendarRoute(
       } catch (error) {
         logWarn("contact_sheet_failed", { requestId, error: String(error) });
       }
+      if (hasD1(env)) {
+        try {
+          await env.DB.prepare(
+            `INSERT INTO consultations (
+              id,
+              created_at,
+              request_id,
+              customer_name,
+              customer_email,
+              customer_phone,
+              message,
+              how_heard_about_us,
+              utm_source,
+              utm_medium,
+              utm_campaign,
+              utm_content,
+              utm_term,
+              referrer_url,
+              landing_page_url,
+              consultation_status,
+              consultation_date,
+              consultation_time,
+              contact_preference,
+              phone_preferred
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+            .bind(
+              requestId,
+              new Date().toISOString(),
+              requestId,
+              name,
+              email,
+              phone,
+              message,
+              howHeard || null,
+              utmSource || null,
+              utmMedium || null,
+              utmCampaign || null,
+              utmContent || null,
+              utmTerm || null,
+              referrer || null,
+              landingPageUrl || resolvedPageUrl || null,
+              "scheduled",
+              date,
+              time,
+              contactPreference || (phonePreferred ? "phone" : ""),
+              phonePreferred ? 1 : 0
+            )
+            .run();
+        } catch (error) {
+          logWarn("consultation_d1_insert_failed", { requestId, error: String(error) });
+        }
+      }
+      logInfo("consultation_marketing_attribution", {
+        requestId,
+        utmSource,
+        utmCampaign,
+        howHeard,
+        timestamp: new Date().toISOString(),
+      });
       try {
         await upsertUnifiedContact(env, {
           email,

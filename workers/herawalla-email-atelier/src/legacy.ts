@@ -1,5 +1,6 @@
 import { EmailMessage } from "cloudflare:email";
 import type { Env } from "./config";
+import { getConsultationAnalytics } from "./routes/admin/consultations";
 import {
   ACK_SUBJECT_PREFIX,
   QUOTE_ACK_SUBJECT,
@@ -2106,6 +2107,9 @@ async function handleAdminRequest(
           headers: buildCorsHeaders(allowedOrigin, true),
         });
       }
+      if (path === "/consultations/analytics") {
+        return getConsultationAnalytics(request, env, allowedOrigin);
+      }
     if (path === "/orders") {
       const payload = await buildAdminList(env, "order", url.searchParams);
       return new Response(JSON.stringify({ ok: true, ...payload }), {
@@ -3343,6 +3347,7 @@ async function triggerSiteRebuild(env: Env) {
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json",
         "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "heerawalla-admin-rebuild",
       },
       body: JSON.stringify({ ref }),
     }
@@ -4977,22 +4982,7 @@ function findDiamondPricePerCtWithPriority(
   };
 }
 
-function computeOptionPriceFromCosts(
-  record: Record<string, string>,
-  clarity: string,
-  color: string,
-  costValues: CostChartValues,
-  diamondPrices: DiamondPriceEntry[],
-  clarityGroups?: DiamondClarityGroups | null,
-  adjustments?: Record<string, PriceAdjustment>,
-  discountDetails?: DiscountDetails,
-  diamondComponents?: DiamondBreakdownComponent[]
-) {
-  let metalWeight = parseNumberValue(record.metal_weight || "");
-  if (!Number.isFinite(metalWeight) || metalWeight <= 0) {
-    return { ok: false, error: "missing_metal_weight" } as const;
-  }
-
+function computeSizeAdjustments(record: Record<string, string>, costValues: CostChartValues) {
   const sizeValue = record.size || "";
   const sizeLabel = record.size_label || "";
   const sizeText = `${sizeLabel} ${sizeValue}`.toLowerCase();
@@ -5028,18 +5018,28 @@ function computeOptionPriceFromCosts(
       ? (ringSize - ringBase) * ringStep
       : 0;
   const sizeAdjustment = chainAdjustment + braceletAdjustment + ringAdjustment;
-  if (sizeAdjustment > 0) {
-    metalWeight += sizeAdjustment;
-  }
+  return {
+    chainAdjustment,
+    chainLength,
+    chainStep,
+    chainBase,
+    braceletAdjustment,
+    braceletLength,
+    braceletStep,
+    braceletBase,
+    ringAdjustment,
+    ringSize,
+    ringStep,
+    ringBase,
+    sizeAdjustment,
+  };
+}
 
-  const { pieces, defaultType } = resolveDiamondPieces(record, diamondComponents);
-  if (!pieces.length) {
-    const fallbackStoneWeight = parseNumberValue(record.stone_weight || "");
-    if (Number.isFinite(fallbackStoneWeight) && fallbackStoneWeight > 0) {
-      pieces.push({ weight: fallbackStoneWeight, count: 1, stoneType: defaultType || undefined });
-    }
-  }
+function applySizeAdjustmentToMetalWeight(metalWeight: number, sizeAdjustment: number) {
+  return sizeAdjustment > 0 ? metalWeight + sizeAdjustment : metalWeight;
+}
 
+function computeMetalCost(metalWeight: number, metal: string, costValues: CostChartValues) {
   const goldPricePerGram = getCostNumber(costValues, [
     "price_gram_24k",
     "gold_price_per_gram_usd",
@@ -5047,7 +5047,7 @@ function computeOptionPriceFromCosts(
     "gold_price_gram",
     "gold_per_gram",
   ]);
-  const requestedMetal = normalizeMetalOption(record.metal || "");
+  const requestedMetal = normalizeMetalOption(metal || "");
   const baseMetalKey = requestedMetal || "18K";
   const metalPriceKeys = metalPriceKeysFor(baseMetalKey);
   let metalCostPerGram = getCostNumber(costValues, metalPriceKeys);
@@ -5061,12 +5061,29 @@ function computeOptionPriceFromCosts(
     logError("missing_metal_cost", {
       keys: Object.keys(costValues),
       goldPricePerGram,
-      metal: record.metal || "",
+      metal: metal || "",
     });
     return { ok: false, error: "missing_metal_cost" } as const;
   }
   const metalCost = metalCostPerGram * metalWeight;
+  return {
+    ok: true,
+    metalCost,
+    metalCostPerGram,
+    metalCostPerGramBase,
+    metalAdjustmentKey,
+    metalAdjustment,
+  } as const;
+}
 
+function computeDiamondCost(
+  pieces: DiamondBreakdownPiece[],
+  clarity: string,
+  color: string,
+  costValues: CostChartValues,
+  diamondPrices: DiamondPriceEntry[],
+  clarityGroups?: DiamondClarityGroups | null
+) {
   let diamondCost = 0;
   const diamondDebug: Array<{
     weight: number;
@@ -5101,7 +5118,7 @@ function computeOptionPriceFromCosts(
         });
         return { ok: false, error: "diamond_price_missing" } as const;
       }
-      const pieceType = normalizeStoneTypeToken(piece.stoneType || "") || defaultType;
+      const pieceType = normalizeStoneTypeToken(piece.stoneType || "") || "";
       const multiplier = pieceType === "lab" ? labMultiplier : 1;
       diamondDebug.push({
         weight: piece.weight,
@@ -5114,10 +5131,15 @@ function computeOptionPriceFromCosts(
       diamondCost += pricePerCt * piece.weight * piece.count * multiplier;
     }
   }
+  return { ok: true, diamondCost, diamondDebug, labMultiplier } as const;
+}
 
-  const totalDiamondWeight = pieces.reduce((sum, piece) => sum + piece.weight * piece.count, 0);
-  const totalDiamondPieces = pieces.reduce((sum, piece) => sum + piece.count, 0);
-
+function computeLaborCost(
+  metalWeight: number,
+  totalDiamondWeight: number,
+  totalDiamondPieces: number,
+  costValues: CostChartValues
+) {
   const laborFlat = getCostNumber(costValues, ["labor_flat", "labor_cost_flat"]);
   const laborPerGram = getCostNumber(costValues, ["labor_cost_per_gram_usd", "labor_per_gram", "labor_cost_per_gram"]);
   const laborPerCt = getCostNumber(costValues, ["labor_per_ct", "labor_cost_per_ct"]);
@@ -5126,36 +5148,134 @@ function computeOptionPriceFromCosts(
   const laborCostBase =
     laborFlat + laborPerGram * metalWeight + laborPerCt * totalDiamondWeight + laborPerPiece * totalDiamondPieces;
   const laborCost = laborCostBase * (1 + laborMarginPct);
+  return { laborCost, laborCostBase, laborMarginPct } as const;
+}
 
-  const materialCost = metalCost + diamondCost;
-  const tariffPercent = getCostPercent(costValues, ["tariff_percent", "tariff_rate"]);
-  const tariffCost = materialCost * tariffPercent;
+function computeMaterialCost(metalCost: number, diamondCost: number) {
+  return metalCost + diamondCost;
+}
+
+function computeRiskCost(materialCost: number, laborCost: number, costValues: CostChartValues) {
   const dollarRiskPct = getCostPercent(costValues, ["dollar_risk_pct", "risk_percent"]);
-  const riskCost = (materialCost + laborCost) * dollarRiskPct;
+  return { riskCost: (materialCost + laborCost) * dollarRiskPct, dollarRiskPct } as const;
+}
 
-  const shippingCost = getCostNumber(costValues, ["shipping_cost_usd", "shipping_cost", "shipping_fee"]);
+function computeTimeCost(record: Record<string, string>, costValues: CostChartValues) {
   const timeCostFlat = getCostNumber(costValues, ["time_cost_flat_usd", "time_cost_flat", "time_cost"]);
   const timeCostPerWeek = getCostNumber(costValues, ["time_cost_per_week_usd", "time_cost_per_week", "time_cost_weekly"]);
   const timelineAdjustment = parseNumberValue(record.timeline_adjustment_weeks || "");
   const timelineWeeks = Number.isFinite(timelineAdjustment) && timelineAdjustment > 0 ? timelineAdjustment : 0;
-  const timeCost = timeCostFlat + timeCostPerWeek * timelineWeeks;
+  return {
+    timeCost: timeCostFlat + timeCostPerWeek * timelineWeeks,
+    timeCostFlat,
+    timeCostPerWeek,
+    timelineWeeks,
+  } as const;
+}
 
+function computeRushFee(record: Record<string, string>, materialCost: number, costValues: CostChartValues) {
   const rushFeePercent = getCostPercent(costValues, ["rush_fee_percent", "rush_percent"]);
   const rushFeeFlat = getCostNumber(costValues, ["rush_fee_flat_usd", "rush_fee_flat", "rush_fee"]);
   const timelineValue = (record.timeline || "").toLowerCase();
-  const rushFee =
-    timelineValue.includes("rush") ? materialCost * rushFeePercent + rushFeeFlat : 0;
+  const rushFee = timelineValue.includes("rush") ? materialCost * rushFeePercent + rushFeeFlat : 0;
+  return { rushFee, rushFeePercent, rushFeeFlat } as const;
+}
 
-  const baseCost =
-    materialCost + laborCost + tariffCost + shippingCost + timeCost + riskCost + rushFee;
-  const pricePremium = getCostPercent(costValues, ["price_premium_pct", "price_premium_percent"]);
+function computeProductionCost(materialCost: number, laborCost: number, costValues: CostChartValues) {
   const profitProduction = getCostPercent(costValues, [
     "profit_margin_production_pct",
     "profit_margin_percent",
     "profit_margin",
   ]);
+  return { productionCost: (materialCost + laborCost) * (1 + profitProduction), profitProduction } as const;
+}
+
+function computeTariffCost(
+  productionCost: number,
+  shippingCost: number,
+  costValues: CostChartValues
+) {
+  const tariffPercent = getCostPercent(costValues, ["tariff_percent", "tariff_rate"]);
+  const tariffBase = productionCost + shippingCost;
+  return { tariffCost: tariffBase * tariffPercent, tariffPercent, tariffBase } as const;
+}
+
+function computePriceWithSalesMargins(baseCost: number, costValues: CostChartValues) {
+  const pricePremium = getCostPercent(costValues, ["price_premium_pct", "price_premium_percent"]);
   const profitSales = getCostPercent(costValues, ["profit_margin_sales_pct"]);
-  const priceWithMargin = baseCost * (1 + pricePremium + profitProduction + profitSales);
+  const priceWithMargin = baseCost * (1 + pricePremium + profitSales);
+  return { priceWithMargin, pricePremium, profitSales } as const;
+}
+
+function computeOptionPriceFromCosts(
+  record: Record<string, string>,
+  clarity: string,
+  color: string,
+  costValues: CostChartValues,
+  diamondPrices: DiamondPriceEntry[],
+  clarityGroups?: DiamondClarityGroups | null,
+  adjustments?: Record<string, PriceAdjustment>,
+  discountDetails?: DiscountDetails,
+  diamondComponents?: DiamondBreakdownComponent[]
+) {
+  let metalWeight = parseNumberValue(record.metal_weight || "");
+  if (!Number.isFinite(metalWeight) || metalWeight <= 0) {
+    return { ok: false, error: "missing_metal_weight" } as const;
+  }
+
+  const sizeAdjustments = computeSizeAdjustments(record, costValues);
+  metalWeight = applySizeAdjustmentToMetalWeight(metalWeight, sizeAdjustments.sizeAdjustment);
+
+  const { pieces, defaultType } = resolveDiamondPieces(record, diamondComponents);
+  if (!pieces.length) {
+    const fallbackStoneWeight = parseNumberValue(record.stone_weight || "");
+    if (Number.isFinite(fallbackStoneWeight) && fallbackStoneWeight > 0) {
+      pieces.push({ weight: fallbackStoneWeight, count: 1, stoneType: defaultType || undefined });
+    }
+  }
+
+  const metalCostResult = computeMetalCost(metalWeight, record.metal || "", costValues);
+  if (!metalCostResult.ok) return metalCostResult;
+  const {
+    metalCost,
+    metalCostPerGram,
+    metalCostPerGramBase,
+    metalAdjustmentKey,
+    metalAdjustment,
+  } = metalCostResult;
+  const diamondCostResult = computeDiamondCost(
+    pieces,
+    clarity,
+    color,
+    costValues,
+    diamondPrices,
+    clarityGroups
+  );
+  if (!diamondCostResult.ok) return diamondCostResult;
+  const { diamondCost, diamondDebug, labMultiplier } = diamondCostResult;
+
+  const totalDiamondWeight = pieces.reduce((sum, piece) => sum + piece.weight * piece.count, 0);
+  const totalDiamondPieces = pieces.reduce((sum, piece) => sum + piece.count, 0);
+
+  const { laborCost, laborCostBase, laborMarginPct } = computeLaborCost(
+    metalWeight,
+    totalDiamondWeight,
+    totalDiamondPieces,
+    costValues
+  );
+  const materialCost = computeMaterialCost(metalCost, diamondCost);
+  const { riskCost, dollarRiskPct } = computeRiskCost(materialCost, laborCost, costValues);
+  const shippingCost = getCostNumber(costValues, ["shipping_cost_usd", "shipping_cost", "shipping_fee"]);
+  const { timeCost, timeCostFlat, timeCostPerWeek, timelineWeeks } = computeTimeCost(record, costValues);
+  const { rushFee, rushFeePercent, rushFeeFlat } = computeRushFee(record, materialCost, costValues);
+  const { productionCost, profitProduction } = computeProductionCost(materialCost, laborCost, costValues);
+  const { tariffCost, tariffPercent, tariffBase } = computeTariffCost(
+    productionCost,
+    shippingCost,
+    costValues
+  );
+  const baseCost = productionCost + tariffCost + shippingCost + timeCost + riskCost + rushFee;
+  const { priceWithMargin, pricePremium, profitSales } = computePriceWithSalesMargins(baseCost, costValues);
 
   const discount = discountDetails || resolveDiscountDetails(costValues);
   const finalPrice = priceWithMargin * (1 - discount.appliedPercent);
@@ -5171,20 +5291,35 @@ function computeOptionPriceFromCosts(
       metalAdjustmentType: metalAdjustment?.type || "",
       metalAdjustmentValue: metalAdjustment?.value ?? null,
       metalAdjustmentMode: metalAdjustment?.mode || "",
-      chainAdjustment,
-      chainLength,
-      chainStep,
-      chainBase,
-      braceletAdjustment,
-      braceletLength,
-      braceletStep,
-      braceletBase,
-      ringAdjustment,
-      ringSize,
-      ringStep,
-      ringBase,
+      chainAdjustment: sizeAdjustments.chainAdjustment,
+      chainLength: sizeAdjustments.chainLength,
+      chainStep: sizeAdjustments.chainStep,
+      chainBase: sizeAdjustments.chainBase,
+      braceletAdjustment: sizeAdjustments.braceletAdjustment,
+      braceletLength: sizeAdjustments.braceletLength,
+      braceletStep: sizeAdjustments.braceletStep,
+      braceletBase: sizeAdjustments.braceletBase,
+      ringAdjustment: sizeAdjustments.ringAdjustment,
+      ringSize: sizeAdjustments.ringSize,
+      ringStep: sizeAdjustments.ringStep,
+      ringBase: sizeAdjustments.ringBase,
+      tariffBase,
+      productionCost,
+      profitProduction,
+      pricePremium,
+      profitSales,
       diamondCost,
       diamondDebug,
+      laborCostBase,
+      laborMarginPct,
+      labMultiplier,
+      timeCostFlat,
+      timeCostPerWeek,
+      timelineWeeks,
+      rushFeePercent,
+      rushFeeFlat,
+      tariffPercent,
+      dollarRiskPct,
     },
   } as const;
 }
@@ -13204,7 +13339,18 @@ export {
   buildCorsHeaders,
   buildForwardHtml,
   buildForwardSubject,
+  computeDiamondCost,
   computeOptionPriceFromCosts,
+  computeLaborCost,
+  computeMaterialCost,
+  computeMetalCost,
+  computePriceWithSalesMargins,
+  computeProductionCost,
+  computeRiskCost,
+  computeRushFee,
+  computeSizeAdjustments,
+  computeTariffCost,
+  computeTimeCost,
   createTicketFromContact,
   generateRequestId,
   getBoolean,

@@ -9,7 +9,10 @@
     "deploy": "node scripts/deploy.mjs",
     "sync:worker-vars": "node scripts/sync-worker-vars.mjs",
     "preview": "astro preview",
-    "lint": "echo \"Add your linter of choice\""
+    "lint": "echo \"Add your linter of choice\"",
+    "test": "vitest run",
+    "worker": "npm --prefix workers/herawalla-email-atelier run dev -- --persist-to .wrangler/state/v3",
+    "admin": "npx serve admin-placeholder -l 3000"
   },
   "dependencies": {
     "@astrojs/check": "^0.7.0",
@@ -25,6 +28,7 @@
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.3",
+    "vitest": "^4.0.18",
     "wrangler": "^4.61.0"
   }
 }

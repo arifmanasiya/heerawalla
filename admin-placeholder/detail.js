@@ -144,6 +144,11 @@
         label: "Send email",
         confirm: "Send an email to this customer?",
       },
+      {
+        action: "delete",
+        label: "Delete",
+        confirm: "Delete this ticket? This cannot be undone.",
+      },
     ],
     contacts: [],
     products: [
@@ -558,6 +563,7 @@
     stoneAddCarat: document.querySelector("[data-stone-add-carat]"),
     stoneAddCount: document.querySelector("[data-stone-add-count]"),
     stoneAddSizeType: document.querySelector("[data-stone-add-size-type]"),
+    stoneAddShape: document.querySelector("[data-stone-add-shape]"),
     stoneAddPrimary: document.querySelector("[data-stone-add-primary]"),
     stoneAddButton: document.querySelector("[data-stone-add]"),
     catalogMetalSection: document.querySelector("[data-catalog-metal-section]"),

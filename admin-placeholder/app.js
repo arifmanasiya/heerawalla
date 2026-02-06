@@ -75,6 +75,7 @@
       { key: "subject", label: "Subject" },
       { key: "summary", label: "Summary" },
       { key: "view", label: "" },
+      { key: "delete", label: "" },
     ],
     contacts: [
       { key: "created_at", label: "Created" },
@@ -228,6 +229,7 @@
     tickets: [
       { action: "mark_pending", label: "Mark pending", confirm: "Mark as pending?" },
       { action: "mark_resolved", label: "Mark resolved", confirm: "Mark as resolved?" },
+      { action: "delete", label: "Delete", confirm: "Delete this ticket? This cannot be undone." },
     ],
     contacts: [],
     products: [{ action: "delete", label: "Delete", confirm: "Delete this product? This cannot be undone." }],

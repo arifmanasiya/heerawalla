@@ -57,6 +57,30 @@ If you want product/inspiration grids to refresh on page load without rebuilding
 
 When set, list pages and detail pages refresh catalog data on page load. Set `PUBLIC_CATALOG_MODE=ssr` to disable runtime refresh everywhere.
 
+## Marketing Attribution & Analytics
+The consultation booking system tracks marketing sources using:
+
+1. **UTM Parameters**: Captured from URL and stored in sessionStorage.
+2. **"How did you hear about us?" field**: Manual fallback attribution.
+3. **Google Analytics 4**: Page views, form starts, lead generation.
+4. **Meta Pixel**: Facebook/Instagram campaign tracking.
+
+### Environment Variables Required
+- `PUBLIC_GA_MEASUREMENT_ID` - Google Analytics 4 Measurement ID
+- `PUBLIC_META_PIXEL_ID` - Meta Pixel ID
+
+### Viewing Analytics
+- Google Analytics: Standard GA4 dashboard
+- Meta Events Manager: Facebook Ads Manager
+- Admin Dashboard: `business.heerawalla.com/consultations.html`
+
+### Database Schema
+Consultations table includes marketing attribution columns:
+- `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`
+- `referrer_url`, `landing_page_url`
+- `how_heard_about_us`
+- `consultation_status`, `consultation_outcome`
+
 ## TODO (later)
 - Add log sampling and an error-only log view in Cloudflare Workers Logs.
 - Add Cloudflare cache rules for product vs editorial images (longer TTL for product imagery).

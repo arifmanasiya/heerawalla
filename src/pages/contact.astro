@@ -39,6 +39,43 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
       </p>
     </div>
 
+    <section class="rounded-2xl border border-slate-200 bg-slate-50 p-6 space-y-6">
+      <div class="grid gap-4 text-center sm:grid-cols-3">
+        <div>
+          <p class="text-2xl font-semibold text-ink">500+</p>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Happy Customers</p>
+        </div>
+        <div>
+          <p class="text-2xl font-semibold text-ink">4.9 Stars</p>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Average Rating</p>
+        </div>
+        <div>
+          <p class="text-2xl font-semibold text-ink">100%</p>
+          <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Free Consultation</p>
+        </div>
+      </div>
+      <div class="space-y-3 text-sm text-slate-600">
+        <h2 class="text-base font-semibold text-ink">What to expect in your consultation:</h2>
+        <ul class="space-y-2">
+          <li>Expert guidance from IGI-certified diamond graders</li>
+          <li>Walk through your design ideas and preferences</li>
+          <li>Learn about diamonds, metals, and customization options</li>
+          <li>Get a preliminary quote for your bespoke piece</li>
+          <li>No obligation, just expert advice</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="rounded-2xl border-l-4 border-amber-400 bg-white p-6 text-sm text-slate-600 shadow-sm">
+      <blockquote class="space-y-3">
+        <p>
+          "The consultation was incredibly helpful. They explained everything about diamonds and helped me design the
+          perfect engagement ring without any pressure. Highly recommend starting with a call!"
+        </p>
+        <footer class="text-xs uppercase tracking-[0.2em] text-slate-500">- Sarah M., Austin, TX</footer>
+      </blockquote>
+    </section>
+
     <form class="card p-6 space-y-4" action="#" method="post" data-contact-form>
       <div class="grid gap-4 md:grid-cols-2">
         <label class="text-sm space-y-1">
@@ -59,6 +96,27 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
             class="w-full rounded-lg border border-slate-200 px-3 py-2"
             data-phone-input
           />
+        </label>
+        <label class="text-sm space-y-1">
+          <span class="text-slate-600">How did you hear about us?</span>
+          <select
+            id="source"
+            name="source"
+            required
+            class="w-full rounded-lg border border-slate-200 px-3 py-2"
+          >
+            <option value="">Select one...</option>
+            <option value="google_search">Google Search</option>
+            <option value="google_ads">Google Ad</option>
+            <option value="instagram">Instagram</option>
+            <option value="facebook">Facebook</option>
+            <option value="pinterest">Pinterest</option>
+            <option value="tiktok">TikTok</option>
+            <option value="friend_referral">Friend/Family Referral</option>
+            <option value="wedding_blog">Wedding Blog/Website</option>
+            <option value="jeweler_referral">Another Jeweler</option>
+            <option value="other">Other</option>
+          </select>
         </label>
         <div class="text-sm space-y-1 hidden" data-consultation-only>
           <span class="text-slate-600">Consultation preference</span>
@@ -183,9 +241,37 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
       const emailInput = form.querySelector('[name="email"]');
       const messageInput = form.querySelector('[name="message"]');
       const phoneInput = form.querySelector('[data-phone-input]');
+      const sourceInput = form.querySelector('[name="source"]');
       const contactPreferenceInputs = form.querySelectorAll('[data-contact-preference]');
       const consultOnlyFields = form.querySelectorAll('[data-consultation-only]');
       const feeNote = block.querySelector('[data-consultation-fee]');
+
+      const marketingStorageKey = 'heerawalla_marketing';
+      const readMarketingData = () => {
+        try {
+          const raw = sessionStorage.getItem(marketingStorageKey);
+          return raw ? JSON.parse(raw) : null;
+        } catch (error) {
+          console.error('Failed to read marketing data', error);
+          return null;
+        }
+      };
+
+      const trackConsultationView = () => {
+        if (!isConsult) return;
+        if (typeof window.gtag === 'function') {
+          window.gtag('event', 'view_consultation_page', {
+            page_location: window.location.href,
+            page_title: document.title
+          });
+        }
+        if (typeof window.fbq === 'function') {
+          window.fbq('track', 'ViewContent', {
+            content_name: 'Consultation Booking Page',
+            content_category: 'Consultation'
+          });
+        }
+      };
       if (!isConsult) {
         block.classList.add('hidden');
         if (submitButton) submitButton.classList.add('hidden');
@@ -209,6 +295,7 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
           if (text) intro.textContent = text;
         }
       }
+      trackConsultationView();
       const applyFeeCopy = () => {
         if (!feeNote) return;
         const modeRaw = feeNote.getAttribute('data-fee-mode') || 'free';
@@ -590,6 +677,22 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
         updateButtons();
       });
 
+      let formStarted = false;
+      const trackFormStart = () => {
+        if (!isConsult || formStarted) return;
+        if (typeof window.gtag === 'function') {
+          window.gtag('event', 'begin_consultation_form', {
+            event_category: 'consultation',
+            event_label: 'form_started'
+          });
+        }
+        formStarted = true;
+      };
+      const formInputs = form.querySelectorAll('input, select, textarea');
+      formInputs.forEach((input) => {
+        input.addEventListener('focus', trackFormStart, { once: true });
+      });
+
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const { phoneValue, wantsPhone, phoneOk, preference } = applyPhoneValidity();
@@ -606,6 +709,19 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
         const name = String(form.querySelector('[name="name"]')?.value || '').trim();
         const email = String(form.querySelector('[name="email"]')?.value || '').trim();
         const message = String(form.querySelector('[name="message"]')?.value || '').trim();
+        const source = String(sourceInput?.value || '').trim();
+        const marketingData = readMarketingData();
+        const marketingPayload = marketingData
+          ? {
+              utmSource: marketingData.utm_source,
+              utmMedium: marketingData.utm_medium,
+              utmCampaign: marketingData.utm_campaign,
+              utmContent: marketingData.utm_content,
+              utmTerm: marketingData.utm_term,
+              referrer: marketingData.referrer,
+              landingPageUrl: marketingData.landing_page
+            }
+          : {};
 
         if (isConsult) {
           if (!selectedDateKey || !selectedTimeValue) {
@@ -615,6 +731,21 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
           if (!calendarApiBase) {
             setStatus('Calendar service is unavailable. Use the live calendar link.', 'error');
             return;
+          }
+          if (typeof window.gtag === 'function') {
+            window.gtag('event', 'generate_lead', {
+              event_category: 'consultation',
+              event_label: 'booking_submitted',
+              value: 0
+            });
+          }
+          if (typeof window.fbq === 'function') {
+            window.fbq('track', 'Lead', {
+              content_name: 'Consultation Booking',
+              content_category: 'Consultation',
+              value: 0.0,
+              currency: 'USD'
+            });
           }
           if (submitButton instanceof HTMLButtonElement) {
             submitButton.disabled = true;
@@ -631,7 +762,10 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
               time: selectedTimeValue,
               phone: phoneNormalized,
               phonePreferred: wantsPhone,
-              contactPreference: preference
+              contactPreference: preference,
+              source,
+              pageUrl: window.location.href,
+              ...marketingPayload
             };
             const attemptBooking = async (replaceExisting) => {
               const response = await fetch(`${calendarApiBase}/book`, {
@@ -757,7 +891,10 @@ const consultationFeeMode = getConfigValue(config, 'consultation_fee_mode', 'fre
               subject,
               phone: phoneNormalized,
               phonePreferred: wantsPhone,
-              contactPreference: preference
+              contactPreference: preference,
+              source,
+              pageUrl: window.location.href,
+              ...marketingPayload
             })
           });
           const payload = await response.json().catch(() => ({}));
