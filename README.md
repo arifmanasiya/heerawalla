@@ -94,6 +94,8 @@ Consultations table includes marketing attribution columns:
   - `CLOUDFLARE_API_TOKEN`
   - `CLOUDFLARE_ACCOUNT_ID`
   - `PUBLIC_TURNSTILE_SITE_KEY` (required for Turnstile-protected forms on the public site)
+  - `PUBLIC_GA_MEASUREMENT_ID` (GA4 measurement ID for public site analytics)
+  - `PUBLIC_META_PIXEL_ID` (Meta Pixel ID for public site tracking)
 - GitHub variables required:
   - `CF_ADMIN_WORKER_NAME` (Cloudflare Worker name that serves `admin-placeholder`)
 

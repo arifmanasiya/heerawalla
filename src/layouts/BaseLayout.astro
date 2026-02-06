@@ -159,15 +159,9 @@ void websiteJson;
         </noscript>
       </>
     ) : null}
-    <script type="application/ld+json" is:inline>
-      {organizationJson}
-    </script>
-    <script type="application/ld+json" is:inline>
-      {breadcrumbJson}
-    </script>
-    <script type="application/ld+json" is:inline>
-      {websiteJson}
-    </script>
+    <script type="application/ld+json" set:html={organizationJson} />
+    <script type="application/ld+json" set:html={breadcrumbJson} />
+    <script type="application/ld+json" set:html={websiteJson} />
   </head>
   <body class="min-h-screen bg-white text-ink">
     <div
