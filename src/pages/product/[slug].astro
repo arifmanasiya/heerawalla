@@ -1376,9 +1376,7 @@ void jsonLdString;
   </main>
   <Footer />
 
-  <script type="application/ld+json" is:inline>
-    {jsonLdString}
-  </script>
+  <script type="application/ld+json" is:inline set:html={jsonLdString} />
   <script
     is:inline
     define:vars={{
