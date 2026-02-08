@@ -2107,6 +2107,9 @@ async function handleAdminRequest(
           headers: buildCorsHeaders(allowedOrigin, true),
         });
       }
+      if (path === "/dashboard/metrics") {
+        return getDashboardMetrics(request, env, allowedOrigin);
+      }
       if (path === "/consultations/analytics") {
         return getConsultationAnalytics(request, env, allowedOrigin);
       }
@@ -3628,7 +3631,121 @@ function mapD1RowToRecord(row: Record<string, unknown>) {
   const paged = sorted.slice(offset, offset + limit);
 
     return { items: paged, total: sorted.length, headers: headerConfig.header };
+}
+
+async function getDashboardMetrics(request: Request, env: Env, allowedOrigin: string) {
+  const corsHeaders = buildCorsHeaders(allowedOrigin, true);
+  if (!hasD1(env)) {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        todayOrders: 0,
+        pendingQuotes: 0,
+        monthlyRevenue: 0,
+        lowStockCount: 0,
+        recentOrders: [],
+        actionRequired: [],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
   }
+
+  const parseDateValue = (value: unknown) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number") return value;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    const numeric = Number(raw);
+    if (!Number.isNaN(numeric)) {
+      return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
+  const parsePriceValue = (value: unknown) => {
+    if (value === null || value === undefined) return 0;
+    const raw = String(value).replace(/[^0-9.\\-]/g, "");
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const orderRows = await d1All(env, "SELECT request_id, product_name, status, price, created_at FROM orders");
+  const quoteRows = await d1All(env, "SELECT request_id, status, created_at FROM quotes");
+
+  const orders = orderRows.map((row) => mapD1RowToRecord(row));
+  const quotes = quoteRows.map((row) => mapD1RowToRecord(row));
+
+  const todayOrders = orders.filter((order) => {
+    const createdAt = parseDateValue(order.created_at);
+    return createdAt !== null && createdAt >= startOfToday.getTime();
+  }).length;
+
+  const pendingQuotes = quotes.filter((quote) => {
+    const status = String(quote.status || "").toUpperCase();
+    return status === "NEW" || status === "ACKNOWLEDGED";
+  }).length;
+
+  const monthlyRevenue = orders
+    .filter((order) => {
+      const createdAt = parseDateValue(order.created_at);
+      if (createdAt === null || createdAt < startOfMonth.getTime()) return false;
+      const status = String(order.status || "").toUpperCase();
+      return ["INVOICE_PAID", "PROCESSING", "SHIPPED", "DELIVERED"].includes(status);
+    })
+    .reduce((sum, order) => sum + parsePriceValue(order.price), 0);
+
+  const recentOrders = orders
+    .map((order) => ({
+      requestId: order.request_id || "",
+      product: order.product_name || "",
+      status: order.status || "",
+      created_at: order.created_at || "",
+    }))
+    .sort((a, b) => {
+      const left = parseDateValue(a.created_at) || 0;
+      const right = parseDateValue(b.created_at) || 0;
+      return right - left;
+    })
+    .slice(0, 5);
+
+  const actionRequired = [
+    ...orders
+      .filter((order) => String(order.status || "").toUpperCase() === "NEW")
+      .slice(0, 5)
+      .map((order) => ({
+        label: order.product_name || "Order",
+        requestId: order.request_id || "",
+        status: order.status || "",
+      })),
+    ...quotes
+      .filter((quote) => String(quote.status || "").toUpperCase() === "NEW")
+      .slice(0, 5)
+      .map((quote) => ({
+        label: "Quote",
+        requestId: quote.request_id || "",
+        status: quote.status || "",
+      })),
+  ].slice(0, 6);
+
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      todayOrders,
+      pendingQuotes,
+      monthlyRevenue,
+      lowStockCount: 0,
+      recentOrders,
+      actionRequired,
+    }),
+    { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+  );
+}
 
   async function buildCatalogStoneOptionsList(env: Env, params: URLSearchParams) {
     if (!hasD1(env)) {
@@ -3856,6 +3973,7 @@ function applyAdminFilters(
     | "inspiration_media"
 ) {
   const status = (params.get("status") || "").trim().toUpperCase();
+  const dateRange = (params.get("date_range") || "").trim().toLowerCase();
   const q = (params.get("q") || "").trim().toLowerCase();
   const email = (params.get("email") || "").trim().toLowerCase();
   const requestId = (params.get("request_id") || "").trim().toLowerCase();
@@ -3865,10 +3983,40 @@ function applyAdminFilters(
   const productSlug = (params.get("product_slug") || "").trim().toLowerCase();
   const inspirationSlug = (params.get("inspiration_slug") || "").trim().toLowerCase();
 
+  const parseDateValue = (value: unknown) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number") return value;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    const numeric = Number(raw);
+    if (!Number.isNaN(numeric)) {
+      return numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+    }
+    const parsed = Date.parse(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+  const now = Date.now();
+  let dateStart: number | null = null;
+  if (dateRange === "today") {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    dateStart = start.getTime();
+  } else if (dateRange === "week") {
+    dateStart = now - 7 * 24 * 60 * 60 * 1000;
+  } else if (dateRange === "month") {
+    dateStart = now - 30 * 24 * 60 * 60 * 1000;
+  } else if (dateRange === "quarter") {
+    dateStart = now - 90 * 24 * 60 * 60 * 1000;
+  }
+
   return items.filter((item) => {
     if (status) {
       const value = String(item.status || "").trim().toUpperCase();
       if (value !== status) return false;
+    }
+    if (dateStart !== null) {
+      const createdAt = parseDateValue(item.created_at);
+      if (createdAt === null || createdAt < dateStart) return false;
     }
     if (email) {
       if (!String(item.email || "").toLowerCase().includes(email)) return false;

@@ -86,7 +86,7 @@
     }
   </style>
 </head>
-<body>
+<body data-api-base="https://admin-api.heerawalla.com/admin">
   <h1>Consultation Analytics Dashboard</h1>
 
   <div class="filter-controls">
@@ -172,7 +172,10 @@
       const days = document.getElementById('dateRange').value;
 
       try {
-        const response = await fetch(`/admin/consultations/analytics?days=${days}`);
+        const apiBase = document.body.dataset.apiBase || '';
+        const response = await fetch(`${apiBase}/consultations/analytics?days=${days}`, {
+          credentials: 'include'
+        });
         const result = await response.json();
 
         if (!result.success) {

@@ -1,6 +1,6 @@
 (() => {
   const state = {
-    tab: "orders",
+    tab: "dashboard",
     role: "",
     email: "",
     items: [],
@@ -9,6 +9,7 @@
     limit: 50,
     selectedId: "",
     selectedItem: null,
+    selectedItems: [],
     originalValues: {},
     originalRaw: {},
     originalNotes: "",
@@ -17,10 +18,15 @@
     confirmation: null,
     filters: {
       q: "",
+      status: "",
+      date_range: "",
       sort: "created_at",
       dir: "desc",
     },
   };
+
+  const DASHBOARD_TAB = "dashboard";
+  const BULK_TABS = new Set(["orders", "quotes", "tickets", "products"]);
 
   const STATUS_OPTIONS = {
     orders: [
@@ -411,6 +417,16 @@
     return false;
   }
 
+  const isDashboardTab = () => state.tab === DASHBOARD_TAB;
+
+  const isBulkEnabled = () => BULK_TABS.has(state.tab);
+
+  function clearSelection() {
+    state.selectedItems = [];
+    updateBulkActions();
+    renderList();
+  }
+
   const ui = {
     syncLine: document.querySelector("[data-sync-line]"),
     userRole: document.querySelector("[data-user-role]"),
@@ -418,9 +434,14 @@
     autoRefresh: document.querySelector("[data-auto-refresh]"),
     tabs: Array.from(document.querySelectorAll("[data-tab]")),
     adminTabs: Array.from(document.querySelectorAll("[data-admin-only]")),
+    dashboard: document.querySelector("[data-dashboard]"),
+    filtersWrap: document.querySelector(".filters"),
+    listWrap: document.querySelector(".list-wrap"),
+    bulkActions: document.querySelector("[data-bulk-actions]"),
     addRowWrap: document.querySelector("[data-add-row-wrap]"),
     addRowButton: document.querySelector("[data-add-row]"),
     filters: Array.from(document.querySelectorAll("[data-filter]")),
+    exportButtons: Array.from(document.querySelectorAll("[data-export]")),
     listHeader: document.querySelector("[data-list-header]"),
     list: document.querySelector("[data-list]"),
     results: document.querySelector("[data-results]"),
@@ -1604,6 +1625,10 @@
 
   function updateAddRowVisibility() {
     if (!ui.addRowWrap) return;
+    if (isDashboardTab()) {
+      ui.addRowWrap.classList.add("is-hidden");
+      return;
+    }
     const canAdd = state.role === "admin" || state.role === "ops";
     const show =
       canAdd && (PRICING_TABS.has(state.tab) || CATALOG_TABS.has(state.tab));
@@ -1628,9 +1653,130 @@
     return params.toString();
   }
 
+  function updateDashboardVisibility() {
+    const isDashboard = isDashboardTab();
+    if (ui.dashboard) {
+      ui.dashboard.classList.toggle("is-hidden", !isDashboard);
+    }
+    if (ui.filtersWrap) {
+      ui.filtersWrap.classList.toggle("is-hidden", isDashboard);
+    }
+    if (ui.listWrap) {
+      ui.listWrap.classList.toggle("is-hidden", isDashboard);
+    }
+    if (ui.bulkActions) {
+      ui.bulkActions.classList.toggle("is-hidden", isDashboard || !state.selectedItems.length);
+    }
+    if (ui.addRowWrap) {
+      ui.addRowWrap.classList.toggle("is-hidden", isDashboard);
+    }
+  }
+
+  function updateStatusFilterOptions() {
+    if (!ui.filtersWrap) return;
+    const statusWrap = ui.filtersWrap.querySelector("[data-filter-status]");
+    const statusSelect = ui.filters.find((el) => el.dataset.filter === "status");
+    if (!statusWrap || !statusSelect) return;
+    const options = STATUS_OPTIONS[state.tab] || [];
+    if (isDashboardTab() || !options.length) {
+      statusWrap.classList.add("is-hidden");
+      statusSelect.value = "";
+      state.filters.status = "";
+      return;
+    }
+    statusWrap.classList.remove("is-hidden");
+    const currentValue = state.filters.status || "";
+    statusSelect.innerHTML =
+      `<option value="">All statuses</option>` +
+      options.map((status) => `<option value="${status}">${status}</option>`).join("");
+    statusSelect.value = options.includes(currentValue) ? currentValue : "";
+    state.filters.status = statusSelect.value;
+  }
+
+  async function loadDashboard() {
+    updateDashboardVisibility();
+    if (!ui.dashboard) return;
+    ui.dashboard.innerHTML = `<div class="dashboard-section"><h3>Loading dashboard...</h3></div>`;
+    try {
+      const metrics = await apiFetch("/dashboard/metrics");
+      if (!metrics.ok) {
+        ui.dashboard.innerHTML = `<div class="dashboard-section"><h3>Unable to load dashboard.</h3></div>`;
+        return;
+      }
+      ui.dashboard.innerHTML = renderDashboard(metrics);
+    } catch (error) {
+      ui.dashboard.innerHTML = `<div class="dashboard-section"><h3>Unable to load dashboard.</h3></div>`;
+    }
+  }
+
+  function renderDashboard(metrics) {
+    const recentOrders = metrics.recentOrders || [];
+    const actionItems = metrics.actionRequired || [];
+    return `
+      <div class="dashboard-grid">
+        <div class="metric-card">
+          <h3>Today's Activity</h3>
+          <div class="metric-value">${metrics.todayOrders || 0}</div>
+          <div class="metric-label">New Orders</div>
+        </div>
+        <div class="metric-card">
+          <h3>Pending Quotes</h3>
+          <div class="metric-value">${metrics.pendingQuotes || 0}</div>
+          <div class="metric-label">Awaiting Response</div>
+        </div>
+        <div class="metric-card">
+          <h3>This Month</h3>
+          <div class="metric-value">${metrics.monthlyRevenue || 0}</div>
+          <div class="metric-label">Revenue</div>
+        </div>
+        <div class="metric-card">
+          <h3>Alerts</h3>
+          <div class="metric-value ${metrics.lowStockCount > 0 ? "warning" : ""}">${metrics.lowStockCount || 0}</div>
+          <div class="metric-label">Low Stock Items</div>
+        </div>
+      </div>
+      <div class="dashboard-section">
+        <h3>Recent Orders</h3>
+        <div class="quick-list">
+          ${recentOrders.length ? recentOrders
+            .map(
+              (order) => `
+            <div class="quick-item">
+              <div>
+                <strong>${escapeHtml(order.product || order.requestId || "Order")}</strong>
+                <div class="quick-meta">${escapeHtml(order.requestId || "")}</div>
+              </div>
+              <div class="quick-meta">${escapeHtml(order.status || "")}</div>
+            </div>`
+            )
+            .join("") : `<div class="quick-meta">No recent orders.</div>`}
+        </div>
+      </div>
+      <div class="dashboard-section">
+        <h3>Action Required</h3>
+        <div class="quick-list">
+          ${actionItems.length ? actionItems
+            .map(
+              (item) => `
+            <div class="quick-item">
+              <div>
+                <strong>${escapeHtml(item.label || item.requestId || "Item")}</strong>
+                <div class="quick-meta">${escapeHtml(item.requestId || "")}</div>
+              </div>
+              <div class="quick-meta">${escapeHtml(item.status || "")}</div>
+            </div>`
+            )
+            .join("") : `<div class="quick-meta">No actions required.</div>`}
+        </div>
+      </div>
+    `;
+  }
+
   async function loadList() {
     if (state.isLoading) return;
     state.isLoading = true;
+    state.selectedItems = [];
+    updateBulkActions();
     setSyncStatus("Syncing");
     try {
       const data = await apiFetch(`${getTabEndpoint(state.tab)}?${buildQuery()}`);
@@ -1659,6 +1805,16 @@
     }
   }
 
+  async function loadCurrentView() {
+    updateDashboardVisibility();
+    updateStatusFilterOptions();
+    if (isDashboardTab()) {
+      await loadDashboard();
+      return;
+    }
+    await loadList();
+  }
+
   async function loadOrderDetails(requestId) {
     if (!requestId || state.tab !== "orders") {
       populateOrderDetails({});
@@ -1675,13 +1831,24 @@
   function renderHeader() {
     if (!ui.listHeader) return;
     const columns = LIST_COLUMNS[state.tab];
-      const template = columns
-        .map((col) => (col.key === "view" || col.key === "delete" ? "90px" : "minmax(120px, 1fr)"))
-        .join(" ");
+    const bulkEnabled = isBulkEnabled();
+    const templateParts = [];
+    if (bulkEnabled) templateParts.push("44px");
+    templateParts.push(
+      ...columns.map((col) => (col.key === "view" || col.key === "delete" ? "90px" : "minmax(120px, 1fr)"))
+    );
+    const template = templateParts.join(" ");
     ui.listHeader.style.gridTemplateColumns = template;
-    ui.listHeader.innerHTML = columns
-      .map((col) => `<div>${col.label || ""}</div>`)
-      .join("");
+    const headerCells = [];
+    if (bulkEnabled) {
+      const allSelected =
+        state.items.length > 0 && state.selectedItems.length === state.items.length;
+      headerCells.push(
+        `<div class="cell"><input type="checkbox" class="bulk-select" data-bulk-select-all ${allSelected ? "checked" : ""} /></div>`
+      );
+    }
+    headerCells.push(...columns.map((col) => `<div>${col.label || ""}</div>`));
+    ui.listHeader.innerHTML = headerCells.join("");
   }
 
   function renderList() {
@@ -1693,9 +1860,13 @@
       return;
     }
     const columns = LIST_COLUMNS[state.tab];
-      const template = columns
-        .map((col) => (col.key === "view" || col.key === "delete" ? "90px" : "minmax(120px, 1fr)"))
-        .join(" ");
+    const bulkEnabled = isBulkEnabled();
+    const templateParts = [];
+    if (bulkEnabled) templateParts.push("44px");
+    templateParts.push(
+      ...columns.map((col) => (col.key === "view" || col.key === "delete" ? "90px" : "minmax(120px, 1fr)"))
+    );
+    const template = templateParts.join(" ");
     ui.list.innerHTML = state.items
       .map((item) => {
         const key = getItemKey(item);
@@ -1708,8 +1879,17 @@
           item.row_number ||
           item.media_id ||
           "";
-        const cells = columns
-          .map((col) => {
+        const cells = [];
+        if (bulkEnabled) {
+          const isChecked = state.selectedItems.includes(key);
+          cells.push(
+            `<div class="cell"><input type="checkbox" class="bulk-select" data-bulk-select-item="${escapeAttribute(
+              key
+            )}" ${isChecked ? "checked" : ""} /></div>`
+          );
+        }
+        cells.push(
+          ...columns.map((col) => {
               if (col.key === "view") {
                 const disabled = key ? "" : "disabled";
                 return `<div class="cell"><button class="btn btn-ghost" data-view="${key}" ${disabled}>View</button></div>`;
@@ -1725,15 +1905,89 @@
             const value = getValue(item, col.key);
             return `<div class="cell"><span class="cell-label">${col.label}</span><span>${value}</span></div>`;
           })
-          .join("");
-        return `<div class="list-row" data-row="${escapeAttribute(
+        );
+        const rowClass = bulkEnabled && state.selectedItems.includes(key) ? "list-row is-selected" : "list-row";
+        return `<div class="${rowClass}" data-row="${escapeAttribute(
           rowId
         )}" data-slug="${escapeAttribute(item.slug || "")}" data-id="${escapeAttribute(
           item.id || ""
-        )}" style="grid-template-columns:${template}">${cells}</div>`;
+        )}" style="grid-template-columns:${template}">${cells.join("")}</div>`;
       })
       .join("");
     ui.results.textContent = `Showing ${state.items.length} of ${state.total}`;
+  }
+
+  function updateBulkActions() {
+    if (!ui.bulkActions) return;
+    if (!isBulkEnabled() || !state.selectedItems.length) {
+      ui.bulkActions.classList.add("is-hidden");
+      ui.bulkActions.innerHTML = "";
+      return;
+    }
+    const actions = getBulkActionsForTab(state.tab);
+    ui.bulkActions.classList.remove("is-hidden");
+    ui.bulkActions.innerHTML = `
+      <div class="bulk-info">
+        <span>${state.selectedItems.length} selected</span>
+        <button class="btn-link" data-bulk-clear type="button">Clear</button>
+      </div>
+      <div class="bulk-buttons">
+        ${actions
+          .map(
+            (action) =>
+              `<button class="btn ${action.danger ? "btn-danger" : ""}" data-bulk-action="${action.action}" type="button">${action.label}</button>`
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  function getBulkActionsForTab(tab) {
+    const actions = {
+      orders: [
+        { action: "acknowledge", label: "Acknowledge" },
+        { action: "cancel", label: "Cancel" },
+        { action: "delete", label: "Delete", danger: true },
+      ],
+      quotes: [
+        { action: "acknowledge", label: "Acknowledge" },
+        { action: "drop", label: "Drop" },
+        { action: "delete", label: "Delete", danger: true },
+      ],
+      tickets: [
+        { action: "mark_resolved", label: "Resolve" },
+        { action: "delete", label: "Delete", danger: true },
+      ],
+      products: [{ action: "delete", label: "Delete", danger: true }],
+    };
+    return actions[tab] || [];
+  }
+
+  async function handleBulkAction(action) {
+    if (!state.selectedItems.length) return;
+    const label = getBulkActionsForTab(state.tab).find((entry) => entry.action === action)?.label || action;
+    if (!window.confirm(`Apply \"${label}\" to ${state.selectedItems.length} items?`)) return;
+    const endpoint = getActionEndpoint();
+    if (!endpoint) {
+      showToast("No bulk actions available.", "error");
+      return;
+    }
+    let successCount = 0;
+    for (const id of state.selectedItems) {
+      try {
+        const payload = { action, requestId: id };
+        const result = await apiFetch(endpoint, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        if (result.ok) successCount += 1;
+      } catch {
+        // Ignore per-item errors and continue.
+      }
+    }
+    showToast(`Updated ${successCount} of ${state.selectedItems.length} items`);
+    clearSelection();
+    await loadList();
   }
 
   function renderDetailCell(label, value) {
@@ -1761,6 +2015,79 @@
         </div>`;
       })
       .join("");
+  }
+
+  function showShortcutsModal() {
+    if (document.querySelector(".shortcuts-modal")) return;
+    const modal = document.createElement("div");
+    modal.className = "shortcuts-modal";
+    modal.innerHTML = `
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Keyboard Shortcuts</h2>
+          <button class="btn btn-ghost" data-shortcuts-close type="button">Close</button>
+        </div>
+        <div class="shortcuts-list">
+          <div class="shortcut-item"><kbd>Cmd/Ctrl + K</kbd><span>Focus search</span></div>
+          <div class="shortcut-item"><kbd>Cmd/Ctrl + R</kbd><span>Refresh</span></div>
+          <div class="shortcut-item"><kbd>Cmd/Ctrl + N</kbd><span>Add row (catalog)</span></div>
+          <div class="shortcut-item"><kbd>Esc</kbd><span>Close drawer</span></div>
+          <div class="shortcut-item"><kbd>← →</kbd><span>Navigate pages</span></div>
+          <div class="shortcut-item"><kbd>?</kbd><span>Show shortcuts</span></div>
+        </div>
+      </div>
+    `;
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) modal.remove();
+    });
+    modal.querySelector("[data-shortcuts-close]").addEventListener("click", () => modal.remove());
+    document.body.appendChild(modal);
+  }
+
+  function initKeyboardShortcuts() {
+    document.addEventListener("keydown", (event) => {
+      if (event.target instanceof HTMLElement) {
+        if (event.target.matches("input, textarea, select")) return;
+      }
+      if (event.key === "?") {
+        showShortcutsModal();
+        return;
+      }
+      if (event.code === "Escape") {
+        closeDrawer();
+        return;
+      }
+      if (event.code === "ArrowLeft") {
+        if (ui.prev) ui.prev.click();
+        return;
+      }
+      if (event.code === "ArrowRight") {
+        if (ui.next) ui.next.click();
+        return;
+      }
+      const meta = event.metaKey || event.ctrlKey;
+      if (!meta) return;
+      switch (event.code) {
+        case "KeyK": {
+          const search = ui.filters.find((el) => el.dataset.filter === "q");
+          if (search) {
+            event.preventDefault();
+            search.focus();
+          }
+          break;
+        }
+        case "KeyR":
+          event.preventDefault();
+          loadCurrentView();
+          break;
+        case "KeyN":
+          event.preventDefault();
+          if (ui.addRowButton && !ui.addRowWrap?.classList.contains("is-hidden")) {
+            ui.addRowButton.click();
+          }
+          break;
+      }
+    });
   }
 
   function updateStatusOptions() {
@@ -1793,6 +2120,47 @@
       .map((option) => `<option value="${option.value}">${option.label}</option>`)
       .join("");
     sortFilter.value = state.filters.sort;
+  }
+
+  function getExportColumns() {
+    const columns = LIST_COLUMNS[state.tab] || [];
+    return columns.filter((col) => col.key !== "view" && col.key !== "delete");
+  }
+
+  function exportData(format = "csv") {
+    if (format !== "csv") return;
+    const items =
+      state.selectedItems.length > 0
+        ? state.items.filter((item) => state.selectedItems.includes(getItemKey(item)))
+        : state.items;
+    if (!items.length) {
+      showToast("No rows to export.", "error");
+      return;
+    }
+    const columns = getExportColumns();
+    const headers = columns.map((col) => col.label || col.key);
+    const rows = items.map((item) =>
+      columns.map((col) => {
+        const value = getValue(item, col.key);
+        const cleaned = String(value ?? "");
+        if (cleaned.includes(",") || cleaned.includes("\"") || cleaned.includes("\n")) {
+          return `"${cleaned.replace(/"/g, "\"\"")}"`;
+        }
+        return cleaned;
+      })
+    );
+    const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+    const filename = `${state.tab}-${Date.now()}.csv`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${items.length} rows`);
   }
 
   function populateDrawer(item) {
@@ -2880,42 +3248,70 @@
         tab.classList.add("is-active");
         state.tab = tab.dataset.tab;
         state.offset = 0;
+        state.selectedItems = [];
         updateStatusOptions();
         updateSortOptions();
         updateAddRowVisibility();
-        loadList();
+        loadCurrentView();
       });
     });
 
     ui.filters.forEach((input) => {
       input.addEventListener("change", () => {
-        state.filters[input.dataset.filter] = input.value.trim();
+        if (input.dataset.filter === "limit") {
+          state.limit = Number(input.value) || state.limit;
+        } else {
+          state.filters[input.dataset.filter] = input.value.trim();
+        }
         state.offset = 0;
-        loadList();
+        loadCurrentView();
       });
       if (input.tagName === "INPUT") {
         input.addEventListener("input", () => {
-          state.filters[input.dataset.filter] = input.value.trim();
+          if (input.dataset.filter !== "limit") {
+            state.filters[input.dataset.filter] = input.value.trim();
+          }
           state.offset = 0;
-          loadList();
+          loadCurrentView();
         });
       }
     });
 
     ui.prev.addEventListener("click", () => {
       state.offset = Math.max(state.offset - state.limit, 0);
-      loadList();
+      loadCurrentView();
     });
     ui.next.addEventListener("click", () => {
       if (state.offset + state.limit >= state.total) return;
       state.offset += state.limit;
-      loadList();
+      loadCurrentView();
     });
 
     ui.refresh.addEventListener("click", () => {
       if (autoRefresh) return;
-      loadList();
+      loadCurrentView();
     });
+
+    if (ui.bulkActions) {
+      ui.bulkActions.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (target.dataset.bulkClear !== undefined) {
+          clearSelection();
+          return;
+        }
+        const bulkAction = target.dataset.bulkAction;
+        if (bulkAction) handleBulkAction(bulkAction);
+      });
+    }
+
+    if (ui.exportButtons.length) {
+      ui.exportButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          exportData(button.dataset.export || "csv");
+        });
+      });
+    }
 
     if (ui.autoRefresh) {
       ui.autoRefresh.checked = autoRefresh;
@@ -2933,6 +3329,29 @@
     ui.list.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      if (target instanceof HTMLInputElement && target.hasAttribute("data-bulk-select-all")) {
+        const allIds = state.items.map((item) => getItemKey(item)).filter(Boolean);
+        if (target.checked) {
+          state.selectedItems = allIds;
+        } else {
+          state.selectedItems = [];
+        }
+        updateBulkActions();
+        renderList();
+        return;
+      }
+      if (target instanceof HTMLInputElement && target.dataset.bulkSelectItem !== undefined) {
+        const id = target.dataset.bulkSelectItem;
+        if (!id) return;
+        if (target.checked) {
+          if (!state.selectedItems.includes(id)) state.selectedItems.push(id);
+        } else {
+          state.selectedItems = state.selectedItems.filter((item) => item !== id);
+        }
+        updateBulkActions();
+        renderList();
+        return;
+      }
       const deleteId = target.dataset.delete;
       if (deleteId) {
         if (!canEditCurrentTab()) return;
@@ -3153,22 +3572,24 @@
   async function init() {
     const params = new URLSearchParams(window.location.search);
     const initialTab = params.get("tab");
-    if (initialTab && STATUS_OPTIONS[initialTab]) {
+    if (initialTab && (STATUS_OPTIONS[initialTab] || initialTab === DASHBOARD_TAB)) {
       state.tab = initialTab;
       ui.tabs.forEach((button) => {
         button.classList.toggle("is-active", button.dataset.tab === state.tab);
       });
     }
     updateStatusOptions();
+    updateStatusFilterOptions();
     updateSortOptions();
     bindEvents();
+    initKeyboardShortcuts();
     updateSyncLine();
     if (!ensureLocalAdminAccess()) return;
     await loadMe();
-    await loadList();
+    await loadCurrentView();
     setInterval(() => {
       if (document.hidden || !autoRefresh) return;
-      loadList();
+      loadCurrentView();
     }, 60000);
   }
 

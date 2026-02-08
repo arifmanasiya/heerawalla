@@ -59,7 +59,8 @@
 
       <nav class="tabs" aria-label="Admin sections">
         <div class="tab-group">
-          <button class="tab is-active" data-tab="orders" type="button" title="Orders">📦 Orders</button>
+          <button class="tab is-active" data-tab="dashboard" type="button" title="Dashboard">Dashboard</button>
+          <button class="tab" data-tab="orders" type="button" title="Orders">📦 Orders</button>
           <button class="tab" data-tab="quotes" type="button" title="Quotes">💬 Quotes</button>
           <button class="tab" data-tab="tickets" type="button" title="Customer Tickets">🎟 Tickets</button>
           <button class="tab" data-tab="contacts" type="button" title="Contacts">👤 Contacts</button>
@@ -73,19 +74,48 @@
           <button class="tab" data-tab="diamond-price-chart" data-admin-only type="button" title="Diamond Pricing">
             Diamonds
           </button>
+          <a class="tab" href="/consultations.html" data-admin-only title="Consultation Analytics">Consultations</a>
         </div>
       </nav>
+
+      <section class="dashboard is-hidden" data-dashboard></section>
 
       <section class="filters">
         <label class="field">
           <span>Search</span>
           <input type="search" placeholder="Name, email, product, request ID" data-filter="q" />
         </label>
+        <label class="field" data-filter-status>
+          <span>Status</span>
+          <select data-filter="status">
+            <option value="">All statuses</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Created</span>
+          <select data-filter="date_range">
+            <option value="">All time</option>
+            <option value="today">Today</option>
+            <option value="week">This week</option>
+            <option value="month">This month</option>
+            <option value="quarter">This quarter</option>
+          </select>
+        </label>
         <label class="field">
           <span>Sort by</span>
           <select data-filter="sort"></select>
         </label>
+        <label class="field">
+          <span>Show</span>
+          <select data-filter="limit">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+          </select>
+        </label>
       </section>
+      <div class="bulk-action-bar is-hidden" data-bulk-actions></div>
       <div class="filter-actions is-hidden" data-add-row-wrap>
         <button class="btn" data-add-row type="button">Add row</button>
       </div>
@@ -95,6 +125,9 @@
         <div class="list-body" data-list></div>
         <div class="list-footer">
           <span data-results>0 results</span>
+          <div class="export-actions">
+            <button class="btn btn-ghost" data-export="csv" type="button">Export CSV</button>
+          </div>
           <div class="pager">
             <button class="btn btn-ghost" data-prev type="button">Prev</button>
             <button class="btn btn-ghost" data-next type="button">Next</button>
@@ -475,3 +508,5 @@
     <script src="./app.js" defer></script>
   </body>
 </html>
+
+
