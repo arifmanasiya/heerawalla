@@ -2054,6 +2054,13 @@ button:disabled {
   margin-bottom: 24px;
 }
 
+.dashboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
 .metric-card {
   background: var(--surface);
   border: 1px solid var(--line);

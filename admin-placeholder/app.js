@@ -1643,6 +1643,22 @@
     }
   }
 
+  function setTab(tabName) {
+    const target = tabName || "orders";
+    state.tab = target;
+    state.offset = 0;
+    state.selectedItems = [];
+    ui.tabs.forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.tab === state.tab);
+    });
+    updateStatusOptions();
+    updateStatusFilterOptions();
+    updateSortOptions();
+    updateAddRowVisibility();
+    updateBulkActions();
+    loadCurrentView();
+  }
+
   function buildQuery() {
     const params = new URLSearchParams();
     Object.entries(state.filters).forEach(([key, value]) => {
@@ -1704,6 +1720,12 @@
         return;
       }
       ui.dashboard.innerHTML = renderDashboard(metrics);
+      ui.dashboard.querySelectorAll("[data-dashboard-tab]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const target = button.dataset.dashboardTab;
+          if (target) setTab(target);
+        });
+      });
     } catch (error) {
       ui.dashboard.innerHTML = `<div class="dashboard-section"><h3>Unable to load dashboard.</h3></div>`;
     }
@@ -1734,6 +1756,12 @@
           <div class="metric-value ${metrics.lowStockCount > 0 ? "warning" : ""}">${metrics.lowStockCount || 0}</div>
           <div class="metric-label">Low Stock Items</div>
         </div>
+      </div>
+      <div class="dashboard-actions">
+        <button class="btn btn-primary" data-dashboard-tab="orders" type="button">View Orders</button>
+        <button class="btn btn-ghost" data-dashboard-tab="quotes" type="button">View Quotes</button>
+        <button class="btn btn-ghost" data-dashboard-tab="products" type="button">Manage Products</button>
+        <button class="btn btn-ghost" data-dashboard-tab="tickets" type="button">Support Tickets</button>
       </div>
       <div class="dashboard-section">
         <h3>Recent Orders</h3>
@@ -3244,15 +3272,7 @@
   function bindEvents() {
     ui.tabs.forEach((tab) => {
       tab.addEventListener("click", () => {
-        ui.tabs.forEach((button) => button.classList.remove("is-active"));
-        tab.classList.add("is-active");
-        state.tab = tab.dataset.tab;
-        state.offset = 0;
-        state.selectedItems = [];
-        updateStatusOptions();
-        updateSortOptions();
-        updateAddRowVisibility();
-        loadCurrentView();
+        setTab(tab.dataset.tab);
       });
     });
 
@@ -3572,21 +3592,16 @@
   async function init() {
     const params = new URLSearchParams(window.location.search);
     const initialTab = params.get("tab");
-    if (initialTab && (STATUS_OPTIONS[initialTab] || initialTab === DASHBOARD_TAB)) {
-      state.tab = initialTab;
-      ui.tabs.forEach((button) => {
-        button.classList.toggle("is-active", button.dataset.tab === state.tab);
-      });
-    }
-    updateStatusOptions();
-    updateStatusFilterOptions();
-    updateSortOptions();
     bindEvents();
     initKeyboardShortcuts();
     updateSyncLine();
     if (!ensureLocalAdminAccess()) return;
     await loadMe();
-    await loadCurrentView();
+    const targetTab =
+      initialTab && (STATUS_OPTIONS[initialTab] || initialTab === DASHBOARD_TAB)
+        ? initialTab
+        : state.tab;
+    setTab(targetTab);
     setInterval(() => {
       if (document.hidden || !autoRefresh) return;
       loadCurrentView();
