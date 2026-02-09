@@ -9,7 +9,8 @@
     "build": "npm run build:main && npm run build:detail",
     "build:main": "esbuild src/index.js --bundle --minify --outfile=dist/app.js",
     "build:detail": "esbuild src/detail-index.js --bundle --minify --outfile=dist/detail.js",
-    "clean": "rimraf dist && mkdir dist"
+    "postbuild": "node scripts/copy-build.mjs",
+    "clean": "rimraf dist app.js detail.js && mkdir dist"
   },
   "devDependencies": {
     "esbuild": "^0.19.12",
