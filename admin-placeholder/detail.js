@@ -550,6 +550,12 @@
       "[data-media-primary-existing]",
     ),
     mediaLink: document.querySelector("[data-media-link]"),
+    mediaDetailSection: document.querySelector("[data-media-detail-section]"),
+    mediaDetailPreview: document.querySelector("[data-media-detail-preview]"),
+    mediaDetailGenerate: document.querySelector("[data-media-detail-generate]"),
+    mediaDetailId: document.querySelector("[data-media-detail-id]"),
+    mediaDetailType: document.querySelector("[data-media-detail-type]"),
+    mediaDetailUrl: document.querySelector("[data-media-detail-url]"),
     catalogNotesSection: document.querySelector("[data-catalog-notes-section]"),
     noteEditors: Array.from(document.querySelectorAll("[data-note-editor]")),
     noteSaveButtons: Array.from(document.querySelectorAll("[data-note-save]")),
@@ -676,6 +682,7 @@
     summaryPhone: document.querySelector("[data-summary-phone]"),
     summaryAddress: document.querySelector("[data-summary-address]"),
     summaryCard: document.querySelector("[data-summary-card]"),
+    detailAside: document.querySelector(".detail-aside"),
     summaryQuoteBlock: document.querySelector("[data-summary-quote-block]"),
     summaryPreferencesBlock: document.querySelector(
       "[data-summary-preferences-block]",
@@ -2377,6 +2384,8 @@
     if (ui.sizeBlock) ui.sizeBlock.classList.toggle("is-hidden", showCatalog);
     if (ui.summaryCard)
       ui.summaryCard.classList.toggle("is-hidden", showCatalog);
+    if (ui.detailAside)
+      ui.detailAside.classList.toggle("is-hidden", showCatalog);
     if (ui.nextActionPanel)
       ui.nextActionPanel.classList.toggle("is-hidden", showCatalog);
   }
@@ -2435,8 +2444,39 @@
     if (!window.CatalogForm) return;
     const form = window.CatalogForm;
     const safeEnums = enums || {};
+    const fixedCatalogOptions = {
+      categories: ["RING", "PENDANT", "BRACELET", "BAND", "NECKLACE", "BANGLE"],
+      styles: [
+        "Bold",
+        "Subtle",
+        "Minimalist",
+        "Contemporary",
+        "Traditional",
+        "Vintage",
+        "Modern",
+        "Classic",
+        "Art Deco",
+        "Bohemian",
+        "Romantic",
+      ],
+      motifs: [
+        "Gift",
+        "Wedding",
+        "Engagement",
+        "Anniversary",
+        "Birthday",
+        "Promise",
+        "Eternal Love",
+        "Family",
+        "Celebration",
+      ],
+      tags: ["RING", "PENDANT", "BRACELET", "BAND", "NECKLACE", "BANGLE"],
+    };
+    Object.entries(fixedCatalogOptions).forEach(([key, values]) => {
+      safeEnums[key] = values.map((value) => ({ value }));
+    });
     const value = item || {};
-    const allowCustomLists = new Set(["styles", "motifs", "tags"]);
+    const allowCustomLists = new Set([]);
     const activeValue =
       value.is_active === undefined || value.is_active === null
         ? state.isNewRow
@@ -2657,6 +2697,42 @@
       updateCounter();
       input.addEventListener("input", updateCounter);
     });
+  }
+
+  function getMediaDescriptionField() {
+    if (!ui.catalogFields) return null;
+    return ui.catalogFields.querySelector('[data-field="description"]');
+  }
+
+  function renderMediaDetail(item) {
+    if (!ui.mediaDetailSection) return;
+    const show = state.tab === "media-library";
+    ui.mediaDetailSection.classList.toggle("is-hidden", !show);
+    if (!show) return;
+    const mediaId = String(item?.media_id || item?.id || item?.row_number || "");
+    const mediaType = String(item?.media_type || "image").trim() || "image";
+    const rawUrl = item?.url || item?.media_url || "";
+    const url = normalizeImageUrl(rawUrl);
+    if (ui.mediaDetailId) ui.mediaDetailId.textContent = mediaId || "--";
+    if (ui.mediaDetailType) ui.mediaDetailType.textContent = mediaType || "--";
+    if (ui.mediaDetailUrl) {
+      if (url) {
+        ui.mediaDetailUrl.href = url;
+        ui.mediaDetailUrl.textContent = "Open file";
+      } else {
+        ui.mediaDetailUrl.href = "#";
+        ui.mediaDetailUrl.textContent = "No file";
+      }
+    }
+    if (ui.mediaDetailPreview) {
+      if (!url) {
+        ui.mediaDetailPreview.innerHTML = '<span class="muted">No preview available.</span>';
+      } else if (mediaType.toLowerCase().includes("video")) {
+        ui.mediaDetailPreview.innerHTML = `<video controls src="${escapeAttribute(url)}"></video>`;
+      } else {
+        ui.mediaDetailPreview.innerHTML = `<img src="${escapeAttribute(url)}" alt="" loading="lazy" />`;
+      }
+    }
   }
 
   async function renderCatalogMedia(item) {
@@ -2940,6 +3016,39 @@
     `;
   }
 
+  function sortStoneOptionsBySize(items) {
+    if (!Array.isArray(items)) return [];
+    const sizeOrder = ["xsmall", "small", "medium", "large", "xlarge", "xxlarge"];
+    const indexMap = new Map(sizeOrder.map((value, index) => [value, index]));
+    return [...items].sort((a, b) => {
+      const aKey = String(a.size_type || "").toLowerCase();
+      const bKey = String(b.size_type || "").toLowerCase();
+      const aIndex = indexMap.has(aKey) ? indexMap.get(aKey) : sizeOrder.length + 1;
+      const bIndex = indexMap.has(bKey) ? indexMap.get(bKey) : sizeOrder.length + 1;
+      if (aIndex !== bIndex) return aIndex - bIndex;
+      const aRole = String(a.role || "");
+      const bRole = String(b.role || "");
+      if (aRole !== bRole) return aRole.localeCompare(bRole);
+      const aCarat = Number(a.carat || 0);
+      const bCarat = Number(b.carat || 0);
+      if (!Number.isNaN(aCarat) && !Number.isNaN(bCarat) && aCarat !== bCarat) {
+        return aCarat - bCarat;
+      }
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
+  }
+
+  function groupStoneOptionsBySize(items) {
+    const sorted = sortStoneOptionsBySize(items);
+    const groups = new Map();
+    sorted.forEach((entry) => {
+      const key = String(entry.size_type || "unspecified").toLowerCase() || "unspecified";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(entry);
+    });
+    return Array.from(groups.entries());
+  }
+
   function getStoneOptionRowValues(row) {
     const read = (key) => {
       const field = row.querySelector(`[data-stone-field="${key}"]`);
@@ -2976,10 +3085,22 @@
       const items = Array.isArray(data.items) ? data.items : [];
       state.catalogStoneOptions = { items };
       const enums = state.catalogEnums || {};
-      const rows = items.map((entry) => renderStoneOptionRow(entry, enums));
-      ui.catalogStoneList.innerHTML = rows.length
-        ? rows.join("")
-        : `<div class="muted">No stone options yet.</div>`;
+      const grouped = groupStoneOptionsBySize(items);
+      if (!grouped.length) {
+        ui.catalogStoneList.innerHTML = `<div class="muted">No stone options yet.</div>`;
+        return;
+      }
+      const sections = grouped.map(([sizeType, entries]) => {
+        const label = sizeType === "unspecified" ? "Unspecified size" : sizeType.replace(/_/g, " ");
+        const rows = entries.map((entry) => renderStoneOptionRow(entry, enums)).join("");
+        return `
+          <div class="stone-size-group" data-size-type="${escapeAttribute(sizeType)}">
+            <div class="stone-size-header">${escapeHtml(label)}</div>
+            <div class="stone-size-rows">${rows}</div>
+          </div>
+        `;
+      });
+      ui.catalogStoneList.innerHTML = sections.join("");
     } catch (error) {
       state.catalogStoneOptions = { items: [] };
       ui.catalogStoneList.innerHTML = `<div class="muted">Unable to load stone options.</div>`;
@@ -3119,6 +3240,36 @@
     `;
   }
 
+  function sortMetalOptionsBySize(items) {
+    if (!Array.isArray(items)) return [];
+    const sizeOrder = ["xsmall", "small", "medium", "large", "xlarge", "xxlarge"];
+    const indexMap = new Map(sizeOrder.map((value, index) => [value, index]));
+    return [...items].sort((a, b) => {
+      const aKey = String(a.size_type || "").toLowerCase();
+      const bKey = String(b.size_type || "").toLowerCase();
+      const aIndex = indexMap.has(aKey) ? indexMap.get(aKey) : sizeOrder.length + 1;
+      const bIndex = indexMap.has(bKey) ? indexMap.get(bKey) : sizeOrder.length + 1;
+      if (aIndex !== bIndex) return aIndex - bIndex;
+      const aWeight = Number(a.metal_weight || 0);
+      const bWeight = Number(b.metal_weight || 0);
+      if (!Number.isNaN(aWeight) && !Number.isNaN(bWeight) && aWeight !== bWeight) {
+        return aWeight - bWeight;
+      }
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
+  }
+
+  function groupMetalOptionsBySize(items) {
+    const sorted = sortMetalOptionsBySize(items);
+    const groups = new Map();
+    sorted.forEach((entry) => {
+      const key = String(entry.size_type || "unspecified").toLowerCase() || "unspecified";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(entry);
+    });
+    return Array.from(groups.entries());
+  }
+
   function getMetalOptionRowValues(row) {
     const read = (key) => {
       const field = row.querySelector(`[data-metal-field="${key}"]`);
@@ -3150,12 +3301,22 @@
       );
       const items = Array.isArray(data.items) ? data.items : [];
       state.catalogMetalOptions = { items };
-      const rows = items.map((entry) =>
-        renderMetalOptionRow(entry, state.catalogEnums),
-      );
-      ui.catalogMetalList.innerHTML = rows.length
-        ? rows.join("")
-        : `<div class="muted">No metal options yet.</div>`;
+      const grouped = groupMetalOptionsBySize(items);
+      if (!grouped.length) {
+        ui.catalogMetalList.innerHTML = `<div class="muted">No metal options yet.</div>`;
+        return;
+      }
+      const sections = grouped.map(([sizeType, entries]) => {
+        const label = sizeType === "unspecified" ? "Unspecified size" : sizeType.replace(/_/g, " ");
+        const rows = entries.map((entry) => renderMetalOptionRow(entry, state.catalogEnums)).join("");
+        return `
+          <div class="stone-size-group" data-size-type="${escapeAttribute(sizeType)}">
+            <div class="stone-size-header">${escapeHtml(label)}</div>
+            <div class="stone-size-rows">${rows}</div>
+          </div>
+        `;
+      });
+      ui.catalogMetalList.innerHTML = sections.join("");
     } catch (error) {
       state.catalogMetalOptions = { items: [] };
       ui.catalogMetalList.innerHTML = `<div class="muted">Unable to load metal options.</div>`;
@@ -4369,7 +4530,9 @@
     if (!ui.dirtyIndicator) return;
     const parts = [];
     if (state.dirtySections.edits) parts.push("Unsaved edits");
-    if (state.dirtySections.fulfillment) parts.push("Unsaved fulfillment");
+    if (state.tab === "orders" && state.dirtySections.fulfillment) {
+      parts.push("Unsaved fulfillment");
+    }
     const text = parts.length ? parts.join(" / ") : "All changes saved";
     ui.dirtyIndicator.textContent = text;
     ui.dirtyIndicator.classList.toggle("is-dirty", parts.length > 0);
@@ -4774,7 +4937,16 @@
           const value = field.value;
           if (value !== undefined) fields[key] = value.trim();
         });
-        return fields;
+        const original = state.catalogOriginalFields || {};
+        const updates = {};
+        Object.keys(fields).forEach((key) => {
+          const current = fields[key];
+          const baseline = original[key];
+          if (String(current ?? "") !== String(baseline ?? "")) {
+            updates[key] = current;
+          }
+        });
+        return updates;
       }
       const rawState = collectCatalogFormState();
       if (!window.CatalogUtils || !window.CatalogUtils.normalizeCatalogItem)
@@ -5238,10 +5410,14 @@
     const enums = await loadCatalogEnums();
     if (state.tab === "media-library") {
       state.catalogFormState = item || {};
-      state.catalogOriginalFields = null;
+      state.catalogOriginalFields = {};
       state.catalogValidation = null;
       state.selectedItem = item || {};
+      Object.keys(item || {}).forEach((key) => {
+        state.catalogOriginalFields[key] = String(item?.[key] ?? "");
+      });
       renderCatalogFields(item || {}, enums);
+      renderMediaDetail(item || {});
       applyEditVisibility();
       renderActions();
       updateActionButtonState();
@@ -5340,7 +5516,11 @@
     try {
       const params = new URLSearchParams({ limit: "1", offset: "0" });
       if (state.tab === "contacts") {
-        params.set("email", requestId);
+        if (String(requestId).includes("@")) {
+          params.set("email", requestId);
+        } else {
+          params.set("request_id", requestId);
+        }
       } else if (
         state.tab === "price-chart" ||
         state.tab === "cost-chart" ||
@@ -5992,6 +6172,43 @@
       });
     }
 
+    if (ui.mediaDetailGenerate) {
+      ui.mediaDetailGenerate.addEventListener("click", async () => {
+        const mediaId = String(
+          state.selectedItem?.media_id || state.selectedItem?.id || "",
+        ).trim();
+        if (!mediaId) {
+          showToast("Missing media ID.", "error");
+          return;
+        }
+        ui.mediaDetailGenerate.disabled = true;
+        ui.mediaDetailGenerate.textContent = "Generating...";
+        try {
+          const result = await apiFetch("/media/describe", {
+            method: "POST",
+            body: JSON.stringify({ media_id: mediaId }),
+          });
+          if (!result?.ok) {
+            showToast(result?.error || "Failed to generate description.", "error");
+            return;
+          }
+          const descriptionField = getMediaDescriptionField();
+          if (descriptionField) {
+            descriptionField.value = result.description || "";
+            descriptionField.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+          updatePrimaryActionState();
+          showToast("Description generated. Review and save updates.", "success");
+        } catch (error) {
+          console.error(error);
+          showToast("Failed to generate description.", "error");
+        } finally {
+          ui.mediaDetailGenerate.disabled = false;
+          ui.mediaDetailGenerate.textContent = "Generate description";
+        }
+      });
+    }
+
     if (ui.catalogMediaList) {
       ui.catalogMediaList.addEventListener("click", (event) => {
         const target = event.target;
@@ -6294,7 +6511,7 @@
     if (ui.primaryAction) {
       ui.primaryAction.addEventListener("click", () => {
         if (state.tab !== "orders") {
-          if (window.confirm("Save updates to this record?")) saveDetails();
+          saveDetails();
           return;
         }
         if (

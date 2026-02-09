@@ -16,19 +16,215 @@
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body data-api-base="https://admin-api.heerawalla.com/admin" data-site-base="https://www.heerawalla.com" data-detail-tab="media-library">
-    <div class="page detail-page">
-      <header class="topbar">
-        <div class="brand">
-          <span class="brand-mark">Heerawalla</span>
-          <span class="brand-tag">Business Portal</span>
+  <body data-enable-nav-counts="true" data-api-base="https://admin-api.heerawalla.com/admin" data-site-base="https://www.heerawalla.com" data-detail-tab="media-library">
+    <div class="app-shell">
+    <aside class="side-nav" data-sidebar>
+      <div class="side-brand">
+        <span class="brand-mark">Heerawalla</span>
+        <span class="brand-tag">Business Portal</span>
+      </div>
+      <div class="side-search">
+        <input
+          type="search"
+          placeholder="Search sections..."
+          class="side-search__input"
+          data-sidebar-search
+          aria-label="Search navigation"
+        />
+        <svg class="side-search__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+      </div>
+      <div class="side-block" data-block-id="main">
+        <div class="side-block__header">
+          <p class="side-label">Main</p>
+          <button class="side-toggle" type="button" data-side-toggle aria-label="Toggle Main section">-</button>
         </div>
-        <div class="user">
-          <div class="user-meta">
-            <span class="role" data-user-role>Loading role</span>
-            <span class="email" data-user-email>Checking access...</span>
+        <div class="side-block__body">
+          <button class="side-link" data-tab="dashboard" data-tooltip="Dashboard" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            <span class="side-link__label">Dashboard</span>
+          </button>
+          <button class="side-link" data-tab="orders" data-tooltip="Orders" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            </svg>
+            <span class="side-link__label">Orders</span>
+            <span class="side-link__badge" data-count-orders>0</span>
+          </button>
+          <button class="side-link" data-tab="quotes" data-tooltip="Quotes" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span class="side-link__label">Quotes</span>
+            <span class="side-link__badge" data-count-quotes>0</span>
+          </button>
+          <button class="side-link" data-tab="tickets" data-tooltip="Tickets" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+            <span class="side-link__label">Tickets</span>
+            <span class="side-link__badge" data-count-tickets>0</span>
+          </button>
+          <button class="side-link" data-tab="contacts" data-tooltip="Contacts" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span class="side-link__label">Contacts</span>
+          </button>
+          <button class="side-link" data-tab="products" data-tooltip="Products" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            <span class="side-link__label">Products</span>
+          </button>
+          <button class="side-link" data-tab="inspirations" data-tooltip="Inspirations" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 1v6m0 6v6m9.22-9.22l-4.24 4.24M7.02 16.98l-4.24 4.24m14.44 0l-4.24-4.24M7.02 7.02L2.78 2.78" />
+            </svg>
+            <span class="side-link__label">Inspirations</span>
+          </button>
+          <button class="side-link" data-tab="media-library" data-tooltip="Media" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+            <span class="side-link__label">Media</span>
+          </button>
+          <button class="side-link" data-tab="consultations" data-tooltip="Consultations" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span class="side-link__label">Consultations</span>
+          </button>
+        </div>
+      </div>
+      <div class="side-block" data-block-id="pricing" data-admin-only>
+        <div class="side-block__header">
+          <p class="side-label">Pricing</p>
+          <button class="side-toggle" type="button" data-side-toggle aria-label="Toggle Pricing section">-</button>
+        </div>
+        <div class="side-block__body">
+          <button class="side-link" data-tab="cost-chart" data-tooltip="Cost Chart" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3v18h18" />
+              <path d="M18 17V9" />
+              <path d="M13 17V5" />
+              <path d="M8 17v-3" />
+            </svg>
+            <span class="side-link__label">Cost Chart</span>
+          </button>
+          <button class="side-link" data-tab="diamond-price-chart" data-tooltip="Diamond Pricing" type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 22 12 12 22 2 12 12 2" />
+            </svg>
+            <span class="side-link__label">Diamond Pricing</span>
+          </button>
+</div>
+      </div>
+      <div class="side-block" data-block-id="status">
+        <div class="side-block__header">
+          <p class="side-label">System Status</p>
+          <button class="side-toggle" type="button" data-side-toggle aria-label="Toggle Status section">-</button>
+        </div>
+        <div class="side-block__body">
+          <div class="status-card">
+            <div class="status-card__header">
+              <svg class="status-card__icon status-card__icon--success" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span class="status-card__title">Synced</span>
+            </div>
+            <div class="status-card__body">
+              <span class="status-card__time" data-sync-line-sidebar>Navigation active</span>
+            </div>
           </div>
-          <a class="btn btn-ghost back-link" href="/cdn-cgi/access/logout?redirect=/">Log out</a>
+        </div>
+      </div>
+      <div class="side-block side-block--user" data-block-id="user">
+        <div class="side-block__header">
+          <p class="side-label">Account</p>
+          <button class="side-toggle" type="button" data-side-toggle aria-label="Toggle Account section">-</button>
+        </div>
+        <div class="side-block__body">
+          <div class="user-card">
+            <div class="user-card__avatar">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <div class="user-card__info">
+              <span class="user-card__role" data-user-role>Loading role</span>
+              <span class="user-card__email" data-user-email>Checking access...</span>
+            </div>
+          </div>
+
+          <button class="side-link side-link--action" data-notifications-toggle type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span class="side-link__label">Notifications</span>
+            <span class="side-link__badge" data-notifications-badge style="display: none;">0</span>
+          </button>
+
+          <hr class="side-divider">
+
+          <a class="side-link side-link--danger" href="/cdn-cgi/access/logout?redirect=/">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span class="side-link__label">Log Out</span>
+          </a>
+        </div>
+      </div>
+      <div class="side-block side-block--actions" data-block-id="actions" data-admin-only>
+        <div class="side-block__header">
+          <p class="side-label">Admin Actions</p>
+          <button class="side-toggle" type="button" data-side-toggle aria-label="Toggle Admin actions">-</button>
+        </div>
+        <div class="side-block__body">
+          <div class="status-card">
+            <div class="status-card__header">
+              <svg class="status-card__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+              </svg>
+              <span class="status-card__title">Build Status</span>
+            </div>
+            <div class="status-card__body">
+              <span class="status-card__status" data-deploy-status>Idle</span>
+            </div>
+          </div>
+
+          <button class="side-link side-link--action" data-trigger-deploy type="button">
+            <svg class="side-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16 18 22 12 16 6" />
+              <polyline points="8 6 2 12 8 18" />
+            </svg>
+            <span class="side-link__label">Trigger Rebuild</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+      <div class="page main-content detail-page">
+            <header class="topbar">
+        <div class="page-title">
+          <span class="page-title__label">Detail</span>
+          <span class="page-title__value" data-tab-title>Details</span>
         </div>
       </header>
 
@@ -75,6 +271,38 @@
                 </div>
                 <div class="chip-list" data-missing-list>
                   <span class="muted">No missing details.</span>
+                </div>
+              </div>
+
+              <div class="drawer-section" data-media-detail-section>
+                <div class="section-heading">
+                  <h3>Media preview</h3>
+                  <p class="muted">Review the asset and generate a description.</p>
+                </div>
+                <div class="media-detail-grid">
+                  <div class="media-detail-preview" data-media-detail-preview>
+                    <span class="muted">No preview available.</span>
+                  </div>
+                  <div class="media-detail-meta">
+                    <div class="media-detail-row">
+                      <span>ID</span>
+                      <span data-media-detail-id>--</span>
+                    </div>
+                    <div class="media-detail-row">
+                      <span>Type</span>
+                      <span data-media-detail-type>--</span>
+                    </div>
+                    <div class="media-detail-row">
+                      <span>URL</span>
+                      <a class="btn-link" data-media-detail-url href="#" target="_blank" rel="noreferrer">Open file</a>
+                    </div>
+                    <button class="btn btn-ghost" type="button" data-media-detail-generate>
+                      Generate description
+                    </button>
+                    <p class="muted">
+                      Generates copy for the Description field below. Click Save updates to store.
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -790,6 +1018,7 @@
         </div>
       </section>
     </div>
+    </div>
 
     <div class="modal" data-confirm-modal aria-hidden="true">
       <div class="modal-card">
@@ -811,7 +1040,7 @@
           </div>
         </div>
         <div class="confirm-preview" data-confirm-preview></div>
-        <div class="modal-actions">
+    <div class="modal-actions">
           <button class="btn" data-confirm-send type="button">Send confirmation</button>
         </div>
       </div>
@@ -819,10 +1048,19 @@
 
     <div class="toast" data-toast aria-live="polite"></div>
 
+<aside class="notification-panel" data-notifications-panel aria-hidden="true" inert>
+      <div class="notification-header">
+        <h3>Notifications</h3>
+        <button class="btn btn-ghost" data-notifications-close type="button">Close</button>
+      </div>
+      <div class="notification-list" data-notifications-list></div>
+    </aside>
+
     <script src="./enums.js" defer></script>
     <script src="./catalog-utils.js" defer></script>
     <script src="./catalog-form.js" defer></script>
-    <script src="./detail.js" defer></script>
+    <script src="./dist/detail.js" defer></script>
   </body>
 </html>
+
 

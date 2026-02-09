@@ -114,16 +114,21 @@
     fullSpan,
   }) {
     const serialized = escapeAttribute(JSON.stringify(values || []));
+    const chipInput = allowCustom
+      ? `
+          <div class="chip-input">
+            <input type="text" data-chip-search placeholder="${escapeAttribute(placeholder || "Add value")}" />
+            <button class="btn btn-ghost btn-small" type="button" data-chip-add>Add</button>
+          </div>
+        `
+      : "";
     return `
       <label class="field ${fullSpan ? "full-span" : ""}">
         <span>${escapeHtml(label)}</span>
         <div class="multi-select" data-multi-select data-field="${escapeAttribute(
           field
         )}" data-enum-key="${escapeAttribute(enumKey || "")}" data-allow-custom="${allowCustom ? "true" : "false"}">
-          <div class="chip-input">
-            <input type="text" data-chip-search placeholder="${escapeAttribute(placeholder || "Add value")}" />
-            <button class="btn btn-ghost btn-small" type="button" data-chip-add>Add</button>
-          </div>
+          ${chipInput}
           <div class="chip-list" data-chip-list></div>
           <div class="multi-select-options" data-chip-options></div>
           <div class="field-helper is-error" data-chip-error></div>

@@ -1,0 +1,18 @@
+{
+  "name": "heerawalla-admin",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev:main & npm run dev:detail",
+    "dev:main": "esbuild src/index.js --bundle --outfile=dist/app.js --sourcemap --watch",
+    "dev:detail": "esbuild src/detail-index.js --bundle --outfile=dist/detail.js --sourcemap --watch",
+    "build": "npm run build:main && npm run build:detail",
+    "build:main": "esbuild src/index.js --bundle --minify --outfile=dist/app.js",
+    "build:detail": "esbuild src/detail-index.js --bundle --minify --outfile=dist/detail.js",
+    "clean": "rimraf dist && mkdir dist"
+  },
+  "devDependencies": {
+    "esbuild": "^0.19.12",
+    "rimraf": "^5.0.5"
+  }
+}

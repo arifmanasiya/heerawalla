@@ -105,6 +105,54 @@ async function d1Run(env: Env & { DB: D1Database }, sql: string, params: unknown
   return bound.run();
 }
 
+async function getNavigationCounts(env: Env, allowedOrigin: string) {
+  const corsHeaders = buildCorsHeaders(allowedOrigin, true);
+  if (!hasD1(env)) {
+    return new Response(
+      JSON.stringify({
+        orders: 0,
+        quotes: 0,
+        tickets: 0,
+        contacts: 0,
+        products: 0,
+        inspirations: 0,
+        media: 0,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+    );
+  }
+
+  const countRow = async (sql: string, params: unknown[] = []) => {
+    const rows = await d1All(env, sql, params);
+    const value = rows[0] as { count?: number | string } | undefined;
+    const raw = value?.count ?? 0;
+    return Number(raw) || 0;
+  };
+
+  const [orders, quotes, tickets, contacts, products, inspirations, media] = await Promise.all([
+    countRow("SELECT COUNT(*) as count FROM orders"),
+    countRow("SELECT COUNT(*) as count FROM quotes"),
+    countRow("SELECT COUNT(*) as count FROM tickets"),
+    countRow("SELECT COUNT(*) as count FROM contacts"),
+    countRow("SELECT COUNT(*) as count FROM catalog_items WHERE type = 'product'"),
+    countRow("SELECT COUNT(*) as count FROM catalog_items WHERE type = 'inspiration'"),
+    countRow("SELECT COUNT(*) as count FROM media_library"),
+  ]);
+
+  return new Response(
+    JSON.stringify({
+      orders,
+      quotes,
+      tickets,
+      contacts,
+      products,
+      inspirations,
+      media,
+    }),
+    { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+  );
+}
+
 async function handleMediaRequest(
   request: Request,
   env: Env,
@@ -2112,6 +2160,9 @@ async function handleAdminRequest(
       }
       if (path === "/consultations/analytics") {
         return getConsultationAnalytics(request, env, allowedOrigin);
+      }
+      if (path === "/navigation/counts") {
+        return getNavigationCounts(env, allowedOrigin);
       }
     if (path === "/orders") {
       const payload = await buildAdminList(env, "order", url.searchParams);

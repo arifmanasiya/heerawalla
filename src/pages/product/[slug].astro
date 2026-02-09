@@ -122,7 +122,7 @@ const expandStandardOptions = (value: string | undefined, standardOptions: strin
   return result;
 };
 const normalizeStoneType = (value: string) =>
-  value
+  String(value || '')
     .replace(/diamond\(s\)/gi, 'Diamond')
     .replace(/diamonds?\b/gi, 'Diamond')
     .replace(/\s+/g, ' ')
@@ -1458,7 +1458,6 @@ void jsonLdString;
       })();
       const priceEl = document.getElementById('price-display');
       if (!priceEl) return;
-        const stoneSelect = document.querySelector('[data-stone-select]');
       const metalSelect = document.querySelector('[data-metal-select]');
       const sizeTypeSelect = document.querySelector('[data-size-type-select]');
       const stoneWeightSelect = document.querySelector('[data-stone-weight-select]');
@@ -1476,9 +1475,7 @@ void jsonLdString;
       const sizeSelects = sizeFields
         .map((field) => field.querySelector('[data-size-select]'))
         .filter(Boolean);
-      const chainField = sizeFields.find((field) => field.getAttribute('data-size-kind') === 'chain');
       const stoneSummary = document.querySelector('[data-stone-summary]');
-      const stoneField = document.querySelector('[data-stone-field]');
       const stoneWeightTotal = document.querySelector('[data-stone-weight-total]');
       const metalWeightTotal = document.querySelector('[data-metal-weight-total]');
       const stoneWeightInfo = document.querySelector('[data-stone-weight-info]');
@@ -1495,7 +1492,6 @@ void jsonLdString;
       const chainWeightInfo = chainField ? chainField.querySelector('[data-chain-weight-info]') : null;
       const chainWeightValue = chainField ? chainField.querySelector('[data-chain-weight-value]') : null;
       const chainWeightUnit = chainField ? chainField.querySelector('[data-chain-weight-unit]') : null;
-      const chainSelect = chainField ? chainField.querySelector('[data-size-select]') : null;
       const sizeHelpers = sizeFields
         .map((field) => field.querySelector('[data-size-helper]'))
         .filter(Boolean);
@@ -2603,14 +2599,9 @@ void jsonLdString;
       if (!catalogUrlValue || !productSlugValue) return;
 
       const priceEl = document.getElementById('price-display');
-      const stoneField = document.querySelector('[data-stone-field]');
-      const stoneSelect = document.querySelector('[data-stone-select]');
       const metalSelect = document.querySelector('[data-metal-select]');
-        const sizeTypeField = document.querySelector('[data-size-type-field]');
         const sizeTypeSelect = document.querySelector('[data-size-type-select]');
-        const stoneWeightField = document.querySelector('[data-stone-weight-field]');
       const stoneWeightSelect = document.querySelector('[data-stone-weight-select]');
-      const metalWeightField = document.querySelector('[data-metal-weight-field]');
       const metalWeightSelect = document.querySelector('[data-metal-weight-select]');
       const chainWeightInfo = document.querySelector('[data-chain-weight-info]');
       const chainWeightValue = document.querySelector('[data-chain-weight-value]');
@@ -2620,15 +2611,9 @@ void jsonLdString;
       const sizeTypeMetalUnit = document.querySelector('[data-size-type-metal-unit]');
       const sizeTypeTotal = document.querySelector('[data-size-type-total]');
       const sizeTypeDetails = document.querySelector('[data-size-type-details]');
-      const clarityField = document.querySelector('[data-clarity-field]');
       const claritySelect = document.querySelector('[data-clarity-select]');
-      const colorField = document.querySelector('[data-color-field]');
         const colorSelect = document.querySelector('[data-color-select]');
-        const cutField = document.querySelector('[data-cut-field]');
         const cutSelect = document.querySelector('[data-cut-select]');
-        const sizeFields = Array.from(document.querySelectorAll('[data-size-field]'));
-        const chainField = sizeFields.find((field) => field.getAttribute('data-size-kind') === 'chain');
-        const chainSelect = chainField ? chainField.querySelector('[data-size-select]') : null;
         const setSelectValue = (select, value) => {
           if (!select) return;
           const options = Array.from(select.options);
@@ -2856,121 +2841,6 @@ void jsonLdString;
               total: group.total,
             }));
         };
-        const buildMetalWeightBySizeType = (options) => {
-          const map = new Map();
-          if (!Array.isArray(options) || !options.length) return map;
-          options.forEach((option) => {
-            const sizeType = String(option.size_type || '').trim().toLowerCase() || 'size';
-            const raw = String(option.metal_weight || '').trim();
-            if (!raw) return;
-            const parsedValues = parseOptionList(raw);
-            parsedValues.forEach((parsed) => {
-              const num = Number(parsed);
-              const current = map.get(sizeType);
-              const currentNum = current === undefined ? Number.POSITIVE_INFINITY : Number(current);
-              if (parsed && Number.isFinite(num) && num < currentNum) {
-                map.set(sizeType, parsed);
-              } else if (parsed && !current) {
-                map.set(sizeType, parsed);
-              }
-            });
-          });
-          return map;
-        };
-        const buildSizeTypeOptions = (stoneGroups, metalBySizeType) => {
-          const sizeTypes = new Set();
-          const totals = new Map();
-          stoneGroups.forEach((group) => {
-            if (group.size_type) sizeTypes.add(group.size_type);
-            const total = Number(group.total);
-            if (Number.isFinite(total)) {
-              const prev = totals.get(group.size_type) ?? Number.POSITIVE_INFINITY;
-              totals.set(group.size_type, Math.min(prev, total));
-            }
-          });
-          metalBySizeType.forEach((_value, sizeType) => {
-            if (sizeType) sizeTypes.add(sizeType);
-          });
-          return Array.from(sizeTypes)
-            .sort((a, b) => {
-              const aTotal = totals.get(a);
-              const bTotal = totals.get(b);
-              if (aTotal !== undefined && bTotal !== undefined && aTotal !== bTotal) return aTotal - bTotal;
-              const aOrder = sizeTypeOrderIndex.get(a) ?? 999;
-              const bOrder = sizeTypeOrderIndex.get(b) ?? 999;
-              if (aOrder !== bOrder) return aOrder - bOrder;
-              return a.localeCompare(b);
-            })
-            .map((value) => ({ value, label: formatSizeTypeLabel(value) }));
-        };
-
-      const buildMetalWeightOptionsFromOptions = (options) => {
-        if (!Array.isArray(options) || !options.length) return [];
-        const weights = [];
-        options.forEach((option) => {
-          const raw = String(option.metal_weight || '').trim();
-          if (!raw) return;
-          parseOptionList(raw).forEach((value) => {
-            if (value) weights.push(value);
-          });
-        });
-        return Array.from(new Set(weights));
-      };
-
-      const normalizeStoneType = (value) =>
-        String(value || '')
-          .replace(/diamond\(s\)/gi, 'Diamond')
-          .replace(/diamonds?\b/gi, 'Diamond')
-          .replace(/\s+/g, ' ')
-          .trim();
-
-      const parseMetalColors = (value) => {
-        const normalized = String(value || '').toLowerCase();
-        const colors = [];
-        if (normalized.includes('yellow')) colors.push('yellow');
-        if (normalized.includes('white')) colors.push('white');
-        if (normalized.includes('rose')) colors.push('rose');
-        return colors.length ? colors : ['yellow', 'white'];
-      };
-
-      const buildMetalOptions = (value, fallbackLabel) => {
-        const list = parseList(value);
-        if (list.length) {
-          return list.map((label) => ({ value: label, label }));
-        }
-        const colors = parseMetalColors(fallbackLabel);
-        return [
-          ...colors.map((color) => ({
-            value: `14K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`,
-            label: `14K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`
-          })),
-          ...colors.map((color) => ({
-            value: `18K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`,
-            label: `18K ${color.charAt(0).toUpperCase() + color.slice(1)} Gold`
-          })),
-          { value: 'Platinum', label: 'Platinum' }
-        ];
-      };
-
-      const pickLowestMetalValue = (options) => {
-        if (!Array.isArray(options) || !options.length) return '';
-        const parseKarat = (val) => {
-          const match = String(val).match(/(\d+)\s*K/i);
-          return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
-        };
-        let best = options[0]?.value || '';
-        let lowest = parseKarat(best);
-        options.forEach((option) => {
-          const k = parseKarat(option.value);
-          if (k < lowest) {
-            lowest = k;
-            best = option.value;
-          }
-        });
-        if (!Number.isFinite(lowest) || lowest > 14) return '14K Yellow Gold';
-        return best || options[0]?.value || '14K Yellow Gold';
-      };
-
       const setSelectOptions = (select, options, selectedValue, placeholderLabel) => {
         if (!select) return;
         select.innerHTML = '';
@@ -3052,345 +2922,7 @@ void jsonLdString;
         }
       };
 
-      const buildSizeSpecs = (tagsValue, categoryValue, genderValue) => {
-        const tags = (() => {
-          const base = parseList(tagsValue).map((tag) => tag.toLowerCase());
-          const categories = parseList(categoryValue).map((entry) => String(entry).toLowerCase());
-          const categoryTags = categories
-            .flatMap((entry) => [entry, entry.split('/').pop()])
-            .filter(Boolean);
-          return Array.from(new Set([...base, ...categoryTags].filter(Boolean)));
-        })();
-        const genderKey = (() => {
-          const gender = String(genderValue || '').toLowerCase();
-          if (gender === 'male') return 'men';
-          if (gender === 'female') return 'women';
-          if (gender) return gender;
-          const category = String(categoryValue || '').toLowerCase();
-          if (category.startsWith('men/') || category.startsWith('male/')) return 'men';
-          if (category.startsWith('women/') || category.startsWith('female/')) return 'women';
-          if (category.startsWith('unisex/')) return 'unisex';
-          return '';
-        })();
-        const ringSizeOptions = (() => {
-          if (genderKey === 'men') {
-            return ['8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12', '12.5', '13'];
-          }
-          if (genderKey === 'women') {
-            return ['4', '4.5', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5'];
-          }
-          return ['4', '4.5', '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12'];
-        })();
-        const hasTag = (values) => values.some((entry) => tags.includes(entry));
-        const specs = [];
-        const isSet = hasTag(['set', 'sets']);
-        const wantsRing = hasTag(['ring', 'rings', 'band', 'bands']);
-        const wantsBracelet = hasTag(['bracelet', 'bracelets', 'bangle', 'bangles', 'wrist']);
-        const wantsChain = hasTag(['necklace', 'necklaces', 'pendant', 'pendants', 'chain', 'chains']);
-        const wantsEarring = hasTag(['earring', 'earrings']);
-        if (wantsRing || (isSet && !wantsRing && !wantsBracelet && !wantsChain)) {
-          specs.push({
-            kind: 'ring',
-            label: 'Ring size',
-            options: ringSizeOptions
-          });
-        }
-        if (wantsBracelet || (isSet && !wantsRing && !wantsBracelet && !wantsChain)) {
-          specs.push({
-            kind: 'bracelet',
-            label: 'Bracelet length',
-            options: ['6"', '6.5"', '7"', '7.5"', '8"']
-          });
-        }
-        if (wantsChain || (isSet && !wantsRing && !wantsBracelet && !wantsChain)) {
-          specs.push({
-            kind: 'chain',
-            label: 'Chain length',
-            options: ['16"', '18"', '20"', '22"', '24"']
-          });
-        }
-        if (wantsEarring) {
-          specs.push({
-            kind: 'earring',
-            label: 'Earring size',
-            options: ['Standard']
-          });
-        }
-        return specs;
-      };
 
-      const updatePricingFromProduct = (item) => {
-        const productName = String(item.name || '').trim();
-        const productDescription = String(item.description || '').trim();
-        if (titleEl && productName) {
-          titleEl.textContent = productName;
-          document.title = `${productName} | Heerawalla`;
-        }
-        if (descEl && productDescription) {
-          descEl.textContent = productDescription;
-        }
-        const mediaImages = Array.isArray(item.media)
-          ? item.media.filter((entry) => entry && entry.media_type === 'image' && entry.url)
-          : [];
-        const mediaMeta = mediaImages.length
-          ? mediaImages.map((entry) => ({
-              url: entry.url,
-              description: entry.description || ''
-            }))
-          : (Array.isArray(item.images) ? item.images : []).map((url) => ({
-              url,
-              description: ''
-            }));
-        if (window.__hwSetProductMedia && mediaMeta.length) {
-          window.__hwSetProductMedia(mediaMeta, productDescription, productName);
-        }
-
-        const stoneTypes = parseList(
-          item.stone_type_options || item.stone_types
-        )
-          .map(normalizeStoneType)
-          .filter(Boolean);
-        const naturalStoneLabel =
-          stoneTypes.find((entry) => /natural/i.test(entry)) || 'Natural Diamond';
-        const labStoneLabel =
-          stoneTypes.find((entry) => /lab/i.test(entry)) || 'Lab Grown Diamond';
-        const stoneTypeDisplay = buildStoneTypeDisplay(stoneTypes, labStoneLabel, naturalStoneLabel);
-        const stoneOptions = stoneTypeDisplay
-          .filter((option) => option.available)
-          .map((option) => ({
-            value: option.value,
-            label: option.summaryLabel,
-            key: option.key
-          }));
-        const stoneDefaultEntry =
-          stoneTypeDisplay.find((option) => option.available && option.key === 'lab') ||
-          stoneTypeDisplay.find((option) => option.available);
-        const stoneDefaultValue = stoneDefaultEntry?.value || stoneTypeDisplay[0]?.value || labStoneLabel;
-        const metalOptions = buildMetalOptions(item.metal_options || item.metals, item.metal || '18K Gold');
-        const defaultMetalValue = pickLowestMetalValue(metalOptions) || metalOptions[metalOptions.length - 1]?.value || '14K Gold';
-        const metalDisplayOptions = buildStandardDisplayOptions(
-          STANDARD_METAL_OPTIONS,
-          new Set(metalOptions.map((option) => option.value))
-        );
-          const stoneWeightGroups = buildStoneWeightGroupsFromOptions(item.stone_options);
-        const stoneWeightFallback = parseOptionList(item.stone_weight).map((value) => ({
-          value,
-          label: value,
-          size_type: 'size'
-        }));
-        const stoneWeightTotal = (raw) => {
-          const breakdown = parseBreakdownLocal(raw);
-          if (breakdown.length) {
-            return breakdown.reduce((sum, entry) => sum + entry.weight * entry.count, 0);
-          }
-          const numeric = Number(String(raw).replace(/[^0-9.]/g, ''));
-          return Number.isFinite(numeric) ? numeric : Number.POSITIVE_INFINITY;
-        };
-        const stoneWeightOptions = (stoneWeightGroups.length
-            ? stoneWeightGroups
-            : stoneWeightFallback
-          )
-          .map((option) => ({
-            value: option.value,
-            label: formatStoneWeightBriefLabelLocal(option.value),
-            size_type: option.size_type
-          }))
-          .sort((a, b) => stoneWeightTotal(a.value) - stoneWeightTotal(b.value));
-        const metalWeightSource = buildMetalWeightOptionsFromOptions(item.metal_weight_options);
-        const metalWeightBySizeType = buildMetalWeightBySizeType(item.metal_weight_options);
-        const sizeTypeOptions = buildSizeTypeOptions(stoneWeightGroups, metalWeightBySizeType);
-        const selectedSizeType = sizeTypeOptions[0]?.value || '';
-        const selectedStoneWeightValue =
-          stoneWeightGroups.find((group) => group.size_type === selectedSizeType)?.value ||
-          stoneWeightGroups[0]?.value ||
-          stoneWeightFallback[0]?.value ||
-          '';
-        const metalWeightOptions = (metalWeightSource.length
-            ? metalWeightSource
-            : parseOptionList(item.metal_weight_range || item.metal_weight)
-          ).map((option) => ({
-            value: option,
-            label: option
-          }));
-        const selectedMetalWeightValue =
-          (selectedSizeType ? metalWeightBySizeType.get(selectedSizeType) : '') ||
-          metalWeightOptions[0]?.value ||
-          '';
-        const clarityOptions = expandStandardOptions(item.clarity, STANDARD_CLARITY_OPTIONS).map((option) => ({
-          value: option,
-          label: option
-        }));
-        const colorOptions = expandStandardOptions(item.color, STANDARD_COLOR_OPTIONS).map((option) => ({
-          value: option,
-          label: option
-        }));
-        const cutOptions = expandStandardOptions(item.cut, STANDARD_CUT_OPTIONS).map((option) => ({
-          value: option,
-          label: option
-        }));
-        const clarityDisplayOptions = buildStandardDisplayOptions(
-          STANDARD_CLARITY_OPTIONS,
-          new Set(clarityOptions.map((option) => option.value))
-        );
-        const colorDisplayOptions = buildStandardDisplayOptions(
-          STANDARD_COLOR_OPTIONS,
-          new Set(colorOptions.map((option) => option.value))
-        );
-        const cutDisplayOptions = buildStandardDisplayOptions(
-          STANDARD_CUT_OPTIONS,
-          new Set(cutOptions.map((option) => option.value))
-        );
-        const sizeSpecList = buildSizeSpecs(item.tags, item.category || item.categories, item.gender);
-        const sizeSpecByKind = new Map(sizeSpecList.map((spec) => [spec.kind, spec]));
-
-        if (stoneTypes.length) {
-          priceEl.dataset.diamondDefault = stoneDefaultValue;
-        }
-        priceEl.dataset.metalDefault = defaultMetalValue;
-
-        if (stoneSelect && stoneTypes.length) {
-          setSelectOptions(
-            stoneSelect,
-            stoneOptions,
-            priceEl.dataset.diamondDefault || stoneDefaultValue
-          );
-          renderStoneSwatches(stoneTypeDisplay, priceEl.dataset.diamondDefault || stoneDefaultValue);
-          stoneSelect.disabled = stoneOptions.length === 0;
-        }
-        if (stoneField && stoneTypes.length) {
-          stoneField.classList.toggle('hidden', stoneOptions.length === 0);
-        }
-        if (metalSelect) {
-          setSelectOptions(metalSelect, metalOptions, defaultMetalValue);
-          renderMetalSwatches(metalDisplayOptions, defaultMetalValue);
-        }
-        if (sizeTypeSelect) {
-          setSelectOptions(sizeTypeSelect, sizeTypeOptions, selectedSizeType);
-          sizeTypeSelect.disabled = sizeTypeOptions.length === 0;
-          sizeTypeOptions.forEach((option, index) => {
-            const optionEl = sizeTypeSelect.options[index];
-            if (!optionEl) return;
-            const stoneWeightValue =
-              stoneWeightGroups.find((group) => group.size_type === option.value)?.value || '';
-            optionEl.dataset.stoneWeight = stoneWeightValue;
-            optionEl.dataset.metalWeight = metalWeightBySizeType.get(option.value) || '';
-          });
-        }
-        if (sizeTypeField) {
-          sizeTypeField.classList.add('hidden');
-        }
-        if (stoneWeightSelect) {
-          setSelectOptions(stoneWeightSelect, stoneWeightOptions, selectedStoneWeightValue);
-          stoneWeightOptions.forEach((option, index) => {
-            const optionEl = stoneWeightSelect.options[index];
-            if (!optionEl) return;
-            if (option.size_type) optionEl.dataset.sizeType = option.size_type;
-          });
-          stoneWeightSelect.disabled = stoneWeightOptions.length === 0;
-        }
-        if (stoneWeightField) {
-          stoneWeightField.classList.toggle('hidden', stoneWeightOptions.length === 0);
-        }
-        if (metalWeightSelect) {
-          setSelectOptions(metalWeightSelect, metalWeightOptions, selectedMetalWeightValue);
-          metalWeightSelect.disabled = metalWeightOptions.length === 0 || sizeTypeOptions.length > 0;
-        }
-        if (metalWeightField) {
-          metalWeightField.classList.add('hidden');
-        }
-        if (claritySelect) {
-          const clarityDefault = clarityOptions[clarityOptions.length - 1]?.value || '';
-          setSelectOptions(claritySelect, clarityOptions, clarityDefault);
-          renderClaritySwatches(clarityDisplayOptions, clarityDefault);
-          claritySelect.disabled = clarityOptions.length === 0;
-        }
-        if (clarityField) {
-          clarityField.classList.toggle('hidden', clarityOptions.length === 0);
-        }
-        if (colorSelect) {
-          const colorDefault = colorOptions[colorOptions.length - 1]?.value || '';
-          setSelectOptions(colorSelect, colorOptions, colorDefault);
-          renderColorSwatches(colorDisplayOptions, colorDefault);
-          colorSelect.disabled = colorOptions.length === 0;
-        }
-        if (colorField) {
-          colorField.classList.toggle('hidden', colorOptions.length === 0);
-        }
-          if (cutSelect) {
-            const cutDefault = cutOptions[cutOptions.length - 1]?.value || '';
-            setSelectOptions(cutSelect, cutOptions, cutDefault);
-            cutSelect.disabled = cutOptions.length === 0;
-            renderCutSwatches(cutDisplayOptions, cutDefault);
-          }
-        if (cutField) {
-          cutField.classList.toggle('hidden', cutOptions.length === 0);
-        }
-        if (sizeFields.length) {
-          sizeFields.forEach((field) => {
-            const kind = field.getAttribute('data-size-kind') || '';
-            const spec = sizeSpecByKind.get(kind);
-            const select = field.querySelector('[data-size-select]');
-            const labelEl = field.querySelector('[data-size-label-text]');
-            if (!select || !labelEl) return;
-            if (spec) {
-              field.classList.remove('hidden');
-              select.disabled = false;
-              labelEl.textContent = spec.label;
-              const sizeOptions = spec.options.map((option) => ({ value: option, label: option }));
-              const defaultSize =
-                kind === 'chain' && sizeOptions.length ? sizeOptions[0].value : '';
-              setSelectOptions(
-                select,
-                sizeOptions,
-                defaultSize,
-                defaultSize ? '' : `Select ${spec.label.toLowerCase()}`
-              );
-              if (kind === 'chain' && window.__hwUpdateChainWeightInfo) {
-                window.__hwUpdateChainWeightInfo(select.value || defaultSize);
-              }
-            } else {
-              field.classList.add('hidden');
-              select.disabled = true;
-            }
-          });
-        }
-        getSizeEntries().forEach((entry) => renderSizeSwatches(entry));
-
-        applySizeTypeSelection();
-        if (sizeTypeSelect) {
-          const selected = sizeTypeSelect.selectedOptions?.[0];
-          if (selected) {
-            updateSizeTypeInfo(selected.dataset.stoneWeight || '', selected.dataset.metalWeight || '');
-          } else {
-            updateSizeTypeInfo(
-              stoneWeightSelect ? stoneWeightSelect.value : '',
-              metalWeightSelect ? metalWeightSelect.value : ''
-            );
-          }
-        } else {
-          updateSizeTypeInfo(
-            stoneWeightSelect ? stoneWeightSelect.value : '',
-            metalWeightSelect ? metalWeightSelect.value : ''
-          );
-        }
-        if (window.__hwRenderStoneWeightSwatches) {
-          window.__hwRenderStoneWeightSwatches();
-        }
-        if (window.__hwSyncStoneWeightSwatches) {
-          window.__hwSyncStoneWeightSwatches();
-        }
-        if (window.__hwUpdateStoneWeightVisual) {
-          window.__hwUpdateStoneWeightVisual();
-        }
-        if (window.__hwUpdateChainWeightInfo && chainSelect) {
-          window.__hwUpdateChainWeightInfo(chainSelect.value);
-        }
-        if (window.__hwRefreshPricingDefaults) {
-          window.__hwRefreshPricingDefaults();
-        } else if (window.__hwApplyPricing) {
-          window.__hwApplyPricing();
-        }
-      };
       const fetchCatalog = async () => {
         const joiner = catalogUrlValue.includes('?') ? '&' : '?';
         const cacheBust = `&bust=${Date.now()}`;

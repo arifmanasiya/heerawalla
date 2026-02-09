@@ -1757,12 +1757,6 @@
           <div class="metric-label">Low Stock Items</div>
         </div>
       </div>
-      <div class="dashboard-actions">
-        <button class="btn btn-primary" data-dashboard-tab="orders" type="button">View Orders</button>
-        <button class="btn btn-ghost" data-dashboard-tab="quotes" type="button">View Quotes</button>
-        <button class="btn btn-ghost" data-dashboard-tab="products" type="button">Manage Products</button>
-        <button class="btn btn-ghost" data-dashboard-tab="tickets" type="button">Support Tickets</button>
-      </div>
       <div class="dashboard-section">
         <h3>Recent Orders</h3>
         <div class="quick-list">
