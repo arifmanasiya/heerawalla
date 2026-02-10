@@ -85,7 +85,7 @@ export const LIST_COLUMNS = {
     { key: "media_id", label: "Media ID" },
     { key: "label", label: "Label" },
     { key: "media_type", label: "Type" },
-    { key: "url", label: "URL" },
+    { key: "url", label: "Preview" },
     { key: "view", label: "" },
   ],
   "cost-chart": [

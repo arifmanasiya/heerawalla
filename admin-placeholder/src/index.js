@@ -237,16 +237,17 @@ import { createSidebar } from "./ui/sidebar.js";
     locationHref: window.location.href,
   });
 
-  const { renderList } = createListRenderer({
-    state,
-    ui,
-    listColumns: LIST_COLUMNS,
-    isBulkEnabled,
-    canEditCurrentTab,
-    getValue,
-    getItemKey,
-    escapeAttribute,
-  });
+    const { renderList } = createListRenderer({
+      state,
+      ui,
+      listColumns: LIST_COLUMNS,
+      isBulkEnabled,
+      canEditCurrentTab,
+      getValue,
+      getItemKey,
+      normalizeImageUrl,
+      escapeAttribute,
+    });
 
   const { updateBulkActions, handleBulkAction } = createBulkActions({
     state,

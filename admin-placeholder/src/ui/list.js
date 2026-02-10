@@ -7,6 +7,7 @@ export function createListRenderer({
   getValue,
   getItemKey,
   escapeAttribute,
+  normalizeImageUrl = (value) => value,
 }) {
   function renderHeader() {
     if (!ui.listHeader) return;
@@ -16,7 +17,11 @@ export function createListRenderer({
     const templateParts = [];
     if (bulkEnabled) templateParts.push("44px");
     templateParts.push(
-      ...columns.map((col) => (col.key === "view" || col.key === "delete" ? "90px" : "minmax(120px, 1fr)"))
+      ...columns.map((col) => {
+        if (col.key === "view" || col.key === "delete") return "90px";
+        if (state.tab === "media-library" && col.key === "url") return "minmax(200px, 2fr)";
+        return "minmax(120px, 1fr)";
+      })
     );
     const template = templateParts.join(" ");
     ui.listHeader.style.gridTemplateColumns = template;
@@ -66,7 +71,11 @@ export function createListRenderer({
     const templateParts = [];
     if (bulkEnabled) templateParts.push("44px");
     templateParts.push(
-      ...columns.map((col) => (col.key === "view" || col.key === "delete" ? "90px" : "minmax(120px, 1fr)"))
+      ...columns.map((col) => {
+        if (col.key === "view" || col.key === "delete") return "90px";
+        if (state.tab === "media-library" && col.key === "url") return "minmax(200px, 2fr)";
+        return "minmax(120px, 1fr)";
+      })
     );
     const template = templateParts.join(" ");
     try {
@@ -110,6 +119,21 @@ export function createListRenderer({
               if (col.key === "status") {
                 const status = item.status || "NEW";
                 return `<div class="cell"><span class="cell-label">${col.label}</span><span class="badge" data-status="${status}">${status}</span></div>`;
+              }
+              if (state.tab === "media-library" && col.key === "url") {
+                const rawUrl = item.url || item.media_url || item.href || getValue(item, col.key);
+                const normalizedUrl = normalizeImageUrl(rawUrl || "");
+                const mediaType = String(item.media_type || item.type || "").toLowerCase();
+                const isVideo = mediaType.includes("video") || /\.(mp4|webm|mov)$/i.test(normalizedUrl);
+                if (!normalizedUrl) {
+                  return `<div class="cell"><span class="cell-label">${col.label}</span><span class="cell-muted">No preview</span></div>`;
+                }
+                if (isVideo) {
+                  return `<div class="cell media-thumb-cell"><span class="cell-label">${col.label}</span><div class="media-thumb media-thumb--video">Video</div></div>`;
+                }
+                return `<div class="cell media-thumb-cell"><span class="cell-label">${col.label}</span><img class="media-thumb" src="${escapeAttribute(
+                  normalizedUrl
+                )}" alt="${escapeAttribute(item.label || item.media_id || "Media")}"></div>`;
               }
               const value = getValue(item, col.key);
               if (isInlinePricing && canEditCurrentTab()) {

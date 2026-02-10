@@ -824,6 +824,31 @@ textarea:focus {
   min-width: 0;
 }
 
+.media-thumb-cell {
+  align-items: flex-start;
+}
+
+.media-thumb {
+  width: 140px;
+  max-width: 140px;
+  height: 180px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: #f2e9da;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-soft);
+}
+
+.media-thumb--video {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+}
+
 .cell-label {
   display: none;
   font-size: 10px;
